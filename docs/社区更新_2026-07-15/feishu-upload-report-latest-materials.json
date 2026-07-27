@@ -1,0 +1,167 @@
+{
+  "mode": "live",
+  "publishedAt": "2026-07-15",
+  "validation": {
+    "sourceFileCount": 24,
+    "publishFileCount": 23,
+    "skippedFileCount": 1,
+    "pageCount": 7
+  },
+  "pageCount": 7,
+  "expectedFileCount": 23,
+  "uploadedFileCount": 23,
+  "missingFileCount": 0,
+  "skippedFiles": [
+    {
+      "filename": "嵌入式复习材料(1).docx",
+      "duplicateOf": "嵌入式复习材料.docx",
+      "reason": "规范化文本相似度 99.3%，仅有极少格式或字符差异；保留无后缀版本，避免页面出现近重复附件。"
+    }
+  ],
+  "pageResults": [
+    {
+      "title": "期末复习 | 实时嵌入式系统",
+      "category": "课程复习 / 实时嵌入式系统",
+      "url": "https://scnbcye3xdfz.feishu.cn/wiki/XObvwyr48iREXfkW4g1cZ4qDnnh",
+      "token": "XObvwyr48iREXfkW4g1cZ4qDnnh",
+      "created": false,
+      "expectedFiles": [
+        "老师复习重点_整合审查版.pdf",
+        "嵌入式课程期末考试必考点_全量优先级版(1).pdf",
+        "嵌入式复习材料.docx",
+        "实时嵌入式练习卷(1).docx",
+        "题目整理.docx",
+        "嵌入式习题卷.docx"
+      ],
+      "uploaded": [
+        "老师复习重点_整合审查版.pdf",
+        "嵌入式课程期末考试必考点_全量优先级版(1).pdf",
+        "嵌入式复习材料.docx",
+        "实时嵌入式练习卷(1).docx",
+        "题目整理.docx",
+        "嵌入式习题卷.docx"
+      ],
+      "missingAfterUpload": [],
+      "containsHeader": true,
+      "screenshotPath": "C:\\Users\\Star\\Desktop\\总项目文件\\杭电飞书社区\\output\\playwright\\latest-materials-2026-07-15\\期末复习 - 实时嵌入式系统.png"
+    },
+    {
+      "title": "期末复习 | 电路分析",
+      "category": "课程复习 / 电路分析",
+      "url": "https://scnbcye3xdfz.feishu.cn/wiki/ZCLSwO28AiNEDZkftfccFzb3nJb",
+      "token": "ZCLSwO28AiNEDZkftfccFzb3nJb",
+      "created": true,
+      "expectedFiles": [
+        "2023电分(1).pdf"
+      ],
+      "uploaded": [
+        "2023电分(1).pdf"
+      ],
+      "missingAfterUpload": [],
+      "containsHeader": true,
+      "screenshotPath": "C:\\Users\\Star\\Desktop\\总项目文件\\杭电飞书社区\\output\\playwright\\latest-materials-2026-07-15\\期末复习 - 电路分析.png"
+    },
+    {
+      "title": "期末复习 | 数字逻辑电路",
+      "category": "课程复习 / 数字逻辑电路",
+      "url": "https://scnbcye3xdfz.feishu.cn/wiki/Q63lw7BOKiIr2ak7TObcPljBncI",
+      "token": "Q63lw7BOKiIr2ak7TObcPljBncI",
+      "created": true,
+      "expectedFiles": [
+        "23年数电(1).pdf"
+      ],
+      "uploaded": [
+        "23年数电(1).pdf"
+      ],
+      "missingAfterUpload": [],
+      "containsHeader": true,
+      "screenshotPath": "C:\\Users\\Star\\Desktop\\总项目文件\\杭电飞书社区\\output\\playwright\\latest-materials-2026-07-15\\期末复习 - 数字逻辑电路.png"
+    },
+    {
+      "title": "期末复习 | 人工智能导论",
+      "category": "课程复习 / 人工智能导论",
+      "url": "https://scnbcye3xdfz.feishu.cn/wiki/RHkpwhudgi4Ll8kp5B7cCwQEn2d",
+      "token": "RHkpwhudgi4Ll8kp5B7cCwQEn2d",
+      "created": true,
+      "expectedFiles": [
+        "chap14总复习(1).pptx"
+      ],
+      "uploaded": [
+        "chap14总复习(1).pptx"
+      ],
+      "missingAfterUpload": [],
+      "containsHeader": true,
+      "screenshotPath": "C:\\Users\\Star\\Desktop\\总项目文件\\杭电飞书社区\\output\\playwright\\latest-materials-2026-07-15\\期末复习 - 人工智能导论.png"
+    },
+    {
+      "title": "公选课资料与评价",
+      "category": "选课与学籍 / 通识课",
+      "url": "https://scnbcye3xdfz.feishu.cn/wiki/IV0HwOhgiierzok5ZnpcXrmBnHI",
+      "token": "IV0HwOhgiierzok5ZnpcXrmBnHI",
+      "created": true,
+      "expectedFiles": [
+        "公选课评价收集表.xlsx",
+        "杭电公选课图鉴(1).xlsx",
+        "公选课选课指导(整合版).docx",
+        "杭电推荐公选课+2.doc",
+        "选课参考资料.doc"
+      ],
+      "uploaded": [
+        "公选课评价收集表.xlsx",
+        "杭电公选课图鉴(1).xlsx",
+        "公选课选课指导(整合版).docx",
+        "杭电推荐公选课+2.doc",
+        "选课参考资料.doc"
+      ],
+      "missingAfterUpload": [],
+      "containsHeader": true,
+      "screenshotPath": "C:\\Users\\Star\\Desktop\\总项目文件\\杭电飞书社区\\output\\playwright\\latest-materials-2026-07-15\\公选课资料与评价.png"
+    },
+    {
+      "title": "2026年本科生奖助评优政策",
+      "category": "发展与就业 / 奖助与评优",
+      "url": "https://scnbcye3xdfz.feishu.cn/wiki/A8NBwNTmOiCQkMksCT5cqC5bnzf",
+      "token": "A8NBwNTmOiCQkMksCT5cqC5bnzf",
+      "created": true,
+      "expectedFiles": [
+        "73_关于印发《杭州电子科技大学本科生国家奖.pdf",
+        "74_关于印发《杭州电子科技大学国家励志奖学.pdf",
+        "75_关于印发《杭州电子科技大学省政府奖学金.pdf",
+        "76_关于印发《杭州电子科技大学国家助学金评.pdf",
+        "77_关于印发《杭州电子科技大学学生资助对象.pdf",
+        "78_关于印发《杭州电子科技大学困难补助管理.pdf",
+        "79_关于印发《杭州电子科技大学本科生奖学金.pdf",
+        "80_关于印发《杭州电子科技大学本科生三好学.pdf"
+      ],
+      "uploaded": [
+        "73_关于印发《杭州电子科技大学本科生国家奖.pdf",
+        "74_关于印发《杭州电子科技大学国家励志奖学.pdf",
+        "75_关于印发《杭州电子科技大学省政府奖学金.pdf",
+        "76_关于印发《杭州电子科技大学国家助学金评.pdf",
+        "77_关于印发《杭州电子科技大学学生资助对象.pdf",
+        "78_关于印发《杭州电子科技大学困难补助管理.pdf",
+        "79_关于印发《杭州电子科技大学本科生奖学金.pdf",
+        "80_关于印发《杭州电子科技大学本科生三好学.pdf"
+      ],
+      "missingAfterUpload": [],
+      "containsHeader": true,
+      "screenshotPath": "C:\\Users\\Star\\Desktop\\总项目文件\\杭电飞书社区\\output\\playwright\\latest-materials-2026-07-15\\2026年本科生奖助评优政策.png"
+    },
+    {
+      "title": "2026年学科竞赛管理规定",
+      "category": "发展与就业 / 竞赛入门",
+      "url": "https://scnbcye3xdfz.feishu.cn/wiki/DrTwwchn2iA5OnkjWYrctRIZnmf",
+      "token": "DrTwwchn2iA5OnkjWYrctRIZnmf",
+      "created": true,
+      "expectedFiles": [
+        "杭州电子科技大学学科竞赛管理规定（杭电教[2026]92号）(2).pdf"
+      ],
+      "uploaded": [
+        "杭州电子科技大学学科竞赛管理规定（杭电教[2026]92号）(2).pdf"
+      ],
+      "missingAfterUpload": [],
+      "containsHeader": true,
+      "screenshotPath": "C:\\Users\\Star\\Desktop\\总项目文件\\杭电飞书社区\\output\\playwright\\latest-materials-2026-07-15\\2026年学科竞赛管理规定.png"
+    }
+  ]
+}

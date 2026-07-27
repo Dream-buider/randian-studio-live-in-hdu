@@ -1,0 +1,17 @@
+node_modules/
+apps/freshman-mvp/node_modules/
+apps/freshman-mvp/dist/
+apps/freshman-mvp/runtime/
+apps/freshman-mvp/.env
+apps/freshman-mvp/.env.local
+vendor/WeKnora/.env
+deploy/local/.env.local
+output/
+outputs/
+tmp/
+.pw-edge-profile/
+.playwright-cli/
+.superpowers/
+.worktrees/
+*.log
+

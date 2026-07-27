@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#111827">
+  <title>问题审核 · LIVE IN HDU</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="admin-page">
+  <header class="admin-topbar">
+    <a class="brand brand-light" href="/">
+      <span class="brand-mark"><i></i><i></i><i></i></span>
+      <span><strong>LIVE IN HDU</strong><small>问题审核台</small></span>
+    </a>
+    <a class="back-link" href="/">返回问答页 →</a>
+  </header>
+
+  <main class="admin-shell">
+    <section class="admin-hero">
+      <div>
+        <p class="eyebrow dark">HUMAN IN THE LOOP</p>
+        <h1>把每一个新问题，<br>变成下一次的标准答案。</h1>
+      </div>
+      <div class="review-stat">
+        <strong id="pending-count">0</strong>
+        <span>条待审核</span>
+      </div>
+    </section>
+
+    <section class="review-toolbar">
+      <div>
+        <h2>审核队列</h2>
+        <p>默认按时间从上到下排列 · 最早提问优先</p>
+      </div>
+      <label>
+        <span>筛选状态</span>
+        <select id="status-filter">
+          <option value="pending">待审核</option>
+          <option value="approved">已通过</option>
+          <option value="rejected">已驳回</option>
+          <option value="">全部</option>
+        </select>
+      </label>
+    </section>
+
+    <div id="review-list" class="review-list" aria-live="polite"></div>
+  </main>
+
+  <template id="review-template">
+    <article class="review-card">
+      <header>
+        <div><span data-role="ordinal"></span><strong data-role="status"></strong><i data-role="risk"></i></div>
+        <time data-role="time"></time>
+      </header>
+      <section class="review-question">
+        <small>用户问题</small>
+        <h3 data-role="question"></h3>
+      </section>
+      <label class="answer-editor">
+        <span>建议答案</span>
+        <textarea data-role="answer" rows="5"></textarea>
+      </label>
+      <div data-role="sources" class="admin-sources"></div>
+      <footer>
+        <button class="reject-button" data-action="reject" type="button">驳回</button>
+        <button class="approve-button" data-action="approve" type="button">通过并加入知识库 <span>→</span></button>
+      </footer>
+    </article>
+  </template>
+
+  <script type="module" src="/admin.js"></script>
+</body>
+</html>

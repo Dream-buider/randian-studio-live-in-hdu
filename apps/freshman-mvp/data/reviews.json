@@ -1,0 +1,100 @@
+{
+  "nextOrdinal": 6,
+  "items": [
+    {
+      "id": "d15b04d8-49e6-4511-bfd2-df68d37817ab",
+      "ordinal": 1,
+      "question": "学校附近哪里可以修自行车",
+      "answer": "关于“学校附近哪里可以修自行车”，当前本地雏形已完成联网兜底流程，但尚未配置真实搜索与模型密钥。正式接入后，这里会展示 DeepSeek V4 根据网络线索整理的答案；涉及校规、时间、费用和办理流程时，请优先核对杭州电子科技大学官方通知。",
+      "sources": [
+        {
+          "title": "本地演示模式",
+          "url": ""
+        }
+      ],
+      "mode": "demo",
+      "riskLevel": "normal",
+      "status": "rejected",
+      "finalAnswer": "关于“学校附近哪里可以修自行车”，当前本地雏形已完成联网兜底流程，但尚未配置真实搜索与模型密钥。正式接入后，这里会展示 DeepSeek V4 根据网络线索整理的答案；涉及校规、时间、费用和办理流程时，请优先核对杭州电子科技大学官方通知。",
+      "reviewerId": "local-admin",
+      "createdAt": "2026-07-21T06:59:25.085Z",
+      "reviewedAt": "2026-07-21T07:05:13.157Z"
+    },
+    {
+      "id": "d1d27af6-6f68-4fac-af87-3085c3dd14fd",
+      "ordinal": 2,
+      "question": "我是金融专业的，想转到计算机学院，需要满足什么条件？",
+      "answer": "关于“我是金融专业的，想转到计算机学院，需要满足什么条件？”，当前本地雏形已完成联网兜底流程，但尚未配置真实搜索与模型密钥。正式接入后，这里会展示 DeepSeek V4 根据网络线索整理的答案；涉及校规、时间、费用和办理流程时，请优先核对杭州电子科技大学官方通知。",
+      "sources": [
+        {
+          "title": "本地演示模式",
+          "url": ""
+        }
+      ],
+      "mode": "demo",
+      "riskLevel": "normal",
+      "status": "approved",
+      "finalAnswer": "关于“我是金融专业的，想转到计算机学院，需要满足什么条件？”，当前本地雏形已完成联网兜底流程，但尚未配置真实搜索与模型密钥。正式接入后，这里会展示 DeepSeek V4 根据网络线索整理的答案；涉及校规、时间、费用和办理流程时，请优先核对杭州电子科技大学官方通知。",
+      "reviewerId": "local-admin",
+      "createdAt": "2026-07-21T07:03:45.721Z",
+      "reviewedAt": "2026-07-21T07:05:14.302Z"
+    },
+    {
+      "id": "14c2cc17-4c67-4c6e-a5c7-df1e103288a1",
+      "ordinal": 3,
+      "question": "卓越学院的培养方案",
+      "answer": "关于“卓越学院的培养方案”，当前本地雏形已完成联网兜底流程，但尚未配置真实搜索与模型密钥。正式接入后，这里会展示 DeepSeek V4 根据网络线索整理的答案；涉及校规、时间、费用和办理流程时，请优先核对杭州电子科技大学官方通知。",
+      "sources": [
+        {
+          "title": "本地演示模式",
+          "url": ""
+        }
+      ],
+      "mode": "demo",
+      "riskLevel": "normal",
+      "status": "rejected",
+      "finalAnswer": "关于“卓越学院的培养方案”，当前本地雏形已完成联网兜底流程，但尚未配置真实搜索与模型密钥。正式接入后，这里会展示 DeepSeek V4 根据网络线索整理的答案；涉及校规、时间、费用和办理流程时，请优先核对杭州电子科技大学官方通知。",
+      "reviewerId": "local-admin",
+      "createdAt": "2026-07-21T07:04:12.017Z",
+      "reviewedAt": "2026-07-21T07:05:18.602Z"
+    },
+    {
+      "id": "d1a2f4f8-d2d0-46bc-a418-d45bf9cf5d47",
+      "ordinal": 4,
+      "question": "学校附近哪里能给自行车补胎",
+      "answer": "关于“学校附近哪里能给自行车补胎”，当前本地雏形已完成联网兜底流程，但尚未配置真实搜索与模型密钥。正式接入后，这里会展示 DeepSeek V4 根据网络线索整理的答案；涉及校规、时间、费用和办理流程时，请优先核对杭州电子科技大学官方通知。",
+      "sources": [
+        {
+          "title": "本地演示模式",
+          "url": ""
+        }
+      ],
+      "mode": "demo",
+      "riskLevel": "normal",
+      "status": "pending",
+      "finalAnswer": "",
+      "reviewerId": "",
+      "createdAt": "2026-07-21T07:23:42.810Z",
+      "reviewedAt": null
+    },
+    {
+      "id": "21d2ba78-bcd2-412f-947d-8aa6f533ee81",
+      "ordinal": 5,
+      "question": "如何申请转专业",
+      "answer": "关于“如何申请转专业”，当前本地雏形已完成联网兜底流程，但尚未配置真实搜索与模型密钥。正式接入后，这里会展示 DeepSeek V4 根据网络线索整理的答案；涉及校规、时间、费用和办理流程时，请优先核对杭州电子科技大学官方通知。",
+      "sources": [
+        {
+          "title": "本地演示模式",
+          "url": ""
+        }
+      ],
+      "mode": "demo",
+      "riskLevel": "high",
+      "status": "pending",
+      "finalAnswer": "",
+      "reviewerId": "",
+      "createdAt": "2026-07-21T07:23:52.633Z",
+      "reviewedAt": null
+    }
+  ]
+}

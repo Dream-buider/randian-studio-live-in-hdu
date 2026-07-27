@@ -1,0 +1,13 @@
+{
+  "name": "live-in-hdu",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "mvp": "node apps/freshman-mvp/server.mjs",
+    "test:mvp": "node --test apps/freshman-mvp/test/*.test.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "^1.60.0"
+  }
+}

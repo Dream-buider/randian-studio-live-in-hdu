@@ -1,0 +1,131 @@
+{
+  "publishedAt": "2026-06-07",
+  "pageCount": 4,
+  "expectedFileCount": 23,
+  "uploadedFileCount": 23,
+  "missingFileCount": 0,
+  "skippedStandalone": [
+    {
+      "filename": "杭州电子科技大学本科学生劳动教育课程管理办法（杭电教〔2023〕151号）(1).pdf",
+      "reason": "库内已有 `劳动教育课程管理办法` 专页，本次不重复上传同主题政策文件。"
+    }
+  ],
+  "pageResults": [
+    {
+      "title": "C++ 程序设计复习资料",
+      "url": "https://scnbcye3xdfz.feishu.cn/wiki/TGMHwsUnjiGy1tkL5AycPSGCnwA",
+      "token": "TGMHwsUnjiGy1tkL5AycPSGCnwA",
+      "created": true,
+      "expectedFiles": [
+        "2006 C++试卷A.pdf",
+        "2008 C++ 试卷A.pdf",
+        "2008 C++ 试卷B.pdf",
+        "2009 C++ 试卷A.pdf",
+        "2009 C++ 试卷B.pdf",
+        "2016 C++ 试卷B (1).pdf",
+        "未知年份C++试卷A.pdf",
+        "未知年份C++试卷A2.pdf",
+        "未知年份C++试卷B.pdf",
+        "未知年份C++试卷B2.pdf",
+        "未知年份C++试卷B3.pdf",
+        "复习提示c++ (1).pdf",
+        "chap14总复习(1).pptx"
+      ],
+      "uploaded": [
+        "2006 C++试卷A.pdf",
+        "2008 C++ 试卷A.pdf",
+        "2008 C++ 试卷B.pdf",
+        "2009 C++ 试卷A.pdf",
+        "2009 C++ 试卷B.pdf",
+        "2016 C++ 试卷B (1).pdf",
+        "未知年份C++试卷A.pdf",
+        "未知年份C++试卷A2.pdf",
+        "未知年份C++试卷B.pdf",
+        "未知年份C++试卷B2.pdf",
+        "未知年份C++试卷B3.pdf",
+        "复习提示c++ (1).pdf",
+        "chap14总复习(1).pptx"
+      ],
+      "missingAfterUpload": [],
+      "excludedDuplicates": [
+        {
+          "filename": "2016 C++ 试卷B (2).pdf",
+          "duplicateOf": "2016 C++ 试卷B (1).pdf"
+        }
+      ],
+      "containsHeader": true,
+      "screenshotPath": "C:\\Users\\Star\\Desktop\\总项目文件\\杭电飞书社区\\output\\playwright\\review-C++ 程序设计复习资料.png"
+    },
+    {
+      "title": "期末复习 | 思想道德与法治",
+      "url": "https://scnbcye3xdfz.feishu.cn/wiki/KRnTwhP9tidmogkAlUIc6KLGnAh",
+      "token": "KRnTwhP9tidmogkAlUIc6KLGnAh",
+      "created": true,
+      "expectedFiles": [
+        "2025-2026-2《思想道德与法治》复习大纲(1).docx"
+      ],
+      "uploaded": [
+        "2025-2026-2《思想道德与法治》复习大纲(1).docx"
+      ],
+      "missingAfterUpload": [],
+      "excludedDuplicates": [],
+      "containsHeader": true,
+      "screenshotPath": "C:\\Users\\Star\\Desktop\\总项目文件\\杭电飞书社区\\output\\playwright\\review-期末复习 - 思想道德与法治.png"
+    },
+    {
+      "title": "2025-2026-2 期末考试安排查询",
+      "url": "https://scnbcye3xdfz.feishu.cn/wiki/Tvhgwp4Vfi5cdXkv7SAc9lxonxe",
+      "token": "Tvhgwp4Vfi5cdXkv7SAc9lxonxe",
+      "created": true,
+      "expectedFiles": [
+        "关于开放2025-2026-2期末考试安排信息查询的通知.pdf"
+      ],
+      "uploaded": [
+        "关于开放2025-2026-2期末考试安排信息查询的通知.pdf"
+      ],
+      "missingAfterUpload": [],
+      "excludedDuplicates": [],
+      "containsHeader": true,
+      "screenshotPath": "C:\\Users\\Star\\Desktop\\总项目文件\\杭电飞书社区\\output\\playwright\\review-2025-2026-2 期末考试安排查询.png"
+    },
+    {
+      "title": "机器人与具身智能岗位资料",
+      "url": "https://scnbcye3xdfz.feishu.cn/wiki/GWDgwrnffifdpMknl4ZcCUqDn9c",
+      "token": "GWDgwrnffifdpMknl4ZcCUqDn9c",
+      "created": true,
+      "expectedFiles": [
+        "导航算法工程师.pdf",
+        "工业机器人算法工程师.pdf",
+        "机器人感知算法工程师.pdf",
+        "机器人嵌入式软件开发工程师.pdf",
+        "机器人硬件工程师.pdf",
+        "机器人运动控制算法工程师.pdf",
+        "具身智能算法工程师.pdf",
+        "机器人SLAM算法工程师面试题.pdf"
+      ],
+      "uploaded": [
+        "导航算法工程师.pdf",
+        "工业机器人算法工程师.pdf",
+        "机器人感知算法工程师.pdf",
+        "机器人嵌入式软件开发工程师.pdf",
+        "机器人硬件工程师.pdf",
+        "机器人运动控制算法工程师.pdf",
+        "具身智能算法工程师.pdf",
+        "机器人SLAM算法工程师面试题.pdf"
+      ],
+      "missingAfterUpload": [],
+      "excludedDuplicates": [],
+      "containsHeader": true,
+      "screenshotPath": "C:\\Users\\Star\\Desktop\\总项目文件\\杭电飞书社区\\output\\playwright\\review-机器人与具身智能岗位资料.png"
+    }
+  ],
+  "changelogResult": {
+    "title": "更新日志",
+    "url": "https://scnbcye3xdfz.feishu.cn/wiki/T8RcwgsUQi4JKUkTU2tcnCyYnBh",
+    "headings": [
+      "飞书云文档",
+      "更新日志​"
+    ],
+    "screenshotPath": "C:\\Users\\Star\\Desktop\\总项目文件\\杭电飞书社区\\output\\playwright\\home-changelog-page-2026-06-07.png"
+  }
+}

@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LIVE IN HDU 阶段总结</title>
+  <style>
+    :root {
+      --bg: #f7f5ef;
+      --paper: #fffdf8;
+      --ink: #17202a;
+      --muted: #68717d;
+      --line: #e5dfd2;
+      --blue: #2563eb;
+      --green: #16825d;
+      --orange: #d97706;
+      --rose: #be3455;
+      --shadow: 0 16px 42px rgba(26, 30, 36, 0.12);
+      --radius: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.72;
+    }
+
+    a {
+      color: inherit;
+    }
+
+    .hero {
+      min-height: 86svh;
+      display: grid;
+      align-items: end;
+      position: relative;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(12, 16, 22, 0.18) 0%, rgba(12, 16, 22, 0.56) 78%),
+        url("../live-in-hdu-final-layout.png") center 18% / cover no-repeat;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto 0 0;
+      height: 28%;
+      background: linear-gradient(180deg, rgba(247, 245, 239, 0), var(--bg));
+      pointer-events: none;
+    }
+
+    .hero-inner,
+    .section-inner {
+      width: min(1120px, calc(100% - 40px));
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-inner {
+      padding: 88px 0 72px;
+      color: #fff;
+      text-shadow: 0 1px 24px rgba(0, 0, 0, 0.22);
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      gap: 10px;
+      align-items: center;
+      padding: 6px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.42);
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 999px;
+      font-size: 13px;
+      letter-spacing: 0;
+      backdrop-filter: blur(8px);
+    }
+
+    h1 {
+      margin: 18px 0 14px;
+      max-width: 780px;
+      font-size: clamp(42px, 8vw, 92px);
+      line-height: 0.98;
+      letter-spacing: 0;
+    }
+
+    .hero-copy {
+      max-width: 720px;
+      margin: 0;
+      font-size: clamp(17px, 2.1vw, 24px);
+      color: rgba(255, 255, 255, 0.92);
+    }
+
+    .quick-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 28px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 38px;
+      padding: 7px 13px;
+      border: 1px solid rgba(255, 255, 255, 0.34);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.16);
+      color: #fff;
+      font-size: 14px;
+      text-decoration: none;
+      backdrop-filter: blur(10px);
+    }
+
+    section {
+      padding: 52px 0;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 16px;
+    }
+
+    .section-title h2 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 48px);
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    .section-title p {
+      margin: 0;
+      color: var(--muted);
+      max-width: 420px;
+      font-size: 15px;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+
+    .metric {
+      min-height: 146px;
+      padding: 18px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 38px;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .metric:nth-child(1) strong { color: var(--blue); }
+    .metric:nth-child(2) strong { color: var(--green); }
+    .metric:nth-child(3) strong { color: var(--orange); }
+    .metric:nth-child(4) strong { color: var(--rose); }
+
+    .timeline {
+      display: grid;
+      gap: 14px;
+    }
+
+    .timeline-item {
+      display: grid;
+      grid-template-columns: 148px 1fr;
+      gap: 20px;
+      align-items: start;
+      padding: 20px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .timeline-item time {
+      color: var(--green);
+      font-weight: 800;
+      font-size: 15px;
+    }
+
+    .timeline-item h3 {
+      margin: 0 0 8px;
+      font-size: 23px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    .timeline-item p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .layout-band {
+      background: #ece7db;
+      border-block: 1px solid var(--line);
+    }
+
+    .layout-wrap {
+      display: grid;
+      grid-template-columns: 0.92fr 1.08fr;
+      gap: 28px;
+      align-items: center;
+    }
+
+    .screenshot {
+      width: 100%;
+      display: block;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+    }
+
+    .feature-list {
+      display: grid;
+      gap: 12px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .feature-list li {
+      padding: 14px 0;
+      border-bottom: 1px solid rgba(23, 32, 42, 0.12);
+      font-size: 18px;
+    }
+
+    .feature-list b {
+      color: var(--ink);
+    }
+
+    .feature-list span {
+      color: var(--muted);
+    }
+
+    .topic-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+
+    .topic {
+      min-height: 190px;
+      padding: 18px;
+      border-radius: var(--radius);
+      background: var(--paper);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+
+    .topic h3 {
+      margin: 0 0 10px;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    .topic p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .notice {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 20px;
+      align-items: center;
+      padding: 28px;
+      background: var(--ink);
+      color: #fff;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .notice h2 {
+      margin: 0 0 8px;
+      font-size: clamp(26px, 4vw, 44px);
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    .notice p {
+      margin: 0;
+      color: rgba(255, 255, 255, 0.78);
+    }
+
+    .notice a {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: #fff;
+      color: var(--ink);
+      font-weight: 800;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    footer {
+      padding: 26px 0 44px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    @media (max-width: 900px) {
+      .summary-grid,
+      .topic-grid,
+      .layout-wrap,
+      .notice {
+        grid-template-columns: 1fr;
+      }
+
+      .timeline-item {
+        grid-template-columns: 1fr;
+        gap: 6px;
+      }
+
+      .section-title {
+        align-items: start;
+        flex-direction: column;
+      }
+
+      .notice a {
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .hero {
+        min-height: 82svh;
+        background:
+          linear-gradient(180deg, rgba(12, 16, 22, 0.54) 0%, rgba(12, 16, 22, 0.86) 78%),
+          url("../live-in-hdu-final-layout.png") 20% 8% / cover no-repeat;
+      }
+
+      .hero-inner,
+      .section-inner {
+        width: min(100% - 28px, 1120px);
+      }
+
+      .hero-inner {
+        padding: 68px 0 54px;
+      }
+
+      .pill {
+        width: 100%;
+        justify-content: center;
+      }
+
+      section {
+        padding: 40px 0;
+      }
+
+      .metric,
+      .topic,
+      .notice {
+        padding: 16px;
+      }
+
+      .metric {
+        min-height: 118px;
+      }
+
+      .topic {
+        min-height: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-inner">
+      <div class="eyebrow">2026-05-24 阶段总结</div>
+      <h1>LIVE IN HDU</h1>
+      <p class="hero-copy">首页和基础目录已经搭好，可以开始把杭电学生真正会问、会搜、会反复确认的信息沉淀进知识库。</p>
+      <nav class="quick-row" aria-label="核心入口">
+        <a class="pill" href="https://scnbcye3xdfz.feishu.cn/wiki/XI0hwjd9biAw6Kkz3afcmEGxn6g">打开首页</a>
+        <a class="pill" href="https://ask.feishu.cn/">问答入口</a>
+        <a class="pill" href="https://scnbcye3xdfz.feishu.cn/wiki/Q3rwwOyn7iixTnkm6vRcNXatn9e">新生必看</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <div class="section-inner">
+        <div class="section-title">
+          <h2>已经完成</h2>
+          <p>先把社区的入口、阅读路径和资料沉淀位置搭起来，让后续内容增长有稳定容器。</p>
+        </div>
+        <div class="summary-grid">
+          <article class="metric">
+            <strong>8</strong>
+            <span>一级问题域已经整理完成</span>
+          </article>
+          <article class="metric">
+            <strong>50+</strong>
+            <span>二级页面入口按学生场景铺开</span>
+          </article>
+          <article class="metric">
+            <strong>1</strong>
+            <span>首页门户布局已上线</span>
+          </article>
+          <article class="metric">
+            <strong>AI</strong>
+            <span>问答入口已前置到首页</span>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="layout-band">
+      <div class="section-inner layout-wrap">
+        <img class="screenshot" src="../live-in-hdu-final-layout.png" alt="LIVE IN HDU 飞书首页截图">
+        <div>
+          <div class="section-title">
+            <h2>页面结构</h2>
+            <p>参考 WaytoAGI 的知识库首页，先做出可浏览、可跳转、可继续扩展的门户。</p>
+          </div>
+          <ul class="feature-list">
+            <li><b>顶部：</b><span>封面、主标题、外部分享状态和编辑入口。</span></li>
+            <li><b>左侧：</b><span>知识库目录树，按学生真实问题路径进入。</span></li>
+            <li><b>正文：</b><span>AI 速览、愿景、简介、问答入口、投稿入口、更新日志。</span></li>
+            <li><b>右侧：</b><span>页内目录自动生成，长页面也能快速定位。</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-inner">
+        <div class="section-title">
+          <h2>内容方向</h2>
+          <p>现在先围绕高频校园问题补资料，不安排具体个人分工。</p>
+        </div>
+        <div class="topic-grid">
+          <article class="topic">
+            <h3>新生入学</h3>
+            <p>报到准备、宿舍用品、校园卡、网络水电、快递外卖、食堂地图。</p>
+          </article>
+          <article class="topic">
+            <h3>学业与课程</h3>
+            <p>课程复习、历年卷、实验作业、程设、高数、线代、大物、四六级。</p>
+          </article>
+          <article class="topic">
+            <h3>选课与学籍</h3>
+            <p>选课时间线、体育课、通识课、重修补考缓考、转专业、培养方案。</p>
+          </article>
+          <article class="topic">
+            <h3>实验室与科研</h3>
+            <p>实验室名单、加入方式、导师联系、科研入门、大创项目、面试经验。</p>
+          </article>
+          <article class="topic">
+            <h3>校园生活</h3>
+            <p>打印、校医院医保、交通、宿舍维修、周边生活、安全防骗。</p>
+          </article>
+          <article class="topic">
+            <h3>发展与就业</h3>
+            <p>竞赛、保研、考研、实习、秋招春招、简历面试、项目作品集。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-inner">
+        <div class="section-title">
+          <h2>执行记录</h2>
+          <p>这一轮主要是把“能让大家开始行动”的基础设施补齐。</p>
+        </div>
+        <div class="timeline">
+          <article class="timeline-item">
+            <time>5 月 13 日</time>
+            <div>
+              <h3>创建知识库和初始目录</h3>
+              <p>完成 LIVE IN HDU 的飞书知识库搭建，建立首批一级和二级页面。</p>
+            </div>
+          </article>
+          <article class="timeline-item">
+            <time>5 月 18 日</time>
+            <div>
+              <h3>完成 V1 信息架构</h3>
+              <p>把目录从资料分类改成学生真实问题路径，控制层级，避免过早复杂化。</p>
+            </div>
+          </article>
+          <article class="timeline-item">
+            <time>5 月 24 日</time>
+            <div>
+              <h3>首页门户布局上线</h3>
+              <p>参考 WaytoAGI 首页组织方式，前置问答入口、快速导航、投稿入口和更新说明。</p>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-inner">
+        <div class="notice">
+          <div>
+            <h2>可以开始搜集资料了</h2>
+            <p>资料尽量带上来源、时间、适用对象和是否需要复核；政策类优先标官方来源，经验类后续再做多人确认。</p>
+          </div>
+          <a href="团队发布总结_2026-05-24.md">查看文字版总结</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="section-inner">LIVE IN HDU · 阶段总结可视化页面</div>
+  </footer>
+</body>
+</html>

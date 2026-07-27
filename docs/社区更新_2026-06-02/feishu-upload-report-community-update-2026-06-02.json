@@ -1,0 +1,19 @@
+{
+  "publishedAt": "2026-06-02",
+  "pageCount": 1,
+  "expectedFileCount": 2,
+  "uploadedFileCount": 0,
+  "missingFileCount": 0,
+  "pages": [
+    {
+      "type": "campusLife",
+      "title": "美食红黑榜 | 下沙外卖互助",
+      "url": "https://scnbcye3xdfz.feishu.cn/wiki/GvuVwuDaEixo9CkDHy2cWP9Xn1e",
+      "created": true,
+      "renamed": false,
+      "deletedProbeLines": 0,
+      "wpsUrl": "https://www.kdocs.cn/l/cb17FeBLYim6",
+      "screenshotPath": "C:\\Users\\Star\\Desktop\\总项目文件\\杭电飞书社区\\output\\playwright\\review-美食红黑榜 - 下沙外卖互助.png"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "publishedAt": "2026-05-28",
+  "pageCount": 1,
+  "expectedFiles": 10,
+  "uploadedFiles": 10,
+  "missingFiles": 0,
+  "results": [
+    {
+      "title": "期末复习 | 离散数学",
+      "url": "https://scnbcye3xdfz.feishu.cn/wiki/SNG7wh7zGiUGcjkAv1QcYktDnsc",
+      "created": false,
+      "deletedProbeLines": 0,
+      "repairedRecord": false,
+      "expected": 10,
+      "uploaded": [
+        "2018.1 离散数学期末试题及答案.pdf",
+        "2019.1 离散数学期末答案.pdf",
+        "2019.1 离散数学期末试题.pdf",
+        "2020 离散数学 A卷 附答案_1.pdf",
+        "2020 离散数学 A卷_1.pdf",
+        "2020 离散数学 B卷 附答案_1.pdf",
+        "2020 离散数学 B卷_1.pdf",
+        "2020.1 离散数学期末试题及答案.pdf",
+        "杭电离散数学期末卷.pdf",
+        "杭电离散数学复习PPT.zip"
+      ],
+      "missing": [],
+      "excludedDuplicates": [
+        "2020 离散数学 A卷 附答案.pdf => 2020 离散数学 A卷 附答案_1.pdf",
+        "2020 离散数学 B卷 附答案.pdf => 2020 离散数学 B卷 附答案_1.pdf",
+        "2020 离散数学 B卷.pdf => 2020 离散数学 B卷_1.pdf"
+      ]
+    }
+  ]
+}

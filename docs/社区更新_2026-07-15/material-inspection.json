@@ -1,0 +1,42 @@
+{
+  "inspectedAt": "2026-07-15",
+  "sourceDirectory": "最新资料",
+  "sourceFileCount": 24,
+  "publishFileCount": 23,
+  "skippedFileCount": 1,
+  "categories": [
+    "课程复习 / 实时嵌入式系统",
+    "课程复习 / 电路分析",
+    "课程复习 / 数字逻辑电路",
+    "课程复习 / 人工智能导论",
+    "选课与学籍 / 通识课",
+    "发展与就业 / 奖助与评优",
+    "发展与就业 / 竞赛入门"
+  ],
+  "records": [
+    { "filename": "2023电分(1).pdf", "type": "pdf", "decision": "publish", "targetPage": "期末复习 | 电路分析", "inspection": "3页扫描试卷，含题面、参考解答和电路图；视觉抽查清晰。" },
+    { "filename": "23年数电(1).pdf", "type": "pdf", "decision": "publish", "targetPage": "期末复习 | 数字逻辑电路", "inspection": "8页扫描件，前后包含4页题面及带解答版本；视觉抽查清晰。" },
+    { "filename": "73_关于印发《杭州电子科技大学本科生国家奖.pdf", "type": "pdf", "decision": "publish", "targetPage": "2026年本科生奖助评优政策", "inspection": "杭电学〔2026〕73号，本科生国家奖学金评审办法，6页红头文件。" },
+    { "filename": "74_关于印发《杭州电子科技大学国家励志奖学.pdf", "type": "pdf", "decision": "publish", "targetPage": "2026年本科生奖助评优政策", "inspection": "杭电学〔2026〕74号，国家励志奖学金评审办法，4页红头文件。" },
+    { "filename": "75_关于印发《杭州电子科技大学省政府奖学金.pdf", "type": "pdf", "decision": "publish", "targetPage": "2026年本科生奖助评优政策", "inspection": "杭电学〔2026〕75号，省政府奖学金评审办法，5页红头文件。" },
+    { "filename": "76_关于印发《杭州电子科技大学国家助学金评.pdf", "type": "pdf", "decision": "publish", "targetPage": "2026年本科生奖助评优政策", "inspection": "杭电学〔2026〕76号，国家助学金评审办法，4页红头文件。" },
+    { "filename": "77_关于印发《杭州电子科技大学学生资助对象.pdf", "type": "pdf", "decision": "publish", "targetPage": "2026年本科生奖助评优政策", "inspection": "杭电学〔2026〕77号，学生资助对象认定办法，6页红头文件。" },
+    { "filename": "78_关于印发《杭州电子科技大学困难补助管理.pdf", "type": "pdf", "decision": "publish", "targetPage": "2026年本科生奖助评优政策", "inspection": "杭电学〔2026〕78号，困难补助管理办法，3页红头文件。" },
+    { "filename": "79_关于印发《杭州电子科技大学本科生奖学金.pdf", "type": "pdf", "decision": "publish", "targetPage": "2026年本科生奖助评优政策", "inspection": "杭电学〔2026〕79号，本科生奖学金评审办法，7页红头文件。" },
+    { "filename": "80_关于印发《杭州电子科技大学本科生三好学.pdf", "type": "pdf", "decision": "publish", "targetPage": "2026年本科生奖助评优政策", "inspection": "杭电学〔2026〕80号，三好学生与优秀学生干部评审办法，3页红头文件。" },
+    { "filename": "公选课评价收集表.xlsx", "type": "xlsx", "decision": "publish_with_disclaimer", "targetPage": "公选课资料与评价", "inspection": "单表结构化课程、教师和学生评价；内容为个人体验，存在明显时效性。" },
+    { "filename": "公选课选课指导(整合版).docx", "type": "docx", "decision": "publish_with_disclaimer", "targetPage": "公选课资料与评价", "inspection": "公选课、体育课和选课操作经验整合；包含主观推荐与过时链接风险。" },
+    { "filename": "杭电公选课图鉴(1).xlsx", "type": "xlsx", "decision": "publish_with_disclaimer", "targetPage": "公选课资料与评价", "inspection": "课程代码、教师、时间地点、容量和评价总表；数据显然来自往届学期。" },
+    { "filename": "杭电推荐公选课+2.doc", "type": "doc", "decision": "publish_with_disclaimer", "targetPage": "公选课资料与评价", "inspection": "往届推荐与避雷经验，约3900字符；主观且可能过时。" },
+    { "filename": "杭州电子科技大学学科竞赛管理规定（杭电教[2026]92号）(2).pdf", "type": "pdf", "decision": "publish", "targetPage": "2026年学科竞赛管理规定", "inspection": "杭电教〔2026〕92号，2026年6月22日印发，共10页；OCR和首页视觉抽查一致。" },
+    { "filename": "老师复习重点_整合审查版.pdf", "type": "pdf", "decision": "publish", "targetPage": "期末复习 | 实时嵌入式系统", "inspection": "5页精简审查版重点，已注明来源和纠偏边界。" },
+    { "filename": "嵌入式复习材料.docx", "type": "docx", "decision": "publish", "targetPage": "期末复习 | 实时嵌入式系统", "inspection": "约3500字符的成套练习，覆盖ARM、HAL、FreeRTOS、定时器、OLED等。" },
+    { "filename": "嵌入式复习材料(1).docx", "type": "docx", "decision": "skip_near_duplicate", "targetPage": null, "inspection": "与嵌入式复习材料.docx规范化文本相似度99.3%，仅保留无后缀版本。" },
+    { "filename": "嵌入式课程期末考试必考点_全量优先级版(1).pdf", "type": "pdf", "decision": "publish", "targetPage": "期末复习 | 实时嵌入式系统", "inspection": "8页全量重点梳理，说明由37张图片去重整理，覆盖考试结构和优先级。" },
+    { "filename": "嵌入式习题卷.docx", "type": "docx", "decision": "publish", "targetPage": "期末复习 | 实时嵌入式系统", "inspection": "正文为17张答题截图，OCR确认包含题目和作答；与文字版题目整理有交叉但非完全重复。" },
+    { "filename": "实时嵌入式练习卷(1).docx", "type": "docx", "decision": "publish", "targetPage": "期末复习 | 实时嵌入式系统", "inspection": "约3000字符练习卷，题组与其他卷有部分交叉但独立。" },
+    { "filename": "题目整理.docx", "type": "docx", "decision": "publish", "targetPage": "期末复习 | 实时嵌入式系统", "inspection": "42题、100分的题目整理，约3600字符；与截图答题卷互为题面和作答补充。" },
+    { "filename": "选课参考资料.doc", "type": "doc", "decision": "publish_with_disclaimer", "targetPage": "公选课资料与评价", "inspection": "往届选课评价汇编，约3900字符；内容主观且可能过时。" },
+    { "filename": "chap14总复习(1).pptx", "type": "pptx", "decision": "publish", "targetPage": "期末复习 | 人工智能导论", "inspection": "88页人工智能导论总复习课件；核验后纠正了仅凭文件名可能造成的错误课程归类。" }
+  ]
+}

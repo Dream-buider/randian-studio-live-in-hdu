@@ -1,0 +1,23 @@
+{
+  "publishedAt": "2026-05-28",
+  "pageCount": 1,
+  "expectedFiles": 47,
+  "uploadedFiles": 0,
+  "missingFiles": 0,
+  "results": [
+    {
+      "title": "期末复习 | 高等数学",
+      "url": "https://scnbcye3xdfz.feishu.cn/wiki/HKiUwarYCiiaoFk9g4VchFj4n5e",
+      "created": false,
+      "deletedProbeLines": 0,
+      "repairedRecord": false,
+      "expected": 47,
+      "uploaded": [],
+      "missing": [],
+      "excludedDuplicates": [
+        "14年杭电高数下A期末试题及答案.pdf => 14年杭电高数下A期末试题及答案 (1).pdf",
+        "2021.11杭电高数D期中试题.pdf => 2021.11 杭电高数D期中试题.pdf"
+      ]
+    }
+  ]
+}

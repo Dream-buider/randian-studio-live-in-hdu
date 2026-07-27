@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f7f8fc">
+  <title>LIVE IN HDU 新生助手</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="ask-page">
+  <header class="topbar shell">
+    <a class="brand" href="/" aria-label="LIVE IN HDU 首页">
+      <span class="brand-mark"><i></i><i></i><i></i></span>
+      <span><strong>LIVE IN HDU</strong><small>新生信息助手</small></span>
+    </a>
+    <a class="admin-link" href="/admin">审核后台 <span>↗</span></a>
+  </header>
+
+  <main class="shell ask-layout">
+    <section class="hero">
+      <div class="eyebrow"><span class="status-dot"></span> 2026 新生季 · 本地雏形</div>
+      <h1>关于杭电，<br><em>现在就问。</em></h1>
+      <p>转专业、宿舍、校园生活、专业选择……先查社区，再帮你找线索。</p>
+    </section>
+
+    <section class="quick-section" aria-labelledby="quick-title">
+      <div class="section-heading">
+        <h2 id="quick-title">大家都在问</h2>
+        <span>点击直接提问</span>
+      </div>
+      <div class="quick-grid">
+        <button data-quick-question="如何申请转专业"><b>01</b><span>如何申请转专业？</span><i>→</i></button>
+        <button data-quick-question="宿舍是几人间"><b>02</b><span>宿舍是几人间？</span><i>→</i></button>
+        <button data-quick-question="新生报到要带什么"><b>03</b><span>报到要带什么？</span><i>→</i></button>
+        <button data-quick-question="图书馆开放时间"><b>04</b><span>图书馆几点开门？</span><i>→</i></button>
+      </div>
+    </section>
+
+    <section class="conversation" aria-live="polite">
+      <div class="section-heading">
+        <h2>问答记录</h2>
+        <button id="clear-feed" class="text-button" type="button">清空本页</button>
+      </div>
+      <div id="answer-feed" class="answer-feed">
+        <article class="welcome-card">
+          <div class="assistant-avatar">H</div>
+          <div>
+            <strong>你好，我是杭电新生助手</strong>
+            <p>输入具体问题，我会优先查找预设答案和社区知识；需要联网寻找线索时，会明确标注信息状态。</p>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <div class="composer-wrap">
+    <form id="ask-form" class="composer shell">
+      <label class="sr-only" for="question">输入问题</label>
+      <textarea id="question" name="question" rows="1" maxlength="500" placeholder="例如：转专业需要满足什么条件？" required></textarea>
+      <button id="send-button" type="submit" aria-label="发送问题">
+        <span>发送</span><i>↑</i>
+      </button>
+    </form>
+    <p class="composer-note">请勿输入身份证号、手机号等敏感信息</p>
+  </div>
+
+  <template id="answer-template">
+    <article class="answer-card">
+      <div class="question-row"><span>你</span><p data-role="question"></p></div>
+      <div class="answer-body">
+        <div class="assistant-avatar">H</div>
+        <div class="answer-content">
+          <div class="answer-meta"><span data-role="route"></span><small data-role="mode"></small></div>
+          <p data-role="answer"></p>
+          <div data-role="sources" class="source-list"></div>
+          <aside data-role="disclaimer" class="disclaimer" hidden></aside>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
