@@ -23,9 +23,44 @@ export interface AppDependencies {
   router: AnswerRouterContract;
 }
 
+function isLoopbackAddress(address: string): boolean {
+  const normalized = address.toLowerCase();
+  return normalized === '127.0.0.1'
+    || normalized === '::1'
+    || normalized === '::ffff:127.0.0.1'
+    || normalized === '::ffff:7f00:1';
+}
+
+function clientErrorStatus(error: unknown): number | null {
+  if (
+    typeof error !== 'object'
+    || error === null
+    || !('statusCode' in error)
+    || typeof error.statusCode !== 'number'
+    || !Number.isInteger(error.statusCode)
+    || error.statusCode < 400
+    || error.statusCode > 499
+  ) {
+    return null;
+  }
+  return error.statusCode;
+}
+
 export function createApp(deps: AppDependencies): FastifyInstance {
   const app = Fastify({ logger: false });
   const reviewService = new ContentReviewService(deps.content);
+
+  app.addHook('onRequest', async (request, reply) => {
+    const pathname = request.raw.url?.split('?', 1)[0] ?? '';
+    const isLocalOnlyRoute = pathname === '/api/reviews'
+      || pathname === '/api/admin'
+      || pathname.startsWith('/api/admin/');
+    if (isLocalOnlyRoute && !isLoopbackAddress(request.ip)) {
+      return reply.code(403).send({
+        error: { code: 'FORBIDDEN', message: 'Local access only' },
+      });
+    }
+  });
 
   app.setNotFoundHandler((_request, reply) => (
     reply.code(404).send({
@@ -49,15 +84,15 @@ export function createApp(deps: AppDependencies): FastifyInstance {
         error: { code: 'CONFLICT', message: error.message },
       });
     }
-    const statusCode = (
-      typeof error === 'object'
-      && error !== null
-      && 'statusCode' in error
-      && error.statusCode === 400
-    ) ? 400 : 500;
+    const statusCode = clientErrorStatus(error);
     if (statusCode === 400) {
       return reply.code(400).send({
         error: { code: 'VALIDATION_ERROR', message: 'Invalid request payload' },
+      });
+    }
+    if (statusCode !== null) {
+      return reply.code(statusCode).send({
+        error: { code: 'CLIENT_ERROR', message: 'Request could not be processed' },
       });
     }
     return reply.code(500).send({

@@ -409,3 +409,70 @@ test('publication API wraps 404, malformed input, and internal failures without 
     }
   });
 });
+
+test('publication API keeps admin and review routes loopback-only while public routes remain LAN-accessible', async () => {
+  await withApp(async ({ app }) => {
+    const remoteAddress = '192.168.10.88';
+    const publicQuestions = await app.inject({
+      method: 'GET',
+      url: '/api/questions',
+      remoteAddress,
+    });
+    const publicAsk = await app.inject({
+      method: 'POST',
+      url: '/api/ask',
+      remoteAddress,
+      payload: { question: '学校怎么办校园卡' },
+    });
+    assert.equal(publicQuestions.statusCode, 200);
+    assert.equal(publicAsk.statusCode, 200);
+
+    for (const url of ['/api/admin/intents', '/api/reviews?status=pending']) {
+      const denied = await app.inject({ method: 'GET', url, remoteAddress });
+      assert.equal(denied.statusCode, 403);
+      assert.deepEqual(denied.json(), {
+        error: { code: 'FORBIDDEN', message: 'Local access only' },
+      });
+    }
+
+    for (const loopback of ['127.0.0.1', '::1', '::ffff:127.0.0.1']) {
+      const allowed = await app.inject({
+        method: 'GET',
+        url: '/api/admin/intents',
+        remoteAddress: loopback,
+      });
+      assert.equal(allowed.statusCode, 200, loopback);
+    }
+  });
+});
+
+test('publication API preserves safe Fastify 413 and 415 statuses without exposing diagnostics', async () => {
+  await withApp(async ({ app }) => {
+    const oversized = await app.inject({
+      method: 'POST',
+      url: '/api/ask',
+      headers: { 'content-type': 'application/json' },
+      payload: JSON.stringify({ question: '问'.repeat(1_100_000) }),
+    });
+    assert.equal(oversized.statusCode, 413);
+    assert.deepEqual(oversized.json(), {
+      error: { code: 'CLIENT_ERROR', message: 'Request could not be processed' },
+    });
+
+    const unsupported = await app.inject({
+      method: 'POST',
+      url: '/api/ask',
+      headers: { 'content-type': 'application/xml' },
+      payload: '<question>学校怎么办校园卡</question>',
+    });
+    assert.equal(unsupported.statusCode, 415);
+    assert.deepEqual(unsupported.json(), {
+      error: { code: 'CLIENT_ERROR', message: 'Request could not be processed' },
+    });
+
+    assert.doesNotMatch(
+      `${oversized.body}\n${unsupported.body}`,
+      /FST_ERR|body is too large|unsupported media type|application\/xml|stack/i,
+    );
+  });
+});
