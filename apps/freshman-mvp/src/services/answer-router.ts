@@ -2,6 +2,7 @@ import { ServiceUnavailableError } from '../domain/errors.js';
 import type { AnswerResult } from '../domain/models.js';
 import type {
   KnowledgeProvider,
+  ModelAnswer,
   ModelProvider,
   SearchProvider,
   SearchResult,
@@ -13,7 +14,70 @@ import type {
 import type { IntentMatcher } from './intent-matcher.js';
 
 export const DISCLAIMER = '该条回复并不在我们的知识库以及 40 个预设问题中，请注意甄别';
-const REFUSAL_PATTERN = /未收录|抱歉[，,\s]*(?:我)?(?:无法|不能)(?:提供|回答)?|(?:无法|不能)(?:提供|回答)/u;
+const UNUSABLE_ANSWER_PATTERNS = [
+  /未收录/u,
+  /(?:不知道|不清楚)(?:答案|情况|信息|怎么|具体)?/u,
+  /(?:暂时|目前)?(?:无法|不能)(?:回答|确定|提供|获知|查询)/u,
+  /作为(?:ai|人工智能).*(?:没有|缺少|无法|不能|不具备)/u,
+  /(?:没有|缺少)(?:相关|足够|可用)?(?:信息|资料|答案)/u,
+];
+
+export function isUsableAnswer(value: string): boolean {
+  const normalized = value
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[\s\p{P}\p{S}]+/gu, '');
+  return normalized.length > 0
+    && !UNUSABLE_ANSWER_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
+function usableSearchItems(search: SearchResult): SearchResult['items'] {
+  if (!search.available) {
+    return [];
+  }
+  return search.items.filter((item) => (
+    item.title.trim().length > 0
+    && item.url.trim().length > 0
+    && item.snippet.trim().length > 0
+  ));
+}
+
+function searchSources(search: SearchResult): ModelAnswer['sources'] {
+  return usableSearchItems(search).map((item) => ({
+    type: 'web',
+    title: item.title.trim(),
+    url: item.url.trim(),
+    updatedAt: null,
+  }));
+}
+
+function deterministicFallback(search: SearchResult): ModelAnswer {
+  const items = usableSearchItems(search);
+  if (items.length > 0) {
+    const evidence = items
+      .map((item, index) => `${index + 1}. ${item.title.trim()}：${item.snippet.trim()}`)
+      .join('\n');
+    return {
+      text: [
+        '目前可供参考的公开线索如下，内容尚未完成社区审核：',
+        evidence,
+        '请打开以上来源，并通过学校官网、学院通知或辅导员核验最新安排。该问题已进入人工审核队列。',
+      ].join('\n'),
+      sources: searchSources(search),
+    };
+  }
+  const availability = search.available
+    ? '当前检索没有返回可直接引用的公开线索。'
+    : '当前自动检索服务暂时不可用。';
+  return {
+    text: [
+      availability,
+      '请先通过学校官网（杭州电子科技大学官网）、学校官方微信公众号、所在学院通知或辅导员核验最新安排。',
+      '该问题已进入人工审核队列，审核确认后会补充到知识库。',
+    ].join(''),
+    sources: [],
+  };
+}
 
 interface AnswerRouterDependencies {
   content: ContentRepository;
@@ -70,10 +134,21 @@ export class AnswerRouter {
     } catch {
       search = { available: false, items: [] };
     }
-    const modelAnswer = await this.deps.model.synthesize({ question, search });
-    const answer = modelAnswer.text.trim();
-    if (answer.length === 0 || REFUSAL_PATTERN.test(answer)) {
-      throw new ServiceUnavailableError('Model answer is temporarily unavailable');
+    let modelAnswer: ModelAnswer | null;
+    try {
+      modelAnswer = await this.deps.model.synthesize({ question, search });
+    } catch {
+      modelAnswer = null;
+    }
+    const fallback = deterministicFallback(search);
+    let answer: string;
+    let sources: ModelAnswer['sources'];
+    if (modelAnswer !== null && isUsableAnswer(modelAnswer.text)) {
+      answer = modelAnswer.text.trim();
+      sources = searchSources(search);
+    } else {
+      answer = fallback.text;
+      sources = fallback.sources;
     }
 
     let review;
@@ -81,7 +156,7 @@ export class AnswerRouter {
       review = await this.deps.reviews.enqueue({
         question,
         answer,
-        sources: modelAnswer.sources,
+        sources,
       });
     } catch {
       throw new ServiceUnavailableError('Answer review queue is temporarily unavailable');
@@ -91,7 +166,7 @@ export class AnswerRouter {
       route: 'web',
       trustStatus: 'web-unverified',
       answer,
-      sources: modelAnswer.sources,
+      sources,
       disclaimer: this.deps.disclaimer,
       reviewOrdinal: review.ordinal,
     };

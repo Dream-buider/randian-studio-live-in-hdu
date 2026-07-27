@@ -95,7 +95,7 @@ export class IntentMatcher {
   constructor(
     model: ModelProvider,
     modelConfidenceThreshold = 0.7,
-    localThreshold = 0.3,
+    localThreshold = 0.5,
   ) {
     this.model = model;
     this.modelConfidenceThreshold = modelConfidenceThreshold;
@@ -118,7 +118,12 @@ export class IntentMatcher {
     if (activeCatalog.length === 0) {
       return null;
     }
-    const classification = await this.model.classifyIntent(question, activeCatalog);
+    let classification;
+    try {
+      classification = await this.model.classifyIntent(question, activeCatalog);
+    } catch {
+      classification = null;
+    }
     if (
       !classification
       || classification.intentId === null

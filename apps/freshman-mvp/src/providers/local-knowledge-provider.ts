@@ -15,7 +15,7 @@ export class LocalKnowledgeProvider implements KnowledgeProvider {
   private readonly records: readonly LocalKnowledgeRecord[];
   private readonly threshold: number;
 
-  constructor(records: readonly LocalKnowledgeRecord[], threshold = 0.3) {
+  constructor(records: readonly LocalKnowledgeRecord[], threshold = 0.5) {
     this.records = records;
     this.threshold = threshold;
   }

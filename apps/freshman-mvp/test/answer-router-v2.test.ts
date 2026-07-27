@@ -8,6 +8,7 @@ import { openDatabase } from '../src/db/sqlite.js';
 import { ServiceUnavailableError } from '../src/domain/errors.js';
 import type { QuestionIntent, SourceRef } from '../src/domain/models.js';
 import { LocalKnowledgeProvider } from '../src/providers/local-knowledge-provider.js';
+import { TokenDanceProvider } from '../src/providers/tokendance-provider.js';
 import type {
   ModelProvider,
   SearchProvider,
@@ -17,7 +18,11 @@ import { SqliteContentRepository } from '../src/repositories/sqlite-content-repo
 import { SqliteReviewRepository } from '../src/repositories/sqlite-review-repository.js';
 import { createApp } from '../src/server/app.js';
 import type { AppConfig } from '../src/server/config.js';
-import { AnswerRouter, DISCLAIMER } from '../src/services/answer-router.js';
+import {
+  AnswerRouter,
+  DISCLAIMER,
+  isUsableAnswer,
+} from '../src/services/answer-router.js';
 import { IntentMatcher } from '../src/services/intent-matcher.js';
 
 const source: SourceRef = {
@@ -40,6 +45,19 @@ const baseIntent: QuestionIntent = {
   featured: true,
   displayOrder: 1,
 };
+
+const CONFIG = {
+  host: '127.0.0.1',
+  port: 3210,
+  databasePath: 'runtime/test.db',
+  publicDir: 'dist/client',
+  modelBaseUrl: 'https://tokendance.space/gateway/v1',
+  modelApiKey: '',
+  modelId: 'deepseek-v4-flash',
+  modelEnabled: false,
+  requestTimeoutMs: 20_000,
+  disclaimer: DISCLAIMER,
+} satisfies AppConfig;
 
 function model(overrides: Partial<ModelProvider> = {}): ModelProvider {
   return {
@@ -97,7 +115,7 @@ function makeRouter(
   });
 }
 
-test('router v2 recognizes exact, alias, and keyword variants only for active published presets', async () => {
+test('router v2 recognizes exact and alias variants only for active published presets', async () => {
   await withRepositories(async ({ content, reviews }) => {
     await content.createIntent(baseIntent);
     await content.createIntent({
@@ -136,7 +154,6 @@ test('router v2 recognizes exact, alias, and keyword variants only for active pu
     for (const question of [
       '校园一卡通如何领取？',
       '学校怎么办校园卡',
-      '请问新生的一卡通应该到哪里领取呢',
     ]) {
       const result = await router.answer(question);
       assert.equal(result.route, 'preset', question);
@@ -148,7 +165,7 @@ test('router v2 recognizes exact, alias, and keyword variants only for active pu
   });
 });
 
-test('router v2 uses model understanding for rewrites but rejects unknown, inactive, and unpublished intent IDs', async () => {
+test('router v2 uses model understanding for natural rewrites but rejects unknown, inactive, and unpublished intent IDs', async () => {
   await withRepositories(async ({ content, reviews }) => {
     await content.createIntent(baseIntent);
     await content.createIntent({ ...baseIntent, id: 'inactive', active: false });
@@ -168,10 +185,40 @@ test('router v2 uses model understanding for rewrites but rejects unknown, inact
     });
     const router = makeRouter(content, reviews, { model: provider });
 
-    assert.equal((await router.answer('第一种完全改写')).route, 'preset');
+    assert.equal((await router.answer('请问新生的一卡通应该到哪里领取呢')).route, 'preset');
     assert.equal((await router.answer('第二种完全改写')).route, 'web');
     assert.equal((await router.answer('第三种完全改写')).route, 'web');
     assert.equal((await router.answer('第四种完全改写')).route, 'web');
+  });
+});
+
+test('router v2 conservative local matching does not collide with adjacent card and network topics', async () => {
+  await withRepositories(async ({ content, reviews }) => {
+    await content.createIntent(baseIntent);
+    await content.publishCanonicalAnswer({
+      intentId: baseIntent.id,
+      summary: '校园卡领取摘要。',
+      fullAnswer: '按学院通知领取校园卡。',
+      sources: [source],
+      reviewerId: 'admin',
+    });
+    const router = makeRouter(content, reviews, {
+      knowledge: new LocalKnowledgeProvider([{
+        question: '校园卡如何领取？',
+        aliases: ['学校怎么办校园卡'],
+        keywords: ['校园卡', '领取'],
+        excludeKeywords: ['密码', '饭卡', '银行卡', '校园网'],
+        answer: '知识库中的校园卡领取回答。',
+        sources: [source],
+      }]),
+    });
+
+    for (const question of ['食堂饭卡怎么办', '校园网怎么办', '银行卡怎么办', '校园卡密码是什么']) {
+      const result = await router.answer(question);
+      assert.equal(result.route, 'web', question);
+      assert.notEqual(result.answer, '按学院通知领取校园卡。', question);
+      assert.notEqual(result.answer, '知识库中的校园卡领取回答。', question);
+    }
   });
 });
 
@@ -277,52 +324,133 @@ test('router v2 stage 3 handles available and unavailable search, persists first
   }
 });
 
-test('router v2 rejects blank model answers and never returns an untracked answer', async () => {
-  await withRepositories(async ({ content, reviews }) => {
-    const blankRouter = makeRouter(content, reviews, {
-      model: model({ async synthesize() { return { text: '  ', sources: [] }; } }),
-    });
-    await assert.rejects(blankRouter.answer('未知问题'), ServiceUnavailableError);
-    assert.equal((await reviews.list()).length, 0);
+test('router v2 usable-answer gate rejects blank, uncollected, uncertain, and AI refusal boilerplate', () => {
+  for (const unusable of [
+    '',
+    '   ',
+    '这个问题未收录。',
+    '抱歉，我无法回答这个问题。',
+    '不知道答案。',
+    '这个情况暂时无法确定。',
+    '作为AI，我没有相关信息。',
+  ]) {
+    assert.equal(isUsableAnswer(unusable), false, unusable);
+  }
+  assert.equal(
+    isUsableAnswer('具体安排请通过学校官网、学院通知或辅导员核验；问题已经进入审核队列。'),
+    true,
+  );
+});
 
-    const failingReviews = Object.create(reviews) as SqliteReviewRepository;
-    failingReviews.enqueue = async () => { throw new Error('disk secret'); };
-    const router = new AnswerRouter({
-      content,
-      reviews: failingReviews,
-      intentMatcher: new IntentMatcher(model(), 0.7),
-      knowledge: new LocalKnowledgeProvider([]),
-      search: new UnavailableSearchProvider(),
-      model: model(),
-      disclaimer: DISCLAIMER,
-    });
-    await assert.rejects(
-      router.answer('另一个未知问题'),
-      (error: unknown) => (
-        error instanceof ServiceUnavailableError
-        && error.message === 'Answer review queue is temporarily unavailable'
-        && !error.message.includes('disk')
-      ),
-    );
+test('router v2 converts TokenDance failures and unusable text into HTTP 200 tracked fallback answers', async () => {
+  await withRepositories(async ({ content, reviews }) => {
+    const timeoutFetch: typeof globalThis.fetch = async (_input, init) => {
+      await new Promise<void>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new DOMException('timeout', 'AbortError')));
+      });
+      throw new Error('unreachable');
+    };
+    const scenarios: Array<{ name: string; provider: ModelProvider }> = [
+      {
+        name: 'timeout',
+        provider: new TokenDanceProvider({ apiKey: 'test-key', fetch: timeoutFetch, timeoutMs: 5 }),
+      },
+      {
+        name: 'non-2xx',
+        provider: new TokenDanceProvider({
+          apiKey: 'test-key',
+          fetch: async () => new Response('upstream detail', { status: 503 }),
+        }),
+      },
+      {
+        name: 'invalid JSON',
+        provider: new TokenDanceProvider({
+          apiKey: 'test-key',
+          fetch: async () => new Response('not-json', { status: 200 }),
+        }),
+      },
+      {
+        name: 'throw',
+        provider: model({
+          async synthesize() {
+            throw new Error('provider secret');
+          },
+        }),
+      },
+      ...[
+        ' ',
+        '这个问题未收录。',
+        '不知道答案。',
+        '这个情况暂时无法确定。',
+        '作为AI，我没有相关信息。',
+      ].map((text) => ({
+        name: text || 'blank',
+        provider: model({ async synthesize() { return { text, sources: [] }; } }),
+      })),
+    ];
+
+    for (const scenario of scenarios) {
+      const router = makeRouter(content, reviews, { model: scenario.provider });
+      const app = createApp({ config: CONFIG, content, reviews, router });
+      try {
+        const response = await app.inject({
+          method: 'POST',
+          url: '/api/ask',
+          payload: { question: `未知问题-${scenario.name}` },
+        });
+        assert.equal(response.statusCode, 200, scenario.name);
+        const body = response.json();
+        assert.equal(body.route, 'web', scenario.name);
+        assert.ok(body.answer.trim(), scenario.name);
+        assert.equal(isUsableAnswer(body.answer), true, scenario.name);
+        assert.equal(body.disclaimer, DISCLAIMER, scenario.name);
+      } finally {
+        await app.close();
+      }
+    }
+    assert.equal((await reviews.list('pending')).length, scenarios.length);
   });
 });
 
-test('router v2 never returns or queues an uncollected/refusal model answer', async () => {
+test('router v2 deterministic fallback uses only real search evidence or official verification channels', async () => {
   await withRepositories(async ({ content, reviews }) => {
-    for (const forbidden of [
-      '这个问题未收录。',
-      '抱歉，我无法回答这个问题。',
-    ]) {
-      const router = makeRouter(content, reviews, {
-        model: model({
-          async synthesize() {
-            return { text: forbidden, sources: [] };
-          },
-        }),
-      });
-      await assert.rejects(router.answer('未知问题'), ServiceUnavailableError);
-    }
-    assert.equal((await reviews.list()).length, 0);
+    const brokenModel = model({
+      async synthesize() {
+        throw new Error('model unavailable');
+      },
+    });
+    const searchItem = {
+      title: '学校公开通知',
+      url: 'https://example.test/official-notice',
+      snippet: '办理地点以学院迎新通知为准',
+    };
+    const available = makeRouter(content, reviews, {
+      model: brokenModel,
+      search: { async search() { return { available: true, items: [searchItem] }; } },
+    });
+    const withEvidence = await available.answer('未知办理问题');
+    assert.equal(withEvidence.route, 'web');
+    assert.match(withEvidence.answer, /办理地点以学院迎新通知为准/);
+    assert.deepEqual(withEvidence.sources, [{
+      type: 'web',
+      title: searchItem.title,
+      url: searchItem.url,
+      updatedAt: null,
+    }]);
+    assert.doesNotMatch(withEvidence.answer, /未提供的事实|搜索到了其他/);
+
+    const unavailable = makeRouter(content, reviews, {
+      model: brokenModel,
+      search: new UnavailableSearchProvider(),
+    });
+    const officialFallback = await unavailable.answer('另一个未知办理问题');
+    assert.equal(officialFallback.route, 'web');
+    assert.match(officialFallback.answer, /学校官网/);
+    assert.match(officialFallback.answer, /学院通知/);
+    assert.match(officialFallback.answer, /辅导员/);
+    assert.match(officialFallback.answer, /审核队列/);
+    assert.deepEqual(officialFallback.sources, []);
+    assert.equal(isUsableAnswer(officialFallback.answer), true);
   });
 });
 
@@ -339,19 +467,7 @@ test('router v2 enqueue failure maps to HTTP 503 without exposing diagnostics', 
       model: model(),
       disclaimer: DISCLAIMER,
     });
-    const config = {
-      host: '127.0.0.1',
-      port: 3210,
-      databasePath: 'runtime/test.db',
-      publicDir: 'dist/client',
-      modelBaseUrl: 'https://tokendance.space/gateway/v1',
-      modelApiKey: '',
-      modelId: 'deepseek-v4-flash',
-      modelEnabled: false,
-      requestTimeoutMs: 20_000,
-      disclaimer: DISCLAIMER,
-    } satisfies AppConfig;
-    const app = createApp({ config, content, reviews, router });
+    const app = createApp({ config: CONFIG, content, reviews, router });
     try {
       const response = await app.inject({
         method: 'POST',
