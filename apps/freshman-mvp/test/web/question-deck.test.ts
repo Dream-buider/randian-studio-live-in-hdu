@@ -335,6 +335,82 @@ describe('question deck', () => {
     expect(wrapper.text()).toContain('04 / 12');
   });
 
+  it('submits with a stable RFC4122-style request ID when randomUUID is unavailable', async () => {
+    vi.stubGlobal('crypto', {
+      randomUUID: undefined,
+      getRandomValues(array: Uint8Array) {
+        array.forEach((_value, index) => {
+          array[index] = index;
+        });
+        return array;
+      },
+    });
+    let postedRequestId = '';
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === '/api/questions') {
+        return jsonResponse({ items: questions });
+      }
+      const payload = JSON.parse(String(init?.body)) as { requestId?: string };
+      postedRequestId = payload.requestId ?? '';
+      return jsonResponse({
+        route: 'knowledge',
+        trustStatus: 'knowledge',
+        answer: '兼容模式下的回答。',
+        sources: [],
+      });
+    }));
+    const router = createAppRouter(createMemoryHistory());
+    await router.push('/');
+    await router.isReady();
+    const wrapper = mount(App, { global: { plugins: [router] } });
+    await flushPromises();
+
+    await wrapper.get('[data-action="ask"]').trigger('click');
+    await wrapper.get('textarea[aria-label="输入你的校园问题"]').setValue('兼容模式提问');
+    await wrapper.get('form').trigger('submit');
+    await flushPromises();
+
+    const stored = JSON.parse(sessionStorage.getItem('live-in-hdu:pending-question') ?? '{}');
+    expect(router.currentRoute.value.path).toBe('/chat');
+    expect(postedRequestId).toBe('00010203-0405-4607-8809-0a0b0c0d0e0f');
+    expect(stored.requestId).toBe(postedRequestId);
+    wrapper.unmount();
+  });
+
+  it('does not block submission when the complete WebCrypto capability is absent', async () => {
+    vi.stubGlobal('crypto', undefined);
+    let postedRequestId = '';
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === '/api/questions') {
+        return jsonResponse({ items: questions });
+      }
+      const payload = JSON.parse(String(init?.body)) as { requestId?: string };
+      postedRequestId = payload.requestId ?? '';
+      return jsonResponse({
+        route: 'knowledge',
+        trustStatus: 'knowledge',
+        answer: '无 WebCrypto 时仍可回答。',
+        sources: [],
+      });
+    }));
+    const router = createAppRouter(createMemoryHistory());
+    await router.push('/');
+    await router.isReady();
+    const wrapper = mount(App, { global: { plugins: [router] } });
+    await flushPromises();
+
+    await wrapper.get('[data-action="ask"]').trigger('click');
+    await wrapper.get('textarea[aria-label="输入你的校园问题"]').setValue('无 WebCrypto 提问');
+    await wrapper.get('form').trigger('submit');
+    await flushPromises();
+
+    const stored = JSON.parse(sessionStorage.getItem('live-in-hdu:pending-question') ?? '{}');
+    expect(router.currentRoute.value.path).toBe('/chat');
+    expect(postedRequestId).toMatch(/^req-[a-z0-9-]+$/);
+    expect(stored.requestId).toBe(postedRequestId);
+    wrapper.unmount();
+  });
+
   it('shows an honest empty state and still lets a user ask a free question', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ items: [] })));
     const wrapper = mount(QuestionDeckView);

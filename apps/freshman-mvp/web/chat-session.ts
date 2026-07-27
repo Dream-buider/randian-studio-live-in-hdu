@@ -27,12 +27,47 @@ function isContext(value: unknown): value is QuestionContext {
     && (value.category === null || typeof value.category === 'string');
 }
 
+function requestId(): string {
+  const webCrypto = globalThis.crypto;
+  if (webCrypto && typeof webCrypto.randomUUID === 'function') {
+    try {
+      return webCrypto.randomUUID();
+    } catch {
+      // Continue to the lower-capability request-ID paths.
+    }
+  }
+  if (webCrypto && typeof webCrypto.getRandomValues === 'function') {
+    try {
+      const bytes = new Uint8Array(16);
+      webCrypto.getRandomValues(bytes);
+      bytes[6] = (bytes[6] & 0x0f) | 0x40;
+      bytes[8] = (bytes[8] & 0x3f) | 0x80;
+      const hex = [...bytes].map((value) => value.toString(16).padStart(2, '0'));
+      return [
+        hex.slice(0, 4).join(''),
+        hex.slice(4, 6).join(''),
+        hex.slice(6, 8).join(''),
+        hex.slice(8, 10).join(''),
+        hex.slice(10, 16).join(''),
+      ].join('-');
+    } catch {
+      // Request IDs are not credentials; the non-WebCrypto path remains valid.
+    }
+  }
+  const now = Date.now().toString(36);
+  const monotonic = typeof globalThis.performance?.now === 'function'
+    ? Math.floor(globalThis.performance.now() * 1_000).toString(36)
+    : '0';
+  const randomPart = () => Math.floor(Math.random() * Number.MAX_SAFE_INTEGER).toString(36);
+  return `req-${now}-${monotonic}-${randomPart()}-${randomPart()}`;
+}
+
 export function createChatSessionRequest(
   question: string,
   context: QuestionContext,
 ): ChatSessionRequest {
   return {
-    requestId: crypto.randomUUID(),
+    requestId: requestId(),
     question,
     context,
     status: 'pending',
