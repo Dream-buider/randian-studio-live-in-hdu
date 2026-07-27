@@ -1,0 +1,110 @@
+import type { SqliteDatabase } from './sqlite.js';
+
+const INITIAL_SCHEMA = `
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  version INTEGER PRIMARY KEY,
+  applied_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS question_intents (
+  id TEXT PRIMARY KEY,
+  external_id TEXT,
+  category TEXT NOT NULL,
+  question TEXT NOT NULL,
+  intent_description TEXT NOT NULL,
+  aliases_json TEXT NOT NULL,
+  keywords_json TEXT NOT NULL,
+  exclude_keywords_json TEXT NOT NULL,
+  active INTEGER NOT NULL CHECK (active IN (0, 1)),
+  featured INTEGER NOT NULL CHECK (featured IN (0, 1)),
+  display_order INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS intent_aliases (
+  intent_id TEXT NOT NULL REFERENCES question_intents(id) ON DELETE CASCADE,
+  alias TEXT NOT NULL,
+  PRIMARY KEY (intent_id, alias)
+);
+
+CREATE TABLE IF NOT EXISTS raw_answers (
+  id TEXT PRIMARY KEY,
+  intent_id TEXT NOT NULL REFERENCES question_intents(id) ON DELETE CASCADE,
+  answer_text TEXT NOT NULL,
+  source_label TEXT NOT NULL,
+  source_cell TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS canonical_answers (
+  id TEXT PRIMARY KEY,
+  intent_id TEXT NOT NULL REFERENCES question_intents(id) ON DELETE CASCADE,
+  version INTEGER NOT NULL,
+  summary TEXT NOT NULL,
+  full_answer TEXT NOT NULL,
+  sources_json TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('draft', 'pending', 'published', 'needs_update', 'disabled')),
+  reviewer_id TEXT NOT NULL,
+  published_at TEXT,
+  updated_at TEXT NOT NULL,
+  UNIQUE (intent_id, version)
+);
+
+CREATE TABLE IF NOT EXISTS canonical_answer_sources (
+  canonical_answer_id TEXT NOT NULL REFERENCES canonical_answers(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  source_type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  url TEXT NOT NULL,
+  updated_at TEXT,
+  PRIMARY KEY (canonical_answer_id, position)
+);
+
+CREATE TABLE IF NOT EXISTS review_tasks (
+  id TEXT PRIMARY KEY,
+  question TEXT NOT NULL,
+  answer_text TEXT NOT NULL,
+  sources_json TEXT NOT NULL,
+  risk_level TEXT NOT NULL CHECK (risk_level IN ('low', 'medium', 'high')),
+  status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'rejected', 'needs_more')),
+  ordinal INTEGER NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  decided_at TEXT,
+  reviewer_id TEXT,
+  decision_note TEXT
+);
+
+CREATE TABLE IF NOT EXISTS conversations (
+  id TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS feedback (
+  id TEXT PRIMARY KEY,
+  conversation_id TEXT REFERENCES conversations(id) ON DELETE SET NULL,
+  value TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+`;
+
+export function migrateDatabase(database: SqliteDatabase): void {
+  database.exec('BEGIN IMMEDIATE');
+  try {
+    database.exec(INITIAL_SCHEMA);
+    database.prepare(
+      'INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)',
+    ).run(1, new Date().toISOString());
+    database.exec('COMMIT');
+  } catch (error) {
+    database.exec('ROLLBACK');
+    throw error;
+  }
+}
