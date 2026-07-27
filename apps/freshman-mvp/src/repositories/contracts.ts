@@ -26,6 +26,8 @@ export interface ReviewDecision {
   status: Exclude<ReviewStatus, 'pending'>;
   reviewerId: string;
   note: string;
+  reviewedAnswer: string | null;
+  feedbackTarget: string | null;
 }
 
 export interface ContentRepository {

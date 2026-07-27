@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
+import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { Worker } from 'node:worker_threads';
 import { migrateDatabase } from '../src/db/migrations.js';
 import { openDatabase } from '../src/db/sqlite.js';
 import { SqliteContentRepository } from '../src/repositories/sqlite-content-repository.js';
@@ -89,5 +91,168 @@ test('SQLite review repository preserves FIFO ordinals after reopening', async (
     const reopenedReviews = new SqliteReviewRepository(reopenedDb);
     assert.deepEqual((await reopenedReviews.list()).map((item) => item.ordinal), [1, 2]);
     reopenedDb.close();
+  });
+});
+
+test('SQLite review decisions persist the reviewed answer and feedback target', async () => {
+  await withTemporaryDatabase(async (databasePath) => {
+    const db = openDatabase(databasePath);
+    migrateDatabase(db);
+    const reviews = new SqliteReviewRepository(db);
+    try {
+      const pending = await reviews.enqueue({
+        question: '校园卡在哪里补办？',
+        answer: '请咨询学院。',
+        sources: [],
+      });
+
+      const decided = await reviews.decide(pending.id, {
+        status: 'needs_more',
+        reviewerId: 'local-admin',
+        note: '补充校区和办理时间。',
+        reviewedAnswer: '校园卡补办地点以校园卡服务中心当年通知为准。',
+        feedbackTarget: 'knowledge-base',
+      });
+
+      assert.equal(decided.reviewedAnswer, '校园卡补办地点以校园卡服务中心当年通知为准。');
+      assert.equal(decided.feedbackTarget, 'knowledge-base');
+    } finally {
+      db.close();
+    }
+  });
+});
+
+test('SQLite review repository waits for another connection and keeps distinct FIFO ordinals', async () => {
+  await withTemporaryDatabase(async (databasePath) => {
+    const firstDb = openDatabase(databasePath);
+    migrateDatabase(firstDb);
+    const firstReviews = new SqliteReviewRepository(firstDb);
+    let secondDb: ReturnType<typeof openDatabase> | null = null;
+    let lockHolder: Worker | null = null;
+    try {
+      await firstReviews.enqueue({
+        question: '第一条排队问题',
+        answer: '第一条临时回答',
+        sources: [],
+      });
+
+      lockHolder = new Worker(`
+      const { parentPort, workerData } = require('node:worker_threads');
+      const { DatabaseSync } = require('node:sqlite');
+      const db = new DatabaseSync(workerData.databasePath);
+      db.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 1000; BEGIN IMMEDIATE;');
+      parentPort.postMessage('locked');
+      setTimeout(() => {
+        db.exec('COMMIT');
+        db.close();
+        parentPort.postMessage('released');
+      }, 75);
+    `, { eval: true, workerData: { databasePath } });
+      await once(lockHolder, 'message');
+
+      secondDb = openDatabase(databasePath);
+      const secondReviews = new SqliteReviewRepository(secondDb);
+      const second = await secondReviews.enqueue({
+        question: '第二条排队问题',
+        answer: '第二条临时回答',
+        sources: [],
+      });
+      await once(lockHolder, 'exit');
+
+      assert.equal(second.ordinal, 2);
+      assert.deepEqual((await secondReviews.list()).map((item) => item.ordinal), [1, 2]);
+    } finally {
+      secondDb?.close();
+      firstDb.close();
+      if (lockHolder) {
+        await lockHolder.terminate();
+      }
+    }
+  });
+});
+
+test('SQLite repositories reject null array inputs and malformed source references', async () => {
+  await withTemporaryDatabase(async (databasePath) => {
+    const db = openDatabase(databasePath);
+    migrateDatabase(db);
+    const content = new SqliteContentRepository(db);
+    const reviews = new SqliteReviewRepository(db);
+    try {
+      const input = {
+      id: 'intent-validation',
+      externalId: null,
+      category: '测试',
+      question: '数组字段验证？',
+      intentDescription: '验证仓储边界拒绝错误数组。',
+      aliases: ['别名'],
+      keywords: ['关键字'],
+      excludeKeywords: ['排除词'],
+      active: true,
+      featured: false,
+      displayOrder: 1,
+      };
+
+      await assert.rejects(content.createIntent({ ...input, aliases: null } as never), /aliases/);
+      await assert.rejects(content.createIntent({ ...input, keywords: null } as never), /keywords/);
+      await assert.rejects(content.createIntent({ ...input, excludeKeywords: null } as never), /excludeKeywords/);
+      await content.createIntent(input);
+      await assert.rejects(content.publishCanonicalAnswer({
+        intentId: input.id,
+        summary: '摘要',
+        fullAnswer: '完整回答',
+        sources: null as never,
+        reviewerId: 'local-admin',
+      }), /sources/);
+      await assert.rejects(reviews.enqueue({
+        question: '来源校验？',
+        answer: '临时回答',
+        sources: [{ type: 'invalid', title: '错误来源', url: '', updatedAt: null }] as never,
+      }), /source.*type/i);
+    } finally {
+      db.close();
+    }
+  });
+});
+
+test('SQLite published questions sort featured then display order across categories', async () => {
+  await withTemporaryDatabase(async (databasePath) => {
+    const db = openDatabase(databasePath);
+    migrateDatabase(db);
+    const content = new SqliteContentRepository(db);
+    const sources = [{ type: 'official' as const, title: '校方通知', url: '', updatedAt: null }];
+    const intents = [
+      { id: 'featured-later', category: '乙类', displayOrder: 9, featured: true },
+      { id: 'featured-earlier', category: '甲类', displayOrder: 2, featured: true },
+      { id: 'regular-earlier', category: '甲类', displayOrder: 1, featured: false },
+    ];
+    try {
+      for (const intent of intents) {
+      await content.createIntent({
+        ...intent,
+        externalId: null,
+        question: `${intent.id} 的问题？`,
+        intentDescription: '用于跨分类排序的测试意图。',
+        aliases: [],
+        keywords: [],
+        excludeKeywords: [],
+        active: true,
+      });
+      await content.publishCanonicalAnswer({
+        intentId: intent.id,
+        summary: '这是用于验证排序规则的简短摘要。',
+        fullAnswer: '这是用于验证排序规则的完整回答。',
+        sources,
+        reviewerId: 'local-admin',
+      });
+      }
+
+      assert.deepEqual((await content.listPublishedQuestions()).map((item) => item.id), [
+        'featured-earlier',
+        'featured-later',
+        'regular-earlier',
+      ]);
+    } finally {
+      db.close();
+    }
   });
 });

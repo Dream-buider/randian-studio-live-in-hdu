@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { SqliteDatabase } from '../db/sqlite.js';
 import { NotFoundError } from '../domain/errors.js';
+import { assertSourceRefs } from '../domain/validation.js';
 import type { ReviewStatus, ReviewTask, SourceRef } from '../domain/models.js';
 import type {
   EnqueueReviewInput,
@@ -23,6 +24,8 @@ function asReviewTask(row: Row): ReviewTask {
     decidedAt: row.decided_at === null ? null : String(row.decided_at),
     reviewerId: row.reviewer_id === null ? null : String(row.reviewer_id),
     decisionNote: row.decision_note === null ? null : String(row.decision_note),
+    reviewedAnswer: row.reviewed_answer === null ? null : String(row.reviewed_answer),
+    feedbackTarget: row.feedback_target === null ? null : String(row.feedback_target),
   };
 }
 
@@ -34,6 +37,7 @@ export class SqliteReviewRepository implements ReviewRepository {
   }
 
   async enqueue(input: EnqueueReviewInput): Promise<ReviewTask> {
+    assertSourceRefs(input.sources);
     const id = randomUUID();
     const createdAt = new Date().toISOString();
     this.database.exec('BEGIN IMMEDIATE');
@@ -61,6 +65,8 @@ export class SqliteReviewRepository implements ReviewRepository {
         decidedAt: null,
         reviewerId: null,
         decisionNote: null,
+        reviewedAnswer: null,
+        feedbackTarget: null,
       };
     } catch (error) {
       this.database.exec('ROLLBACK');
@@ -83,9 +89,17 @@ export class SqliteReviewRepository implements ReviewRepository {
     const decidedAt = new Date().toISOString();
     const result = this.database.prepare(`
       UPDATE review_tasks
-      SET status = ?, reviewer_id = ?, decision_note = ?, decided_at = ?
+      SET status = ?, reviewer_id = ?, decision_note = ?, reviewed_answer = ?, feedback_target = ?, decided_at = ?
       WHERE id = ? AND status = 'pending'
-    `).run(decision.status, decision.reviewerId, decision.note, decidedAt, id);
+    `).run(
+      decision.status,
+      decision.reviewerId,
+      decision.note,
+      decision.reviewedAnswer,
+      decision.feedbackTarget,
+      decidedAt,
+      id,
+    );
     if (Number(result.changes) !== 1) {
       throw new NotFoundError(`Pending review task not found: ${id}`);
     }

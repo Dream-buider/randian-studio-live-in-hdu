@@ -71,6 +71,8 @@ export interface ReviewTask {
   decidedAt: string | null;
   reviewerId: string | null;
   decisionNote: string | null;
+  reviewedAnswer: string | null;
+  feedbackTarget: string | null;
 }
 
 export interface QuestionContext {

@@ -72,7 +72,9 @@ CREATE TABLE IF NOT EXISTS review_tasks (
   created_at TEXT NOT NULL,
   decided_at TEXT,
   reviewer_id TEXT,
-  decision_note TEXT
+  decision_note TEXT,
+  reviewed_answer TEXT,
+  feedback_target TEXT
 );
 
 CREATE TABLE IF NOT EXISTS conversations (
@@ -95,13 +97,25 @@ CREATE TABLE IF NOT EXISTS app_settings (
 );
 `;
 
+function addColumnIfMissing(database: SqliteDatabase, table: string, column: string, definition: string): void {
+  const existing = database.prepare(`SELECT 1 FROM pragma_table_info('${table}') WHERE name = ?`).get(column);
+  if (!existing) {
+    database.exec(`ALTER TABLE ${table} ADD COLUMN ${definition}`);
+  }
+}
+
 export function migrateDatabase(database: SqliteDatabase): void {
   database.exec('BEGIN IMMEDIATE');
   try {
     database.exec(INITIAL_SCHEMA);
+    addColumnIfMissing(database, 'review_tasks', 'reviewed_answer', 'reviewed_answer TEXT');
+    addColumnIfMissing(database, 'review_tasks', 'feedback_target', 'feedback_target TEXT');
     database.prepare(
       'INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)',
     ).run(1, new Date().toISOString());
+    database.prepare(
+      'INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)',
+    ).run(2, new Date().toISOString());
     database.exec('COMMIT');
   } catch (error) {
     database.exec('ROLLBACK');

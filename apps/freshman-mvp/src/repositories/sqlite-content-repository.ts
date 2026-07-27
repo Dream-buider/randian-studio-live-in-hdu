@@ -1,5 +1,6 @@
 import type { SqliteDatabase } from '../db/sqlite.js';
 import { NotFoundError } from '../domain/errors.js';
+import { assertSourceRefs, assertStringArray } from '../domain/validation.js';
 import type {
   CanonicalAnswerVersion,
   PublishedQuestion,
@@ -58,6 +59,9 @@ export class SqliteContentRepository implements ContentRepository {
   }
 
   async createIntent(input: QuestionIntent): Promise<void> {
+    assertStringArray('aliases', input.aliases);
+    assertStringArray('keywords', input.keywords);
+    assertStringArray('excludeKeywords', input.excludeKeywords);
     const now = new Date().toISOString();
     const aliases = JSON.stringify(input.aliases);
     const keywords = JSON.stringify(input.keywords);
@@ -154,7 +158,7 @@ export class SqliteContentRepository implements ContentRepository {
           FROM canonical_answers newer
           WHERE newer.intent_id = qi.id AND newer.status = 'published'
         )
-      ORDER BY qi.featured DESC, qi.category ASC, qi.display_order ASC, qi.question ASC
+      ORDER BY qi.featured DESC, qi.display_order ASC, qi.category ASC, qi.question ASC
     `).all() as Row[];
 
     return rows.map((row) => ({
@@ -182,6 +186,7 @@ export class SqliteContentRepository implements ContentRepository {
   async publishCanonicalAnswer(
     input: PublishCanonicalAnswerInput,
   ): Promise<CanonicalAnswerVersion> {
+    assertSourceRefs(input.sources);
     const now = new Date().toISOString();
     this.database.exec('BEGIN IMMEDIATE');
     try {
