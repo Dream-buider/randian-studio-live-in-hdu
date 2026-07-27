@@ -1,0 +1,38 @@
+import path from 'node:path';
+
+export type AppConfig = Readonly<{
+  host: string;
+  port: number;
+  databasePath: string;
+  publicDir: string;
+  modelBaseUrl: string;
+  modelApiKey: string;
+  modelId: string;
+  modelEnabled: boolean;
+  requestTimeoutMs: number;
+  disclaimer: string;
+}>;
+
+const DEFAULT_DISCLAIMER = '该条回复并不在我们的知识库以及 40 个预设问题中，请注意甄别';
+
+function numberFromEnv(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+export function loadConfig(env: NodeJS.ProcessEnv, appRoot: string): AppConfig {
+  const modelApiKey = env.TOKENDANCE_API_KEY ?? '';
+
+  return {
+    host: env.HOST ?? '0.0.0.0',
+    port: numberFromEnv(env.PORT, 3210),
+    databasePath: path.resolve(appRoot, env.DATABASE_PATH ?? 'runtime/live-in-hdu.db'),
+    publicDir: path.resolve(appRoot, 'dist/client'),
+    modelBaseUrl: env.TOKENDANCE_BASE_URL ?? 'https://tokendance.space/gateway/v1',
+    modelApiKey,
+    modelId: env.TOKENDANCE_MODEL ?? 'deepseek-v4-flash',
+    modelEnabled: modelApiKey.length > 0,
+    requestTimeoutMs: numberFromEnv(env.REQUEST_TIMEOUT_MS, 20000),
+    disclaimer: DEFAULT_DISCLAIMER,
+  };
+}
