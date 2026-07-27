@@ -21,7 +21,7 @@ function numberFromEnv(value: string | undefined, fallback: number): number {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv, appRoot: string): AppConfig {
-  const modelApiKey = env.TOKENDANCE_API_KEY ?? '';
+  const modelApiKey = (env.TOKENDANCE_API_KEY ?? '').trim();
 
   return {
     host: env.HOST ?? '0.0.0.0',

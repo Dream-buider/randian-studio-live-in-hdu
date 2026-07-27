@@ -10,3 +10,9 @@ test('requires Node 24 and defaults to a local SQLite runtime', () => {
   assert.equal(config.modelId, 'deepseek-v4-flash');
   assert.equal(config.modelEnabled, false);
 });
+
+test('does not enable the model for a whitespace-only TokenDance key', () => {
+  const config = loadConfig({ TOKENDANCE_API_KEY: '   ' }, 'C:/project/apps/freshman-mvp');
+  assert.equal(config.modelApiKey, '');
+  assert.equal(config.modelEnabled, false);
+});
