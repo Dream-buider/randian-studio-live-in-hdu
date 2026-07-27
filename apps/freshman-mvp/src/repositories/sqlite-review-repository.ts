@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { SqliteDatabase } from '../db/sqlite.js';
-import { NotFoundError } from '../domain/errors.js';
+import { ConflictError, NotFoundError } from '../domain/errors.js';
 import { assertSourceRefs } from '../domain/validation.js';
 import type { ReviewStatus, ReviewTask, SourceRef } from '../domain/models.js';
 import type {
@@ -101,7 +101,13 @@ export class SqliteReviewRepository implements ReviewRepository {
       id,
     );
     if (Number(result.changes) !== 1) {
-      throw new NotFoundError(`Pending review task not found: ${id}`);
+      const existing = this.database.prepare(
+        'SELECT status FROM review_tasks WHERE id = ?',
+      ).get(id) as Row | undefined;
+      if (!existing) {
+        throw new NotFoundError('Review task not found');
+      }
+      throw new ConflictError('Review task has already been decided');
     }
     const row = this.database.prepare('SELECT * FROM review_tasks WHERE id = ?').get(id) as Row;
     return asReviewTask(row);

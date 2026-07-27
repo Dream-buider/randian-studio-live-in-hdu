@@ -9,6 +9,7 @@ import {
 } from '../domain/errors.js';
 import type {
   ContentRepository,
+  ReviewDecision,
   ReviewRepository,
 } from '../repositories/contracts.js';
 import type { ReviewStatus } from '../domain/models.js';
@@ -53,6 +54,40 @@ function clientErrorStatus(error: unknown): number | null {
   return error.statusCode;
 }
 
+function requiredTrimmedString(field: string, value: unknown): string {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new ValidationError(`${field} must be a non-blank string`);
+  }
+  return value.trim();
+}
+
+function parseReviewDecision(value: unknown): ReviewDecision {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new ValidationError('decision must be an object');
+  }
+  const body = value as Record<string, unknown>;
+  if (!['approved', 'rejected', 'needs_more'].includes(String(body.status))) {
+    throw new ValidationError('status is invalid');
+  }
+  const status = body.status as ReviewDecision['status'];
+  const reviewedAnswer = typeof body.reviewedAnswer === 'string'
+    ? body.reviewedAnswer.trim()
+    : null;
+  if (
+    (status === 'approved' || status === 'needs_more')
+    && (reviewedAnswer === null || reviewedAnswer.length === 0)
+  ) {
+    throw new ValidationError('reviewedAnswer is required for this decision');
+  }
+  return {
+    status,
+    reviewerId: requiredTrimmedString('reviewerId', body.reviewerId),
+    note: requiredTrimmedString('note', body.note),
+    reviewedAnswer: reviewedAnswer && reviewedAnswer.length > 0 ? reviewedAnswer : null,
+    feedbackTarget: requiredTrimmedString('feedbackTarget', body.feedbackTarget),
+  };
+}
+
 export function createApp(deps: AppDependencies): FastifyInstance {
   const app = Fastify({ logger: false });
   const reviewService = new ContentReviewService(deps.content);
@@ -60,6 +95,7 @@ export function createApp(deps: AppDependencies): FastifyInstance {
   app.addHook('onRequest', async (request, reply) => {
     const pathname = request.raw.url?.split('?', 1)[0] ?? '';
     const isLocalOnlyRoute = pathname === '/api/reviews'
+      || pathname.startsWith('/api/reviews/')
       || pathname === '/api/admin'
       || pathname.startsWith('/api/admin/');
     if (isLocalOnlyRoute && !isLoopbackAddress(request.ip)) {
@@ -173,6 +209,16 @@ export function createApp(deps: AppDependencies): FastifyInstance {
       items: await deps.reviews.list(status as ReviewStatus | undefined),
     };
   });
+
+  app.post<{
+    Params: { id: string };
+    Body: unknown;
+  }>('/api/reviews/:id/decision', async (request) => ({
+    item: await deps.reviews.decide(
+      request.params.id,
+      parseReviewDecision(request.body),
+    ),
+  }));
 
   return app;
 }

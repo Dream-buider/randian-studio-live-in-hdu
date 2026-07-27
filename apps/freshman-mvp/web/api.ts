@@ -29,6 +29,64 @@ export interface QuestionContext {
   category: string | null;
 }
 
+export interface RawAnswer {
+  id: string;
+  intentId: string;
+  answer: string;
+  sourceLabel: string;
+  sourceCell: string;
+  createdAt: string;
+}
+
+export interface AdminIntent {
+  id: string;
+  externalId: string | null;
+  category: string;
+  question: string;
+  intentDescription: string;
+  aliases: string[];
+  keywords: string[];
+  excludeKeywords: string[];
+  active: boolean;
+  featured: boolean;
+  displayOrder: number;
+  rawAnswerCount: number;
+  publishedAnswer: PublishedQuestion | null;
+}
+
+export type ReviewStatus = 'pending' | 'approved' | 'rejected' | 'needs_more';
+
+export interface ReviewTask {
+  id: string;
+  question: string;
+  answer: string;
+  sources: SourceRef[];
+  riskLevel: 'low' | 'medium' | 'high';
+  status: ReviewStatus;
+  ordinal: number;
+  createdAt: string;
+  decidedAt: string | null;
+  reviewerId: string | null;
+  decisionNote: string | null;
+  reviewedAnswer: string | null;
+  feedbackTarget: string | null;
+}
+
+export interface PublishAnswerInput {
+  summary: string;
+  fullAnswer: string;
+  sources: SourceRef[];
+  reviewerId: string;
+}
+
+export interface ReviewDecisionInput {
+  status: Exclude<ReviewStatus, 'pending'>;
+  reviewerId: string;
+  note: string;
+  reviewedAnswer: string | null;
+  feedbackTarget: string;
+}
+
 export type AnswerResult =
   | {
     route: 'preset';
@@ -61,9 +119,12 @@ export function safeHttpUrl(url: string): string | null {
   }
 }
 
-class ApiResponseError extends Error {
-  constructor() {
+export class ApiResponseError extends Error {
+  readonly status: number | null;
+
+  constructor(status: number | null = null) {
     super('API response could not be read');
+    this.status = status;
   }
 }
 
@@ -94,6 +155,54 @@ function isPublishedQuestion(value: unknown): value is PublishedQuestion {
     && typeof value.displayOrder === 'number';
 }
 
+function isRawAnswer(value: unknown): value is RawAnswer {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && typeof value.intentId === 'string'
+    && typeof value.answer === 'string'
+    && typeof value.sourceLabel === 'string'
+    && typeof value.sourceCell === 'string'
+    && typeof value.createdAt === 'string';
+}
+
+function isAdminIntent(value: unknown): value is AdminIntent {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && (value.externalId === null || typeof value.externalId === 'string')
+    && typeof value.category === 'string'
+    && typeof value.question === 'string'
+    && typeof value.intentDescription === 'string'
+    && Array.isArray(value.aliases)
+    && value.aliases.every((item) => typeof item === 'string')
+    && Array.isArray(value.keywords)
+    && value.keywords.every((item) => typeof item === 'string')
+    && Array.isArray(value.excludeKeywords)
+    && value.excludeKeywords.every((item) => typeof item === 'string')
+    && typeof value.active === 'boolean'
+    && typeof value.featured === 'boolean'
+    && typeof value.displayOrder === 'number'
+    && typeof value.rawAnswerCount === 'number'
+    && (value.publishedAnswer === null || isPublishedQuestion(value.publishedAnswer));
+}
+
+function isReviewTask(value: unknown): value is ReviewTask {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && typeof value.question === 'string'
+    && typeof value.answer === 'string'
+    && Array.isArray(value.sources)
+    && value.sources.every(isSource)
+    && ['low', 'medium', 'high'].includes(String(value.riskLevel))
+    && ['pending', 'approved', 'rejected', 'needs_more'].includes(String(value.status))
+    && typeof value.ordinal === 'number'
+    && typeof value.createdAt === 'string'
+    && (value.decidedAt === null || typeof value.decidedAt === 'string')
+    && (value.reviewerId === null || typeof value.reviewerId === 'string')
+    && (value.decisionNote === null || typeof value.decisionNote === 'string')
+    && (value.reviewedAnswer === null || typeof value.reviewedAnswer === 'string')
+    && (value.feedbackTarget === null || typeof value.feedbackTarget === 'string');
+}
+
 export function isAnswerResult(value: unknown): value is AnswerResult {
   if (
     !isRecord(value)
@@ -116,8 +225,11 @@ export function isAnswerResult(value: unknown): value is AnswerResult {
 }
 
 async function readJson(response: Response): Promise<unknown> {
-  if (!response.ok || !response.headers.get('content-type')?.toLowerCase().includes('application/json')) {
-    throw new ApiResponseError();
+  if (!response.ok) {
+    throw new ApiResponseError(response.status);
+  }
+  if (!response.headers.get('content-type')?.toLowerCase().includes('application/json')) {
+    throw new ApiResponseError(response.status);
   }
   try {
     return await response.json() as unknown;
@@ -150,4 +262,62 @@ export async function askQuestion(
     throw new ApiResponseError();
   }
   return body;
+}
+
+async function readItems<T>(
+  response: Response,
+  predicate: (value: unknown) => value is T,
+): Promise<T[]> {
+  const body = await readJson(response);
+  if (!isRecord(body) || !Array.isArray(body.items) || !body.items.every(predicate)) {
+    throw new ApiResponseError(response.status);
+  }
+  return body.items;
+}
+
+export async function listAdminIntents(): Promise<AdminIntent[]> {
+  return readItems(await fetch('/api/admin/intents'), isAdminIntent);
+}
+
+export async function listRawAnswers(intentId: string): Promise<RawAnswer[]> {
+  return readItems(
+    await fetch(`/api/admin/intents/${encodeURIComponent(intentId)}/raw-answers`),
+    isRawAnswer,
+  );
+}
+
+export async function listPendingReviews(): Promise<ReviewTask[]> {
+  return readItems(await fetch('/api/reviews?status=pending'), isReviewTask);
+}
+
+export async function publishAnswer(
+  intentId: string,
+  input: PublishAnswerInput,
+): Promise<{ id: string; version: number }> {
+  const response = await fetch(`/api/admin/intents/${encodeURIComponent(intentId)}/publish`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  const body = await readJson(response);
+  if (!isRecord(body) || typeof body.id !== 'string' || typeof body.version !== 'number') {
+    throw new ApiResponseError(response.status);
+  }
+  return { id: body.id, version: body.version };
+}
+
+export async function decideReview(
+  reviewId: string,
+  input: ReviewDecisionInput,
+): Promise<ReviewTask> {
+  const response = await fetch(`/api/reviews/${encodeURIComponent(reviewId)}/decision`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  const body = await readJson(response);
+  if (!isRecord(body) || !isReviewTask(body.item)) {
+    throw new ApiResponseError(response.status);
+  }
+  return body.item;
 }

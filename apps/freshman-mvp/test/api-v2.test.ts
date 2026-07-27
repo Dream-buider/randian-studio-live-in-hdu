@@ -348,6 +348,162 @@ test('publication API lists review tasks in repository FIFO order with an items 
   });
 });
 
+test('review decision API persists a structured approved decision and rejects a second decision', async () => {
+  await withApp(async ({ app, reviews }) => {
+    const review = await reviews.enqueue({
+      question: '图书馆暑假开放到几点？',
+      answer: '请以图书馆当天公告为准。',
+      sources: SOURCES,
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/reviews/${review.id}/decision`,
+      payload: {
+        status: 'approved',
+        reviewerId: ' local-admin ',
+        note: ' 已核对社区资料 ',
+        reviewedAnswer: ' 图书馆开放时间会按假期安排调整，请查看当天公告。 ',
+        feedbackTarget: ' community-knowledge ',
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.json(), {
+      item: {
+        ...review,
+        status: 'approved',
+        decidedAt: response.json().item.decidedAt,
+        reviewerId: 'local-admin',
+        decisionNote: '已核对社区资料',
+        reviewedAnswer: '图书馆开放时间会按假期安排调整，请查看当天公告。',
+        feedbackTarget: 'community-knowledge',
+      },
+    });
+    assert.match(response.json().item.decidedAt, /^\d{4}-\d{2}-\d{2}T/);
+
+    const listed = await reviews.list('approved');
+    assert.equal(listed.length, 1);
+    assert.equal(listed[0].reviewedAnswer, '图书馆开放时间会按假期安排调整，请查看当天公告。');
+    assert.equal(listed[0].feedbackTarget, 'community-knowledge');
+
+    const duplicate = await app.inject({
+      method: 'POST',
+      url: `/api/reviews/${review.id}/decision`,
+      payload: {
+        status: 'rejected',
+        reviewerId: 'local-admin',
+        note: '不应覆盖已有决策',
+        reviewedAnswer: null,
+        feedbackTarget: 'discard',
+      },
+    });
+    assert.equal(duplicate.statusCode, 409);
+    assert.equal(duplicate.json().error.code, 'CONFLICT');
+
+    const missing = await app.inject({
+      method: 'POST',
+      url: '/api/reviews/not-present/decision',
+      payload: {
+        status: 'rejected',
+        reviewerId: 'local-admin',
+        note: '不存在',
+        reviewedAnswer: null,
+        feedbackTarget: 'discard',
+      },
+    });
+    assert.equal(missing.statusCode, 404);
+    assert.equal(missing.json().error.code, 'NOT_FOUND');
+  });
+});
+
+test('review decision API validates status, reviewer, note, reviewed answer, and feedback target', async () => {
+  await withApp(async ({ app, reviews }) => {
+    const review = await reviews.enqueue({
+      question: '未收录问题',
+      answer: '临时回答',
+      sources: [],
+    });
+    const valid = {
+      status: 'needs_more',
+      reviewerId: 'local-admin',
+      note: '还需要学校官方资料',
+      reviewedAnswer: '当前只能确认部分信息，需要继续补充。',
+      feedbackTarget: 'official-source-followup',
+    };
+    const invalidPayloads = [
+      { ...valid, status: 'pending' },
+      { ...valid, status: 'unknown' },
+      { ...valid, reviewerId: ' \n ' },
+      { ...valid, note: '  ' },
+      { ...valid, reviewedAnswer: ' ' },
+      { ...valid, feedbackTarget: '' },
+      { ...valid, status: 'approved', reviewedAnswer: null },
+      null,
+    ];
+
+    for (const payload of invalidPayloads) {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/reviews/${review.id}/decision`,
+        payload,
+      });
+      assert.equal(response.statusCode, 400, JSON.stringify(payload));
+      assert.equal(response.json().error.code, 'VALIDATION_ERROR');
+    }
+
+    assert.equal((await reviews.list('pending')).length, 1);
+  });
+});
+
+test('review decision API survives database reopen with reviewed answer and feedback target intact', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'live-in-hdu-review-decision-'));
+  const databasePath = path.join(directory, 'reviews.db');
+  let database = openDatabase(databasePath);
+  migrateDatabase(database);
+  let reviews = new SqliteReviewRepository(database);
+  const review = await reviews.enqueue({
+    question: '校医院周末开放吗？',
+    answer: '请先查看校医院通知。',
+    sources: [],
+  });
+  const app = createApp({
+    config: CONFIG,
+    content: new SqliteContentRepository(database),
+    reviews,
+    router: { async answer() { return {}; } },
+  });
+
+  try {
+    const decided = await app.inject({
+      method: 'POST',
+      url: `/api/reviews/${review.id}/decision`,
+      payload: {
+        status: 'needs_more',
+        reviewerId: 'local-admin',
+        note: '等待校医院最新值班表',
+        reviewedAnswer: '现有信息不足，请优先查看校医院当天通知。',
+        feedbackTarget: 'official-health-center',
+      },
+    });
+    assert.equal(decided.statusCode, 200);
+    await app.close();
+    database.close();
+
+    database = openDatabase(databasePath);
+    migrateDatabase(database);
+    reviews = new SqliteReviewRepository(database);
+    const [persisted] = await reviews.list('needs_more');
+    assert.equal(persisted.id, review.id);
+    assert.equal(persisted.reviewedAnswer, '现有信息不足，请优先查看校医院当天通知。');
+    assert.equal(persisted.feedbackTarget, 'official-health-center');
+  } finally {
+    await app.close();
+    database.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('publication API delegates questions through the supplied narrow answer contract', async () => {
   await withApp(async ({ app }) => {
     const response = await app.inject({
@@ -435,6 +591,25 @@ test('publication API keeps admin and review routes loopback-only while public r
       });
     }
 
+    const nestedReviewDenied = await app.inject({
+      method: 'POST',
+      url: '/api/reviews/arbitrary/decision',
+      remoteAddress,
+      headers: {
+        'x-forwarded-for': '127.0.0.1',
+        forwarded: 'for=127.0.0.1',
+      },
+      payload: {
+        status: 'rejected',
+        reviewerId: 'local-admin',
+        note: 'remote attempt',
+        reviewedAnswer: null,
+        feedbackTarget: 'discard',
+      },
+    });
+    assert.equal(nestedReviewDenied.statusCode, 403);
+    assert.equal(nestedReviewDenied.json().error.code, 'FORBIDDEN');
+
     for (const loopback of [
       '127.0.0.1',
       '127.0.0.2',
@@ -460,6 +635,21 @@ test('publication API keeps admin and review routes loopback-only while public r
     });
     assert.equal(spoofedForwardedFor.statusCode, 403);
     assert.equal(spoofedForwardedFor.json().error.code, 'FORBIDDEN');
+
+    const loopbackDecision = await app.inject({
+      method: 'POST',
+      url: '/api/reviews/not-present/decision',
+      remoteAddress: '127.0.0.2',
+      headers: { 'x-forwarded-for': '203.0.113.50' },
+      payload: {
+        status: 'rejected',
+        reviewerId: 'local-admin',
+        note: 'loopback remains authoritative',
+        reviewedAnswer: null,
+        feedbackTarget: 'discard',
+      },
+    });
+    assert.equal(loopbackDecision.statusCode, 404);
   });
 });
 
