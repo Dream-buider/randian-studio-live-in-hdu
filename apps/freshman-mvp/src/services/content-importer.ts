@@ -333,6 +333,19 @@ export async function importWorkbook(
     return { ...report, insertedRawAnswerCount: 0 };
   }
 
+  const atomicRepository = repository as ContentRepository & {
+    importDatasetAtomically?: (
+      intents: readonly QuestionIntent[],
+      rawAnswers: readonly RawAnswer[],
+    ) => Promise<number>;
+  };
+  if (typeof atomicRepository.importDatasetAtomically === 'function') {
+    const insertedRawAnswerCount = await atomicRepository.importDatasetAtomically(
+      report.intents,
+      report.rawAnswers,
+    );
+    return { ...report, insertedRawAnswerCount };
+  }
   for (const intent of report.intents) {
     await repository.createIntent(intent);
   }

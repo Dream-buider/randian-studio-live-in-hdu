@@ -205,3 +205,38 @@ test('backup accepts documented workspace junction paths only when they resolve 
     });
   }
 });
+
+test('restore refuses an open WAL database even when PID metadata is missing', async () => {
+  await mkdir(TEST_ROOT, { recursive: true });
+  const directory = await mkdtemp(path.join(TEST_ROOT, 'restore-open-wal-'));
+  const databasePath = path.join(directory, 'live.db');
+  const backupPath = path.join(directory, 'backup.db');
+  const pidFile = path.join(directory, 'missing.pid.json');
+  const live = openDatabase(databasePath);
+  migrateDatabase(live);
+  live.prepare(
+    'INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)',
+  ).run('live-probe', 'do-not-overwrite', new Date().toISOString());
+  const source = openDatabase(backupPath);
+  migrateDatabase(source);
+  source.close();
+
+  try {
+    await assert.rejects(
+      restoreDatabase({
+        backupPath,
+        databasePath,
+        pidFile,
+        safetyBackupDirectory: path.join(directory, 'backups'),
+      }),
+      /live or unclean WAL sidecar/i,
+    );
+    assert.equal(
+      (live.prepare('SELECT value FROM app_settings WHERE key = ?').get('live-probe') as { value: string }).value,
+      'do-not-overwrite',
+    );
+  } finally {
+    live.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

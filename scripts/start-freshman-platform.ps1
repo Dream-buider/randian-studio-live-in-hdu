@@ -30,6 +30,7 @@ $DatabasePath = if ($DatabasePathOverride) {
 $PidFile = Join-Path $InstanceOutput 'platform.pid.json'
 $StdoutLog = Join-Path $InstanceOutput 'platform.stdout.log'
 $StderrLog = Join-Path $InstanceOutput 'platform.stderr.log'
+$StdinFile = Join-Path $InstanceOutput 'platform.stdin.txt'
 $ImportReport = Join-Path $InstanceOutput 'import-report.json'
 $WorkbookPath = Join-Path $RepoRoot 'output\playwright\current-40q-2026-07-27.xlsx'
 $ServerEntrypoint = Join-Path $AppRoot 'dist\server\index.js'
@@ -73,18 +74,41 @@ function Import-LocalEnvironment([string]$PathValue) {
     }
 }
 
+function Get-NormalizedPath([string]$PathValue) {
+    return [IO.Path]::GetFullPath($PathValue).TrimEnd('\').Replace('/', '\')
+}
+
+function Test-ExactCommandArgument([string]$CommandLine, [string]$ExpectedArgument) {
+    $normalized = $CommandLine.Replace('/', '\')
+    $escaped = [regex]::Escape((Get-NormalizedPath $ExpectedArgument))
+    return $normalized -match "(?i)(?:^|[\s`"])$escaped(?=$|[\s`"])"
+}
+
 function Get-OwnedProcess([int]$ProcessId, [string]$ExpectedEntrypoint) {
     $process = Get-CimInstance Win32_Process -Filter "ProcessId = $ProcessId" -ErrorAction SilentlyContinue
     if (-not $process) { return $null }
     $commandLine = [string]$process.CommandLine
-    if (
-        -not $commandLine.Contains($ExpectedEntrypoint, [StringComparison]::OrdinalIgnoreCase) -and
-        -not $commandLine.Contains('dist/server/index.js', [StringComparison]::OrdinalIgnoreCase) -and
-        -not $commandLine.Contains('dist\server\index.js', [StringComparison]::OrdinalIgnoreCase)
-    ) {
+    if (-not (Test-ExactCommandArgument $commandLine $ExpectedEntrypoint)) {
         return $null
     }
     return $process
+}
+
+function Assert-ValidMetadata($Metadata) {
+    if (
+        [int]$Metadata.pid -le 0 -or
+        [int]$Metadata.port -lt 1 -or
+        [int]$Metadata.port -gt 65535
+    ) {
+        throw "PID metadata has an invalid pid or port: $PidFile"
+    }
+    if (
+        (Get-NormalizedPath ([string]$Metadata.appRoot)) -ine (Get-NormalizedPath $AppRoot) -or
+        (Get-NormalizedPath ([string]$Metadata.entrypoint)) -ine (Get-NormalizedPath $ServerEntrypoint) -or
+        (Get-NormalizedPath ([string]$Metadata.database)) -ine (Get-NormalizedPath $DatabasePath)
+    ) {
+        throw 'PID metadata does not describe this exact instance; refusing to accept it.'
+    }
 }
 
 New-Item -ItemType Directory -Path $TempRoot, $NpmCache -Force | Out-Null
@@ -114,11 +138,26 @@ if (Test-Path -LiteralPath $PidFile) {
     } catch {
         throw "PID metadata is invalid; inspect before deleting: $PidFile"
     }
-    $owned = Get-OwnedProcess ([int]$metadata.pid) ([string]$metadata.entrypoint)
+    Assert-ValidMetadata $metadata
+    $owned = Get-OwnedProcess ([int]$metadata.pid) $ServerEntrypoint
     if ($owned) {
-        Write-Output "服务已在运行：http://localhost:$port"
-        Write-Output "本机审核后台：http://localhost:$port/admin"
-        if ($OpenBrowser) { Start-Process "http://localhost:$port" }
+        $actualPort = [int]$metadata.port
+        if ($PortOverride -gt 0 -and $PortOverride -ne $actualPort) {
+            throw "Instance is already running on metadata port $actualPort; requested port $PortOverride conflicts."
+        }
+        try {
+            $health = Invoke-RestMethod `
+                -Uri "http://localhost:$actualPort/api/health" `
+                -TimeoutSec ([Math]::Max(1, [Math]::Min(5, $HealthTimeoutSeconds)))
+        } catch {
+            throw "Owned process is running but metadata port $actualPort is not healthy."
+        }
+        if ($health.status -ne 'ok' -or $health.components.database.status -ne 'ok') {
+            throw "Owned process is running but metadata port $actualPort returned unhealthy status."
+        }
+        Write-Output "服务已在运行：http://localhost:$actualPort"
+        Write-Output "本机审核后台：http://localhost:$actualPort/admin"
+        if ($OpenBrowser) { Start-Process "http://localhost:$actualPort" }
         exit 0
     }
     if (Get-Process -Id ([int]$metadata.pid) -ErrorAction SilentlyContinue) {
@@ -162,7 +201,6 @@ $ImportScript = Join-Path $AppRoot 'scripts\import-feishu-xlsx.mts'
 $stateJson = (& npm --prefix $AppRoot exec -- tsx $DatabaseStateScript --database $DatabasePath | Out-String)
 if ($LASTEXITCODE -ne 0) { throw "Could not inspect production database" }
 $state = $stateJson | ConvertFrom-Json
-$performedFirstRunImport = $false
 if ([int]$state.counts.intents -eq 0) {
     if (-not (Test-Path -LiteralPath $WorkbookPath)) {
         throw "First-run workbook is missing: $WorkbookPath"
@@ -173,23 +211,20 @@ if ([int]$state.counts.intents -eq 0) {
     $stateJson = (& npm --prefix $AppRoot exec -- tsx $DatabaseStateScript --database $DatabasePath | Out-String)
     if ($LASTEXITCODE -ne 0) { throw "Could not verify imported database" }
     $state = $stateJson | ConvertFrom-Json
-    $performedFirstRunImport = $true
 }
 if (
-    $performedFirstRunImport -and (
-        [int]$state.counts.intents -ne 35 -or
-        [int]$state.counts.rawAnswers -ne 31 -or
-        [int]$state.counts.published -ne 0 -or
+        [int]$state.counts.intents -lt 35 -or
+        [int]$state.counts.rawAnswers -lt 31 -or
         [int]$state.counts.q11RawAnswers -ne 0 -or
         [int]$state.counts.q11Published -ne 0 -or
         [int]$state.counts.invalidNumericRawAnswers -ne 0
-    )
 ) {
-    throw "First-run import did not match the reviewed workbook contract: $($state.counts | ConvertTo-Json -Compress)"
+    throw "Suspicious partial baseline database; refusing to start: $($state.counts | ConvertTo-Json -Compress)"
 }
 
 $node = (Get-Command node -ErrorAction Stop).Source
 Remove-Item -LiteralPath $StdoutLog, $StderrLog -Force -ErrorAction SilentlyContinue
+[IO.File]::WriteAllText($StdinFile, '', [Text.UTF8Encoding]::new($false))
 $process = Start-Process `
     -FilePath $node `
     -ArgumentList @(
@@ -200,6 +235,7 @@ $process = Start-Process `
     -WorkingDirectory $AppRoot `
     -PassThru `
     -WindowStyle Hidden `
+    -RedirectStandardInput $StdinFile `
     -RedirectStandardOutput $StdoutLog `
     -RedirectStandardError $StderrLog
 
@@ -210,6 +246,7 @@ $metadata = [ordered]@{
     entrypoint = $ServerEntrypoint
     database = $DatabasePath
     port = $port
+    nodeExecutable = $node
 }
 [IO.File]::WriteAllText(
     $PidFile,

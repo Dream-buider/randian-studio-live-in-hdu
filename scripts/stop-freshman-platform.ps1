@@ -17,6 +17,17 @@ $InstanceOutput = if ($InstanceName -eq 'platform') {
 $PidFile = Join-Path $InstanceOutput 'platform.pid.json'
 $ExpectedAppRoot = Join-Path $RepoRoot 'apps\freshman-mvp'
 $ExpectedEntrypoint = Join-Path $ExpectedAppRoot 'dist\server\index.js'
+$ExpectedDefaultDatabase = Join-Path $ExpectedAppRoot 'runtime\live-in-hdu.db'
+
+function Get-NormalizedPath([string]$PathValue) {
+    return [IO.Path]::GetFullPath($PathValue).TrimEnd('\').Replace('/', '\')
+}
+
+function Test-ExactCommandArgument([string]$CommandLine, [string]$ExpectedArgument) {
+    $normalized = $CommandLine.Replace('/', '\')
+    $escaped = [regex]::Escape((Get-NormalizedPath $ExpectedArgument))
+    return $normalized -match "(?i)(?:^|[\s`"])$escaped(?=$|[\s`"])"
+}
 
 if (-not (Test-Path -LiteralPath $PidFile)) {
     Write-Output '服务已经停止。'
@@ -34,10 +45,27 @@ if ($pidValue -le 0) {
     throw "PID metadata does not contain a valid PID: $PidFile"
 }
 if (
-    [string]$metadata.appRoot -ne $ExpectedAppRoot -or
-    [string]$metadata.entrypoint -ne $ExpectedEntrypoint
+    (Get-NormalizedPath ([string]$metadata.appRoot)) -ine (Get-NormalizedPath $ExpectedAppRoot) -or
+    (Get-NormalizedPath ([string]$metadata.entrypoint)) -ine (Get-NormalizedPath $ExpectedEntrypoint)
 ) {
     throw 'PID metadata does not describe this workspace; refusing to stop anything.'
+}
+$metadataPort = [int]$metadata.port
+if ($metadataPort -lt 1 -or $metadataPort -gt 65535) {
+    throw 'PID metadata has an invalid port; refusing to stop anything.'
+}
+$metadataDatabase = Get-NormalizedPath ([string]$metadata.database)
+if ($metadataDatabase -ieq (Get-NormalizedPath $ExpectedDefaultDatabase)) {
+    $runtimeItem = Get-Item -LiteralPath (Join-Path $ExpectedAppRoot 'runtime') -Force
+    $runtimeTarget = [string]($runtimeItem.Target | Select-Object -First 1)
+    if (
+        $runtimeItem.LinkType -notin @('Junction', 'SymbolicLink') -or
+        [IO.Path]::GetPathRoot($runtimeTarget).ToUpperInvariant() -ne 'D:\'
+    ) {
+        throw 'Default runtime metadata is not backed by the approved D: junction.'
+    }
+} elseif ([IO.Path]::GetPathRoot($metadataDatabase).ToUpperInvariant() -ne 'D:\') {
+    throw 'PID metadata database must be the approved runtime path or an explicit D: override.'
 }
 
 $process = Get-CimInstance Win32_Process -Filter "ProcessId = $pidValue" -ErrorAction SilentlyContinue
@@ -48,11 +76,7 @@ if (-not $process) {
 }
 
 $commandLine = [string]$process.CommandLine
-if (
-    -not $commandLine.Contains($ExpectedEntrypoint, [StringComparison]::OrdinalIgnoreCase) -and
-    -not $commandLine.Contains('dist/server/index.js', [StringComparison]::OrdinalIgnoreCase) -and
-    -not $commandLine.Contains('dist\server\index.js', [StringComparison]::OrdinalIgnoreCase)
-) {
+if (-not (Test-ExactCommandArgument $commandLine $ExpectedEntrypoint)) {
     throw "PID $pidValue belongs to another command; refusing to stop it."
 }
 

@@ -1,4 +1,4 @@
-import { mkdir, readFile, realpath } from 'node:fs/promises';
+import { mkdir, readFile, realpath, stat } from 'node:fs/promises';
 import { networkInterfaces } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -69,8 +69,34 @@ function defaultAppRoot(): string {
 }
 
 async function ensureDDriveRuntimePath(databasePath: string): Promise<void> {
-  await mkdir(path.dirname(databasePath), { recursive: true });
-  const resolvedParent = await realpath(path.dirname(databasePath));
+  const parent = path.dirname(databasePath);
+  const lexicalRoot = path.parse(parent).root.toUpperCase();
+  if (lexicalRoot === 'D:\\') {
+    await mkdir(parent, { recursive: true });
+  } else {
+    let existing = parent;
+    while (true) {
+      try {
+        await stat(existing);
+        break;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw error;
+        }
+        const next = path.dirname(existing);
+        if (next === existing) {
+          throw new Error('Runtime database parent does not exist');
+        }
+        existing = next;
+      }
+    }
+    const resolvedExisting = await realpath(existing);
+    if (path.parse(resolvedExisting).root.toUpperCase() !== 'D:\\') {
+      throw new Error('Runtime database must resolve to the D: data drive');
+    }
+    await mkdir(parent, { recursive: true });
+  }
+  const resolvedParent = await realpath(parent);
   if (path.parse(resolvedParent).root.toUpperCase() !== 'D:\\') {
     throw new Error('Runtime database must resolve to the D: data drive');
   }

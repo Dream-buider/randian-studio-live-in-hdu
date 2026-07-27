@@ -1,4 +1,6 @@
-param()
+param(
+    [switch]$SecretScanOnly
+)
 
 $ErrorActionPreference = 'Stop'
 $RepoRoot = Split-Path -Parent $PSScriptRoot
@@ -75,7 +77,8 @@ function Assert-NoSecrets {
 
     $scanRoots = @(
         (Join-Path $AppRoot 'dist\client'),
-        $OutputRoot
+        $OutputRoot,
+        (Join-Path $RepoRoot 'output\playwright\runtime')
     )
     foreach ($root in $scanRoots) {
         if (-not (Test-Path -LiteralPath $root)) { continue }
@@ -122,6 +125,12 @@ foreach ($scriptName in @(
     if ($errors.Count -gt 0) {
         throw "PowerShell syntax check failed for $scriptName`: $($errors.Message -join '; ')"
     }
+}
+
+if ($SecretScanOnly) {
+    Assert-NoSecrets
+    Write-Output 'Secret scan passed.'
+    exit 0
 }
 
 & (Join-Path $PSScriptRoot 'stop-freshman-platform.ps1') | Out-Host

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -212,5 +212,30 @@ test('production composition uses TokenDance only for a trimmed real key and acc
   } finally {
     await closeQuietly(runtime);
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('production runtime refuses a missing C runtime junction without creating a C directory', async () => {
+  const appRoot = path.join(
+    APP_ROOT,
+    `.runtime-guard-${process.pid}-${Date.now()}`,
+  );
+  const runtimeDirectory = path.join(appRoot, 'runtime');
+  await mkdir(appRoot, { recursive: true });
+  try {
+    await assert.rejects(
+      createProductionRuntime({
+        appRoot,
+        env: {
+          HOST: '127.0.0.1',
+          PORT: '3210',
+          TOKENDANCE_API_KEY: '',
+        },
+      }),
+      /D:|junction|runtime/i,
+    );
+    await assert.rejects(stat(runtimeDirectory), { code: 'ENOENT' });
+  } finally {
+    await rm(appRoot, { recursive: true, force: true });
   }
 });

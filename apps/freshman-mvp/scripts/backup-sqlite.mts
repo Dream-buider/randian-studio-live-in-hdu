@@ -199,6 +199,9 @@ export async function restoreDatabase(options: RestoreOptions): Promise<RestoreR
   await assertResolvedDataDrive(path.dirname(databasePath), 'database parent');
   await assertResolvedDataDrive(safetyBackupDirectory, 'safety backup directory');
   await assertDatabaseIsStopped(pidFile);
+  if (await exists(`${databasePath}-wal`) || await exists(`${databasePath}-shm`)) {
+    throw new Error('Refusing restore while live or unclean WAL sidecar files exist');
+  }
   await inspectDatabase(backupPath);
 
   let safetyBackupPath: string | null = null;
@@ -214,12 +217,14 @@ export async function restoreDatabase(options: RestoreOptions): Promise<RestoreR
   }
 
   const stagingPath = `${databasePath}.restore-${process.pid}.tmp`;
-  await copyFile(backupPath, stagingPath);
-  await inspectDatabase(stagingPath);
-  await rm(`${databasePath}-wal`, { force: true });
-  await rm(`${databasePath}-shm`, { force: true });
-  await rm(databasePath, { force: true });
-  await rename(stagingPath, databasePath);
+  try {
+    await copyFile(backupPath, stagingPath);
+    await inspectDatabase(stagingPath);
+    await rm(databasePath, { force: true });
+    await rename(stagingPath, databasePath);
+  } finally {
+    await rm(stagingPath, { force: true });
+  }
 
   const restored = openDatabase(databasePath);
   try {

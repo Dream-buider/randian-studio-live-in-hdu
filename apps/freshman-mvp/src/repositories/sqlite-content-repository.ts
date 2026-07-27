@@ -58,7 +58,7 @@ export class SqliteContentRepository implements ContentRepository {
     this.database = database;
   }
 
-  async createIntent(input: QuestionIntent): Promise<void> {
+  private writeIntent(input: QuestionIntent): void {
     assertStringArray('aliases', input.aliases);
     assertStringArray('keywords', input.keywords);
     assertStringArray('excludeKeywords', input.excludeKeywords);
@@ -67,9 +67,7 @@ export class SqliteContentRepository implements ContentRepository {
     const keywords = JSON.stringify(input.keywords);
     const excludeKeywords = JSON.stringify(input.excludeKeywords);
 
-    this.database.exec('BEGIN IMMEDIATE');
-    try {
-      this.database.prepare(`
+    this.database.prepare(`
         INSERT INTO question_intents (
           id, external_id, category, question, intent_description, aliases_json,
           keywords_json, exclude_keywords_json, active, featured, display_order,
@@ -87,7 +85,7 @@ export class SqliteContentRepository implements ContentRepository {
           featured = excluded.featured,
           display_order = excluded.display_order,
           updated_at = excluded.updated_at
-      `).run(
+    `).run(
         input.id,
         input.externalId,
         input.category,
@@ -101,14 +99,20 @@ export class SqliteContentRepository implements ContentRepository {
         input.displayOrder,
         now,
         now,
-      );
-      this.database.prepare('DELETE FROM intent_aliases WHERE intent_id = ?').run(input.id);
-      const insertAlias = this.database.prepare(
-        'INSERT INTO intent_aliases (intent_id, alias) VALUES (?, ?)',
-      );
-      for (const alias of input.aliases) {
-        insertAlias.run(input.id, alias);
-      }
+    );
+    this.database.prepare('DELETE FROM intent_aliases WHERE intent_id = ?').run(input.id);
+    const insertAlias = this.database.prepare(
+      'INSERT INTO intent_aliases (intent_id, alias) VALUES (?, ?)',
+    );
+    for (const alias of input.aliases) {
+      insertAlias.run(input.id, alias);
+    }
+  }
+
+  async createIntent(input: QuestionIntent): Promise<void> {
+    this.database.exec('BEGIN IMMEDIATE');
+    try {
+      this.writeIntent(input);
       this.database.exec('COMMIT');
     } catch (error) {
       this.database.exec('ROLLBACK');
@@ -116,26 +120,49 @@ export class SqliteContentRepository implements ContentRepository {
     }
   }
 
-  async upsertRawAnswers(items: RawAnswer[]): Promise<number> {
+  private writeRawAnswers(items: readonly RawAnswer[]): number {
     let inserted = 0;
-    this.database.exec('BEGIN IMMEDIATE');
-    try {
-      const statement = this.database.prepare(`
+    const statement = this.database.prepare(`
         INSERT INTO raw_answers (id, intent_id, answer_text, source_label, source_cell, created_at)
         VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO NOTHING
-      `);
-      for (const item of items) {
-        const result = statement.run(
-          item.id,
-          item.intentId,
-          item.answer,
-          item.sourceLabel,
-          item.sourceCell,
-          item.createdAt,
-        );
-        inserted += Number(result.changes);
+    `);
+    for (const item of items) {
+      const result = statement.run(
+        item.id,
+        item.intentId,
+        item.answer,
+        item.sourceLabel,
+        item.sourceCell,
+        item.createdAt,
+      );
+      inserted += Number(result.changes);
+    }
+    return inserted;
+  }
+
+  async upsertRawAnswers(items: RawAnswer[]): Promise<number> {
+    this.database.exec('BEGIN IMMEDIATE');
+    try {
+      const inserted = this.writeRawAnswers(items);
+      this.database.exec('COMMIT');
+      return inserted;
+    } catch (error) {
+      this.database.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  async importDatasetAtomically(
+    intents: readonly QuestionIntent[],
+    rawAnswers: readonly RawAnswer[],
+  ): Promise<number> {
+    this.database.exec('BEGIN IMMEDIATE');
+    try {
+      for (const intent of intents) {
+        this.writeIntent(intent);
       }
+      const inserted = this.writeRawAnswers(rawAnswers);
       this.database.exec('COMMIT');
       return inserted;
     } catch (error) {

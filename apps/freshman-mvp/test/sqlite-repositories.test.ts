@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { once } from 'node:events';
-import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { Worker } from 'node:worker_threads';
@@ -13,7 +12,9 @@ import { SqliteReviewRepository } from '../src/repositories/sqlite-review-reposi
 async function withTemporaryDatabase(
   run: (databasePath: string) => Promise<void>,
 ): Promise<void> {
-  const directory = await mkdtemp(path.join(tmpdir(), 'live-in-hdu-sqlite-'));
+  const tempRoot = 'D:\\Star\\LIVE_IN_HDU_RUNTIME\\temp';
+  await mkdir(tempRoot, { recursive: true });
+  const directory = await mkdtemp(path.join(tempRoot, 'live-in-hdu-sqlite-'));
 
   try {
     await run(path.join(directory, 'repository.db'));
@@ -21,6 +22,50 @@ async function withTemporaryDatabase(
     await rm(directory, { recursive: true, force: true });
   }
 }
+
+test('SQLite bootstrap import rolls back every intent and raw answer on an injected FK failure', async () => {
+  await withTemporaryDatabase(async (databasePath) => {
+    const db = openDatabase(databasePath);
+    migrateDatabase(db);
+    const content = new SqliteContentRepository(db);
+    const intent = {
+      id: 'atomic-q1',
+      externalId: 'Q01',
+      category: '测试',
+      question: '原子导入是否生效？',
+      intentDescription: '验证失败后没有半成品数据。',
+      aliases: [],
+      keywords: ['原子导入'],
+      excludeKeywords: [],
+      active: true,
+      featured: true,
+      displayOrder: 1,
+    };
+    try {
+      await assert.rejects(
+        content.importDatasetAtomically([intent], [{
+          id: 'invalid-raw-answer',
+          intentId: 'missing-intent',
+          answer: '这条故意引用不存在的问题意图。',
+          sourceLabel: '失败注入',
+          sourceCell: 'E2',
+          createdAt: '2026-07-28T00:00:00.000Z',
+        }]),
+        /foreign key/i,
+      );
+      assert.equal(
+        Number((db.prepare('SELECT COUNT(*) AS count FROM question_intents').get() as { count: number }).count),
+        0,
+      );
+      assert.equal(
+        Number((db.prepare('SELECT COUNT(*) AS count FROM raw_answers').get() as { count: number }).count),
+        0,
+      );
+    } finally {
+      db.close();
+    }
+  });
+});
 
 test('SQLite content repository publishes only canonical approved answers', async () => {
   await withTemporaryDatabase(async (databasePath) => {
