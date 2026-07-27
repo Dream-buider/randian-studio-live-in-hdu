@@ -229,6 +229,37 @@ test('publication API rejects missing and inactive intents without creating answ
   });
 });
 
+test('publication API keeps reserved Q11 empty even when a valid publish payload is submitted', async () => {
+  await withApp(async ({ app, content }) => {
+    await content.createIntent({
+      ...ACTIVE_INTENT,
+      id: 'reserved-q11',
+      externalId: ' q11 ',
+      question: '按项目要求留空的问题',
+      displayOrder: 11,
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/intents/reserved-q11/publish',
+      payload: {
+        summary: '这是一个满足长度要求但绝不能发布的保留问题标准答案。',
+        fullAnswer: '即使字段完整，Q11 也必须继续保持空白。',
+        sources: SOURCES,
+        reviewerId: 'local-admin',
+      },
+    });
+
+    assert.equal(response.statusCode, 409);
+    assert.equal(response.json().error.code, 'CONFLICT');
+    assert.deepEqual(await content.listPublishedQuestions(), []);
+    assert.equal(
+      (await content.getIntentCatalog()).find((item) => item.id === 'reserved-q11')?.externalId,
+      ' q11 ',
+    );
+  });
+});
+
 test('publication API exposes a dynamic admin workspace and raw evidence provenance', async () => {
   await withApp(async ({ app, content }) => {
     const intents = [

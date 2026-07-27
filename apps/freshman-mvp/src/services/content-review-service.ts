@@ -85,6 +85,9 @@ export class ContentReviewService {
     if (!intent.active) {
       throw new ConflictError('Inactive question intents cannot be published');
     }
+    if (intent.externalId?.trim().toUpperCase() === 'Q11') {
+      throw new ConflictError('Reserved Q11 must remain unpublished');
+    }
 
     const summary = requiredTrimmedString('summary', input.summary);
     const summaryLength = Array.from(summary).length;

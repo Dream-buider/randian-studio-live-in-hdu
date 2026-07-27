@@ -21,6 +21,7 @@ const loading = ref(true);
 const loadingRaw = ref(false);
 const localOnly = ref(false);
 const errorMessage = ref('');
+let rawRequestSequence = 0;
 
 function recordError(error: unknown): void {
   if (error instanceof ApiResponseError && error.status === 403) {
@@ -32,16 +33,38 @@ function recordError(error: unknown): void {
 }
 
 async function selectIntent(intent: AdminIntent): Promise<void> {
+  const requestSequence = ++rawRequestSequence;
   selected.value = intent;
   rawAnswers.value = [];
   loadingRaw.value = true;
   try {
-    rawAnswers.value = await listRawAnswers(intent.id);
+    const loadedRawAnswers = await listRawAnswers(intent.id);
+    if (requestSequence === rawRequestSequence && selected.value?.id === intent.id) {
+      rawAnswers.value = loadedRawAnswers;
+    }
+  } catch (error) {
+    if (requestSequence === rawRequestSequence && selected.value?.id === intent.id) {
+      recordError(error);
+    }
+  } finally {
+    if (requestSequence === rawRequestSequence && selected.value?.id === intent.id) {
+      loadingRaw.value = false;
+    }
+  }
+}
+
+async function refreshPublishedIntent(intentId: string): Promise<void> {
+  try {
+    const loadedIntents = await listAdminIntents();
+    intents.value = loadedIntents;
+    selected.value = loadedIntents.find((item) => item.id === intentId) ?? null;
   } catch (error) {
     recordError(error);
-  } finally {
-    loadingRaw.value = false;
   }
+}
+
+function removeDecidedReview(reviewId: string): void {
+  reviews.value = reviews.value.filter((review) => review.id !== reviewId);
 }
 
 async function load(): Promise<void> {
@@ -82,9 +105,9 @@ onMounted(load);
     <aside class="import-audit-notice">
       <strong>导入审计</strong>
       <span>
-        请核对
+        Task 8 完成后才会生成
         <code>output/freshman-platform/import-report.json</code>
-        中的最新导入报告；本页未加载的拒绝单元格不会被视为已接受。
+        运行报告；当前请以导入命令输出的 JSON 审计结果为准，未加载的拒绝单元格不会被视为已接受。
       </span>
     </aside>
 
@@ -105,10 +128,10 @@ onMounted(load);
           :intent="selected"
           :raw-answers="rawAnswers"
           :loading-raw="loadingRaw"
+          @published="refreshPublishedIntent"
         />
       </section>
-      <AdminReviewQueue :reviews="reviews" />
+      <AdminReviewQueue :reviews="reviews" @decided="removeDecidedReview" />
     </template>
   </main>
 </template>
-

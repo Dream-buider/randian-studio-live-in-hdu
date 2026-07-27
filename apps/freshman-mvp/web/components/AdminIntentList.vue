@@ -36,4 +36,3 @@ defineEmits<{
     </ul>
   </aside>
 </template>
-

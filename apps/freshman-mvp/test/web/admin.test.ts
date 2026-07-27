@@ -174,7 +174,8 @@ describe('operations console', () => {
     expect(wrapper.text()).toContain('内容与审核控制台');
     expect(wrapper.text()).toContain('共 3 个问题意图');
     expect(wrapper.text()).not.toContain('共 35 个问题意图');
-    expect(wrapper.text()).toContain('最新导入报告');
+    expect(wrapper.text()).toContain('Task 8 完成后才会生成');
+    expect(wrapper.text()).not.toContain('中的最新导入报告');
     expect(wrapper.text()).not.toMatch(/拒绝\s*\d+/);
     expect(wrapper.text()).toContain('Q11 暂留问题');
     await wrapper.get('[data-intent-id="q11"]').trigger('click');
@@ -190,6 +191,53 @@ describe('operations console', () => {
     expect(wrapper.text()).toContain('回答（一）');
     expect(wrapper.text()).toContain('E9');
     expect(wrapper.html()).not.toContain('v-html');
+  });
+
+  it('ignores an older raw-answer response after the operator selects a different intent', async () => {
+    let resolveDormitory!: (response: Response) => void;
+    const slowDormitory = new Promise<Response>((resolve) => {
+      resolveDormitory = resolve;
+    });
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/admin/intents') {
+        return jsonResponse({ items: intents });
+      }
+      if (url === '/api/reviews?status=pending') {
+        return jsonResponse({ items: [] });
+      }
+      if (url.endsWith('/campus-card/raw-answers')) {
+        return jsonResponse({ items: [] });
+      }
+      if (url.endsWith('/dormitory/raw-answers')) {
+        return slowDormitory;
+      }
+      if (url.endsWith('/q11/raw-answers')) {
+        return jsonResponse({ items: [] });
+      }
+      return jsonResponse({ error: { code: 'NOT_FOUND' } }, { status: 404 });
+    }));
+    const wrapper = await mountAdmin();
+
+    await wrapper.get('[data-intent-id="dormitory"]').trigger('click');
+    await wrapper.get('[data-intent-id="q11"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.text()).toContain('Q11 按要求保持空白');
+
+    resolveDormitory(jsonResponse({
+      items: [{
+        id: 'late-dormitory-answer',
+        intentId: 'dormitory',
+        answer: '这条慢响应绝不能覆盖 Q11。',
+        sourceLabel: '回答（一）',
+        sourceCell: 'E9',
+        createdAt: '2026-07-28T00:00:00.000Z',
+      }],
+    }));
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Q11 按要求保持空白');
+    expect(wrapper.text()).not.toContain('这条慢响应绝不能覆盖 Q11');
   });
 
   it('counts trimmed Unicode code points and requires full answer and a source before publish', async () => {
@@ -256,6 +304,75 @@ describe('operations console', () => {
     expect(wrapper.text()).toContain('旧版本未被覆盖');
   });
 
+  it('refreshes the selected intent after publishing without submitting a second version', async () => {
+    let workspaceReads = 0;
+    let publishCalls = 0;
+    const publishedDormitory = {
+      ...intents[2],
+      publishedAnswer: {
+        id: 'dormitory',
+        category: '校园生活',
+        question: '宿舍条件怎么样？',
+        summary: '宿舍条件会因校区与楼栋不同，入住安排请以学校当年通知为准。',
+        fullAnswer: '滨江校区与下沙校区的宿舍条件不同，床位和设施以当年实际分配为准。',
+        sources: [source],
+        trustStatus: 'approved',
+        updatedAt: '2026-07-28T02:00:00.000Z',
+        featured: false,
+        displayOrder: 8,
+      },
+    };
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/admin/intents') {
+        workspaceReads += 1;
+        return jsonResponse({
+          items: workspaceReads === 1
+            ? intents
+            : [intents[0], intents[1], publishedDormitory],
+        });
+      }
+      if (url === '/api/reviews?status=pending') {
+        return jsonResponse({ items: reviews });
+      }
+      if (url.endsWith('/raw-answers')) {
+        return jsonResponse({ items: [] });
+      }
+      if (url.endsWith('/dormitory/publish')) {
+        publishCalls += 1;
+        return jsonResponse({
+          id: 'dormitory:v1',
+          intentId: 'dormitory',
+          version: 1,
+          status: 'published',
+        });
+      }
+      return jsonResponse({ error: { code: 'NOT_FOUND' } }, { status: 404 });
+    }));
+    const wrapper = await mountAdmin();
+    await wrapper.get('[data-intent-id="dormitory"]').trigger('click');
+    await flushPromises();
+    await wrapper.get('textarea[aria-label="简明答案"]').setValue(
+      '宿舍条件会因校区与楼栋不同，入住安排请以学校当年通知为准。',
+    );
+    await wrapper.get('textarea[aria-label="完整答案"]').setValue(
+      '滨江校区与下沙校区的宿舍条件不同，床位和设施以当年实际分配为准。',
+    );
+    await wrapper.get('input[aria-label="来源标题"]').setValue('2025 年新生指北');
+    await wrapper.get('[data-action="publish"]').trigger('click');
+    await wrapper.get('[data-action="confirm-publish"]').trigger('click');
+    await flushPromises();
+
+    expect(publishCalls).toBe(1);
+    expect(workspaceReads).toBe(2);
+    expect(wrapper.get('[data-intent-id="dormitory"]').text()).toContain('已发布');
+    expect(wrapper.get('.admin-editor .admin-status').text()).toBe('已发布');
+    expect(wrapper.get('textarea[aria-label="简明答案"]').element).toHaveProperty(
+      'value',
+      publishedDormitory.publishedAnswer.summary,
+    );
+  });
+
   it.each([
     ['approved', '通过'],
     ['rejected', '驳回'],
@@ -288,6 +405,86 @@ describe('operations console', () => {
       reviewedAnswer: status === 'rejected' ? null : '核对后的结构化回答',
       feedbackTarget: 'community-knowledge',
     });
+  });
+
+  it('removes a decided task from the pending queue and updates the count', async () => {
+    const records: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal('fetch', adminFetch(records));
+    const wrapper = await mountAdmin();
+    const first = wrapper.findAll('[data-role="review-row"]')[0];
+    await first.get('textarea[aria-label="审核后答案"]').setValue('核对后的结构化回答');
+    await first.get('input[aria-label="回流目标"]').setValue('community-knowledge');
+    await first.get('input[aria-label="审核说明"]').setValue('已人工检查');
+    await first.get('input[aria-label="审核人"]').setValue('local-admin');
+    await first.get('button[aria-label="通过第 7 个未收录问题"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.findAll('[data-role="review-row"]')).toHaveLength(1);
+    expect(wrapper.text()).toContain('1 条待处理');
+    expect(wrapper.text()).not.toContain('第一个未收录问题');
+    expect(
+      records.filter(({ url }) => url.endsWith('/old-low-risk/decision')),
+    ).toHaveLength(1);
+  });
+
+  it('opens an accessible publish confirmation and restores focus after Escape', async () => {
+    vi.stubGlobal('fetch', adminFetch());
+    const host = document.createElement('div');
+    document.body.append(host);
+    const router = createAppRouter(createMemoryHistory());
+    await router.push('/admin');
+    await router.isReady();
+    const wrapper = mount(App, { attachTo: host, global: { plugins: [router] } });
+    try {
+      await flushPromises();
+      await wrapper.get('[data-intent-id="dormitory"]').trigger('click');
+      await flushPromises();
+      await wrapper.get('textarea[aria-label="简明答案"]').setValue(
+        '宿舍条件会因校区与楼栋不同，入住安排请以学校当年通知为准。',
+      );
+      await wrapper.get('textarea[aria-label="完整答案"]').setValue(
+        '滨江校区与下沙校区的宿舍条件不同，床位和设施以当年实际分配为准。',
+      );
+      await wrapper.get('input[aria-label="来源标题"]').setValue('2025 年新生指北');
+      const opener = wrapper.get('[data-action="publish"]').element as HTMLButtonElement;
+      opener.focus();
+      await wrapper.get('[data-action="publish"]').trigger('click');
+      await flushPromises();
+
+      const dialog = wrapper.get('[role="alertdialog"]');
+      expect(dialog.attributes('aria-modal')).toBe('true');
+      expect(dialog.element.contains(document.activeElement)).toBe(true);
+      const cancel = dialog.get('button').element as HTMLButtonElement;
+      const confirm = dialog.get('[data-action="confirm-publish"]').element as HTMLButtonElement;
+
+      cancel.focus();
+      document.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'Tab',
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      }));
+      expect(document.activeElement).toBe(confirm);
+
+      confirm.focus();
+      document.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'Tab',
+        bubbles: true,
+        cancelable: true,
+      }));
+      expect(document.activeElement).toBe(cancel);
+
+      document.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+      }));
+      await flushPromises();
+      expect(wrapper.find('[role="alertdialog"]').exists()).toBe(false);
+      expect(document.activeElement).toBe(opener);
+    } finally {
+      wrapper.unmount();
+      host.remove();
+    }
   });
 
   it('shows the local-only message for a 403 without suggesting a bypass', async () => {

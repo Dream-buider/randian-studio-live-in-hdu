@@ -11,6 +11,10 @@ const props = defineProps<{
   reviews: ReviewTask[];
 }>();
 
+const emit = defineEmits<{
+  decided: [reviewId: string];
+}>();
+
 interface DecisionDraft {
   reviewedAnswer: string;
   feedbackTarget: string;
@@ -72,6 +76,7 @@ async function decide(
   try {
     await decideReview(review.id, payload);
     message.value = `第 ${review.ordinal} 个未收录问题已记录“${actionLabel(status)}”决策。`;
+    emit('decided', review.id);
   } catch {
     message.value = `第 ${review.ordinal} 个未收录问题处理失败，请重试。`;
   } finally {
@@ -145,4 +150,3 @@ async function decide(
     <p v-if="message" role="status">{{ message }}</p>
   </section>
 </template>
-

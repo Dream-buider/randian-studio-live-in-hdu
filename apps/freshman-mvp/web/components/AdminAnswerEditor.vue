@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
   publishAnswer,
   type AdminIntent,
@@ -13,6 +13,10 @@ const props = defineProps<{
   loadingRaw: boolean;
 }>();
 
+const emit = defineEmits<{
+  published: [intentId: string];
+}>();
+
 const summary = ref('');
 const fullAnswer = ref('');
 const sourceTitle = ref('');
@@ -22,6 +26,9 @@ const confirming = ref(false);
 const submitting = ref(false);
 const feedback = ref('');
 const errorMessage = ref('');
+const publishTrigger = ref<HTMLButtonElement | null>(null);
+const cancelConfirmation = ref<HTMLButtonElement | null>(null);
+const confirmPublishButton = ref<HTMLButtonElement | null>(null);
 
 const isReservedQ11 = computed(
   () => props.intent?.externalId?.trim().toUpperCase() === 'Q11',
@@ -57,6 +64,40 @@ function requestPublish(): void {
   if (canPublish.value) {
     confirming.value = true;
     feedback.value = '';
+    void nextTick(() => cancelConfirmation.value?.focus());
+  }
+}
+
+function closeConfirmation(restoreFocus = true): void {
+  confirming.value = false;
+  if (restoreFocus) {
+    void nextTick(() => publishTrigger.value?.focus());
+  }
+}
+
+function onDocumentKeydown(event: KeyboardEvent): void {
+  if (!confirming.value) {
+    return;
+  }
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeConfirmation();
+    return;
+  }
+  if (event.key !== 'Tab') {
+    return;
+  }
+  const first = cancelConfirmation.value;
+  const last = confirmPublishButton.value;
+  if (!first || !last) {
+    return;
+  }
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
   }
 }
 
@@ -80,13 +121,17 @@ async function confirmPublish(): Promise<void> {
       reviewerId: reviewerId.value.trim(),
     });
     feedback.value = `已创建第 ${result.version} 个发布版本，旧版本未被覆盖。`;
-    confirming.value = false;
+    closeConfirmation();
+    emit('published', props.intent.id);
   } catch {
     errorMessage.value = '发布失败，请检查内容后重试。';
   } finally {
     submitting.value = false;
   }
 }
+
+onMounted(() => document.addEventListener('keydown', onDocumentKeydown));
+onBeforeUnmount(() => document.removeEventListener('keydown', onDocumentKeydown));
 </script>
 
 <template>
@@ -150,6 +195,7 @@ async function confirmPublish(): Promise<void> {
         </label>
 
         <button
+          ref="publishTrigger"
           type="button"
           data-action="publish"
           :disabled="!canPublish"
@@ -159,10 +205,17 @@ async function confirmPublish(): Promise<void> {
         </button>
       </form>
 
-      <section v-if="confirming" class="publish-confirmation" role="alertdialog" aria-label="确认发布">
+      <section
+        v-if="confirming"
+        class="publish-confirmation"
+        role="alertdialog"
+        aria-label="确认发布"
+        aria-modal="true"
+      >
         <p>确认后将创建新版本，旧版本会保留。</p>
-        <button type="button" @click="confirming = false">返回检查</button>
+        <button ref="cancelConfirmation" type="button" @click="closeConfirmation()">返回检查</button>
         <button
+          ref="confirmPublishButton"
           type="button"
           data-action="confirm-publish"
           :disabled="submitting"
