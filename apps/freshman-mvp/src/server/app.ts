@@ -4,6 +4,7 @@ import type { AppConfig } from './config.js';
 import {
   ConflictError,
   NotFoundError,
+  ServiceUnavailableError,
   ValidationError,
 } from '../domain/errors.js';
 import type {
@@ -88,6 +89,14 @@ export function createApp(deps: AppDependencies): FastifyInstance {
     if (error instanceof ConflictError) {
       return reply.code(409).send({
         error: { code: 'CONFLICT', message: error.message },
+      });
+    }
+    if (error instanceof ServiceUnavailableError) {
+      return reply.code(503).send({
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'Answer service is temporarily unavailable',
+        },
       });
     }
     const statusCode = clientErrorStatus(error);
