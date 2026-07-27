@@ -435,7 +435,15 @@ test('publication API keeps admin and review routes loopback-only while public r
       });
     }
 
-    for (const loopback of ['127.0.0.1', '::1', '::ffff:127.0.0.1']) {
+    for (const loopback of [
+      '127.0.0.1',
+      '127.0.0.2',
+      '::1',
+      '0:0:0:0:0:0:0:1',
+      '::ffff:127.0.0.1',
+      '::ffff:127.0.0.2',
+      '::ffff:7f00:2',
+    ]) {
       const allowed = await app.inject({
         method: 'GET',
         url: '/api/admin/intents',
@@ -443,6 +451,15 @@ test('publication API keeps admin and review routes loopback-only while public r
       });
       assert.equal(allowed.statusCode, 200, loopback);
     }
+
+    const spoofedForwardedFor = await app.inject({
+      method: 'GET',
+      url: '/api/admin/intents',
+      remoteAddress,
+      headers: { 'x-forwarded-for': '127.0.0.1' },
+    });
+    assert.equal(spoofedForwardedFor.statusCode, 403);
+    assert.equal(spoofedForwardedFor.json().error.code, 'FORBIDDEN');
   });
 });
 

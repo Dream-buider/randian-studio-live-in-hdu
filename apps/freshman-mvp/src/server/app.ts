@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from 'fastify';
+import { BlockList, isIP } from 'node:net';
 import type { AppConfig } from './config.js';
 import {
   ConflictError,
@@ -23,12 +24,17 @@ export interface AppDependencies {
   router: AnswerRouterContract;
 }
 
+const LOOPBACK_ADDRESSES = new BlockList();
+LOOPBACK_ADDRESSES.addSubnet('127.0.0.0', 8, 'ipv4');
+LOOPBACK_ADDRESSES.addAddress('::1', 'ipv6');
+LOOPBACK_ADDRESSES.addSubnet('::ffff:127.0.0.0', 104, 'ipv6');
+
 function isLoopbackAddress(address: string): boolean {
-  const normalized = address.toLowerCase();
-  return normalized === '127.0.0.1'
-    || normalized === '::1'
-    || normalized === '::ffff:127.0.0.1'
-    || normalized === '::ffff:7f00:1';
+  const family = isIP(address);
+  if (family === 0) {
+    return false;
+  }
+  return LOOPBACK_ADDRESSES.check(address, family === 4 ? 'ipv4' : 'ipv6');
 }
 
 function clientErrorStatus(error: unknown): number | null {
