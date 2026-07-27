@@ -94,7 +94,7 @@ function isPublishedQuestion(value: unknown): value is PublishedQuestion {
     && typeof value.displayOrder === 'number';
 }
 
-function isAnswerResult(value: unknown): value is AnswerResult {
+export function isAnswerResult(value: unknown): value is AnswerResult {
   if (
     !isRecord(value)
     || typeof value.answer !== 'string'
@@ -138,11 +138,12 @@ export async function listQuestions(): Promise<PublishedQuestion[]> {
 export async function askQuestion(
   question: string,
   context?: QuestionContext,
+  requestId?: string,
 ): Promise<AnswerResult> {
   const response = await fetch('/api/ask', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ question, context }),
+    body: JSON.stringify({ question, context, requestId }),
   });
   const body = await readJson(response);
   if (!isAnswerResult(body)) {

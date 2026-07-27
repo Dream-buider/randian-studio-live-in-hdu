@@ -3,12 +3,15 @@ import { computed, inject, onMounted, ref } from 'vue';
 import { routerKey, type Router } from 'vue-router';
 import { listQuestions, type PublishedQuestion } from '../api.js';
 import type { QuestionContext } from '../api.js';
+import {
+  createChatSessionRequest,
+  writeChatSessionRequest,
+} from '../chat-session.js';
 import AskSheet from '../components/AskSheet.vue';
 import QuestionCard from '../components/QuestionCard.vue';
 import QuestionCatalog from '../components/QuestionCatalog.vue';
 
 const STORAGE_KEY = 'live-in-hdu:current-question-id';
-const PENDING_KEY = 'live-in-hdu:pending-question';
 const router = inject<Router | null>(routerKey, null);
 const questions = ref<PublishedQuestion[]>([]);
 const currentIndex = ref(0);
@@ -85,11 +88,12 @@ function questionContext(question: PublishedQuestion): QuestionContext {
 }
 
 function submitQuestion(payload: { question: string; context: QuestionContext }): void {
-  sessionStorage.setItem(PENDING_KEY, JSON.stringify(payload));
+  const request = createChatSessionRequest(payload.question, payload.context);
+  writeChatSessionRequest(request);
   askOpen.value = false;
   void router?.push({
     name: 'chat',
-    state: { pendingQuestion: JSON.stringify(payload) },
+    state: { pendingQuestion: JSON.stringify(request) },
   });
 }
 
@@ -166,7 +170,14 @@ onMounted(async () => {
       >
         上一题
       </button>
-      <button type="button" data-action="next" @click="next">下一题</button>
+      <button
+        type="button"
+        data-action="next"
+        :disabled="currentIndex === questions.length - 1"
+        @click="next"
+      >
+        下一题
+      </button>
     </nav>
     <button
       v-if="!loading"

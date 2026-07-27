@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import type { QuestionContext } from '../api.js';
+import { useDialogFocus } from './use-dialog-focus.js';
 
 const props = defineProps<{
   context: QuestionContext;
@@ -12,6 +13,9 @@ const emit = defineEmits<{
 }>();
 
 const question = ref('');
+const panel = ref<HTMLElement | null>(null);
+
+useDialogFocus(panel, '#campus-question', () => emit('close'));
 
 function submit(): void {
   const normalized = question.value.trim();
@@ -24,13 +28,13 @@ function submit(): void {
 <template>
   <div class="modal-backdrop">
     <section
+      ref="panel"
       class="ask-sheet"
       role="dialog"
       aria-modal="true"
       aria-labelledby="ask-title"
       data-role="ask-sheet"
       tabindex="-1"
-      @keydown.esc="$emit('close')"
     >
       <header>
         <div>

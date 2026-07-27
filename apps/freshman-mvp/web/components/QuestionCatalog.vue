@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import type { PublishedQuestion } from '../api.js';
+import { useDialogFocus } from './use-dialog-focus.js';
 
 const props = defineProps<{
   questions: PublishedQuestion[];
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   select: [id: string];
   close: [];
 }>();
+const panel = ref<HTMLElement | null>(null);
+
+useDialogFocus(panel, '[data-question-id]', () => emit('close'));
 
 const groups = computed(() => {
   const result = new Map<string, PublishedQuestion[]>();
@@ -25,13 +29,13 @@ const groups = computed(() => {
 <template>
   <div class="modal-backdrop">
     <section
+      ref="panel"
       class="catalog-panel"
       role="dialog"
       aria-modal="true"
       aria-labelledby="catalog-title"
       data-role="question-catalog"
       tabindex="-1"
-      @keydown.esc="$emit('close')"
     >
       <header>
         <h2 id="catalog-title">全部问题</h2>
