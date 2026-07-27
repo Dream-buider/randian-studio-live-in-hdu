@@ -7,7 +7,7 @@
     "dev": "tsx watch src/server/index.ts",
     "dev:web": "vite",
     "build": "vue-tsc --noEmit -p tsconfig.json && tsc -p tsconfig.server.json && vite build",
-    "start": "node dist/server/index.js",
+    "start": "node --preserve-symlinks --preserve-symlinks-main dist/server/index.js",
     "test": "tsx --test test/*.test.ts",
     "test:web": "vitest run test/web",
     "test:all": "npm test && npm run test:web"

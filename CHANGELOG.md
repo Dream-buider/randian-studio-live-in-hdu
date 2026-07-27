@@ -2,6 +2,33 @@
 
 本文件记录 HDU Feishu Community OS 的执行变更。
 
+## 2026-07-28
+
+### Added
+
+- 新增 TypeScript 生产入口，将 SQLite 仓库、保守意图匹配、本地知识、显式不可用搜索边界、TokenDance 模型和 Fastify API 组合为一个可运行平台。
+- 新增 `start-freshman-platform.ps1`、`stop-freshman-platform.ps1` 和 `test-freshman-platform.ps1`，支持首次导入、增量构建、隐藏后台进程、PID 所有权校验、健康轮询、两轮启停和完整回归。
+- 新增 SQLite `VACUUM INTO` 在线备份与安全恢复，包含 UTC 文件名、保留最近 14 份、完整性检查、运行中拒绝恢复和恢复前安全备份。
+- 新增生产 E2E、备份恢复和 D 盘 junction 测试；Vue 客户端补充 favicon，避免浏览器控制台 404。
+
+### Changed
+
+- 当前飞书表格首次导入为 35 个意图、31 条原始回答、0 条自动发布答案；Q11 原始回答与发布版本均为 0。
+- 管理页导入审计提示改为核对 `output/freshman-platform/import-report.json`，不再显示尚未完成的 Task 8 文案。
+- TokenDance 仅在服务端存在真实非空 Key 时启用，并固定使用官方入口和 `deepseek-v4-flash`；无 Key 时明确显示禁用状态并走诚实、可审核的第三段兜底。
+- node_modules、dist、runtime、知识输出、TEMP/TMP、npm cache、日志、PID、备份和浏览器产物统一落到 `D:\Star\LIVE_IN_HDU_RUNTIME`。
+
+### Verification
+
+- `scripts/test-freshman-platform.ps1` 完整通过：后端 59/59、Vue 30/30、旧版回归 29/29、生产构建、凭据扫描、HTTP 冒烟、在线备份和两轮启停均成功。
+- Microsoft Edge 在 390×844 视口验证翻页、左右滑动、目录跳转、答案展开/收起和提问面板；桌面管理页通过真实表单创建测试版本，控制台错误数为 0。
+- 浏览器验收使用独立 D 盘数据库和明确标记的 synthetic fixture，没有把社区原始回答冒充为已审核内容；实体手机尚未测试。
+
+### Notes
+
+- 当前仍是本地部署，电脑关机后服务中断；TokenDance 只提供模型能力，不承担托管。
+- Phase A 未接入 WeKnora、PostgreSQL、向量检索或经验证的独立全网搜索，也尚未配置公网域名、ICP备案或微信小程序。
+
 ## 2026-07-21
 
 ### Added

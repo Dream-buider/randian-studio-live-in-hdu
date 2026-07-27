@@ -1,0 +1,261 @@
+param(
+    [switch]$OpenBrowser,
+    [int]$HealthTimeoutSeconds = 30,
+    [string]$DatabasePathOverride = '',
+    [int]$PortOverride = 0,
+    [string]$InstanceName = 'platform'
+)
+
+$ErrorActionPreference = 'Stop'
+if ($InstanceName -notmatch '^[a-z0-9-]+$') {
+    throw 'InstanceName may contain only lowercase letters, numbers, and hyphens.'
+}
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+$AppRoot = Join-Path $RepoRoot 'apps\freshman-mvp'
+$DataRoot = 'D:\Star\LIVE_IN_HDU_RUNTIME'
+$TempRoot = Join-Path $DataRoot 'temp'
+$NpmCache = Join-Path $DataRoot 'npm-cache'
+$OutputRoot = Join-Path $RepoRoot 'output\freshman-platform'
+$InstanceOutput = if ($InstanceName -eq 'platform') {
+    $OutputRoot
+} else {
+    Join-Path $OutputRoot $InstanceName
+}
+$RuntimeLink = Join-Path $AppRoot 'runtime'
+$DatabasePath = if ($DatabasePathOverride) {
+    [IO.Path]::GetFullPath($DatabasePathOverride)
+} else {
+    Join-Path $RuntimeLink 'live-in-hdu.db'
+}
+$PidFile = Join-Path $InstanceOutput 'platform.pid.json'
+$StdoutLog = Join-Path $InstanceOutput 'platform.stdout.log'
+$StderrLog = Join-Path $InstanceOutput 'platform.stderr.log'
+$ImportReport = Join-Path $InstanceOutput 'import-report.json'
+$WorkbookPath = Join-Path $RepoRoot 'output\playwright\current-40q-2026-07-27.xlsx'
+$ServerEntrypoint = Join-Path $AppRoot 'dist\server\index.js'
+$ClientEntrypoint = Join-Path $AppRoot 'dist\client\index.html'
+$EnvFile = Join-Path $AppRoot '.env.local'
+
+function Assert-DDriveTarget([string]$PathValue, [string]$Label) {
+    if (-not (Test-Path -LiteralPath $PathValue)) {
+        throw "$Label is missing; recreate the required D-drive junction: $PathValue"
+    }
+    $item = Get-Item -LiteralPath $PathValue -Force
+    if ($item.LinkType -notin @('Junction', 'SymbolicLink')) {
+        throw "$Label must be a D-drive junction, not a normal C-drive directory: $PathValue"
+    }
+    $target = [string]($item.Target | Select-Object -First 1)
+    if (-not [IO.Path]::IsPathRooted($target)) {
+        $target = [IO.Path]::GetFullPath((Join-Path $item.Parent.FullName $target))
+    }
+    if ([IO.Path]::GetPathRoot($target).ToUpperInvariant() -ne 'D:\') {
+        throw "$Label must target D:, target was $target"
+    }
+}
+
+function Import-LocalEnvironment([string]$PathValue) {
+    if (-not (Test-Path -LiteralPath $PathValue)) { return }
+    foreach ($line in Get-Content -LiteralPath $PathValue -Encoding UTF8) {
+        $trimmed = $line.Trim()
+        if (-not $trimmed -or $trimmed.StartsWith('#') -or -not $trimmed.Contains('=')) {
+            continue
+        }
+        $parts = $trimmed.Split('=', 2)
+        $name = $parts[0].Trim()
+        $value = $parts[1].Trim()
+        if (
+            ($value.StartsWith('"') -and $value.EndsWith('"')) -or
+            ($value.StartsWith("'") -and $value.EndsWith("'"))
+        ) {
+            $value = $value.Substring(1, $value.Length - 2)
+        }
+        [Environment]::SetEnvironmentVariable($name, $value, 'Process')
+    }
+}
+
+function Get-OwnedProcess([int]$ProcessId, [string]$ExpectedEntrypoint) {
+    $process = Get-CimInstance Win32_Process -Filter "ProcessId = $ProcessId" -ErrorAction SilentlyContinue
+    if (-not $process) { return $null }
+    $commandLine = [string]$process.CommandLine
+    if (
+        -not $commandLine.Contains($ExpectedEntrypoint, [StringComparison]::OrdinalIgnoreCase) -and
+        -not $commandLine.Contains('dist/server/index.js', [StringComparison]::OrdinalIgnoreCase) -and
+        -not $commandLine.Contains('dist\server\index.js', [StringComparison]::OrdinalIgnoreCase)
+    ) {
+        return $null
+    }
+    return $process
+}
+
+New-Item -ItemType Directory -Path $TempRoot, $NpmCache -Force | Out-Null
+Assert-DDriveTarget $RuntimeLink 'Runtime junction'
+Assert-DDriveTarget $OutputRoot 'Output junction'
+Assert-DDriveTarget (Join-Path $AppRoot 'dist') 'Dist junction'
+Assert-DDriveTarget (Join-Path $AppRoot 'node_modules') 'node_modules junction'
+New-Item -ItemType Directory -Path $InstanceOutput -Force | Out-Null
+
+Import-LocalEnvironment $EnvFile
+$env:TEMP = $TempRoot
+$env:TMP = $TempRoot
+$env:npm_config_cache = $NpmCache
+$env:DATABASE_PATH = $DatabasePath
+$port = if ($PortOverride -gt 0) {
+    $PortOverride
+} elseif ($env:PORT) {
+    [int]$env:PORT
+} else {
+    3210
+}
+$env:PORT = [string]$port
+
+if (Test-Path -LiteralPath $PidFile) {
+    try {
+        $metadata = Get-Content -Raw -LiteralPath $PidFile | ConvertFrom-Json
+    } catch {
+        throw "PID metadata is invalid; inspect before deleting: $PidFile"
+    }
+    $owned = Get-OwnedProcess ([int]$metadata.pid) ([string]$metadata.entrypoint)
+    if ($owned) {
+        Write-Output "服务已在运行：http://localhost:$port"
+        Write-Output "本机审核后台：http://localhost:$port/admin"
+        if ($OpenBrowser) { Start-Process "http://localhost:$port" }
+        exit 0
+    }
+    if (Get-Process -Id ([int]$metadata.pid) -ErrorAction SilentlyContinue) {
+        throw "PID $($metadata.pid) belongs to another process; refusing to overwrite $PidFile"
+    }
+    Remove-Item -LiteralPath $PidFile -Force
+}
+
+$buildRequired = -not (Test-Path -LiteralPath $ServerEntrypoint) -or
+    -not (Test-Path -LiteralPath $ClientEntrypoint)
+if (-not $buildRequired) {
+    $sourceFiles = Get-ChildItem -Path @(
+        (Join-Path $AppRoot 'src'),
+        (Join-Path $AppRoot 'web'),
+        (Join-Path $AppRoot 'public')
+    ) -Recurse -File
+    $sourceFiles += Get-Item @(
+        (Join-Path $AppRoot 'package.json'),
+        (Join-Path $AppRoot 'package-lock.json'),
+        (Join-Path $AppRoot 'tsconfig.json'),
+        (Join-Path $AppRoot 'tsconfig.server.json'),
+        (Join-Path $AppRoot 'vite.config.ts')
+    )
+    $latestSource = ($sourceFiles | Measure-Object LastWriteTimeUtc -Maximum).Maximum
+    $serverBuiltAt = (Get-Item -LiteralPath $ServerEntrypoint).LastWriteTimeUtc
+    $clientBuiltAt = (Get-Item -LiteralPath $ClientEntrypoint).LastWriteTimeUtc
+    $oldestEntrypoint = if ($serverBuiltAt -lt $clientBuiltAt) {
+        $serverBuiltAt
+    } else {
+        $clientBuiltAt
+    }
+    $buildRequired = $latestSource -gt $oldestEntrypoint
+}
+if ($buildRequired) {
+    & npm --prefix $AppRoot run build
+    if ($LASTEXITCODE -ne 0) { throw "Build failed with exit code $LASTEXITCODE" }
+}
+
+$DatabaseStateScript = Join-Path $AppRoot 'scripts\database-state.mts'
+$ImportScript = Join-Path $AppRoot 'scripts\import-feishu-xlsx.mts'
+$stateJson = (& npm --prefix $AppRoot exec -- tsx $DatabaseStateScript --database $DatabasePath | Out-String)
+if ($LASTEXITCODE -ne 0) { throw "Could not inspect production database" }
+$state = $stateJson | ConvertFrom-Json
+$performedFirstRunImport = $false
+if ([int]$state.counts.intents -eq 0) {
+    if (-not (Test-Path -LiteralPath $WorkbookPath)) {
+        throw "First-run workbook is missing: $WorkbookPath"
+    }
+    $importJson = (& npm --prefix $AppRoot exec -- tsx $ImportScript --input $WorkbookPath --database $DatabasePath | Out-String)
+    if ($LASTEXITCODE -ne 0) { throw "First-run workbook import failed" }
+    [IO.File]::WriteAllText($ImportReport, $importJson, [Text.UTF8Encoding]::new($false))
+    $stateJson = (& npm --prefix $AppRoot exec -- tsx $DatabaseStateScript --database $DatabasePath | Out-String)
+    if ($LASTEXITCODE -ne 0) { throw "Could not verify imported database" }
+    $state = $stateJson | ConvertFrom-Json
+    $performedFirstRunImport = $true
+}
+if (
+    $performedFirstRunImport -and (
+        [int]$state.counts.intents -ne 35 -or
+        [int]$state.counts.rawAnswers -ne 31 -or
+        [int]$state.counts.published -ne 0 -or
+        [int]$state.counts.q11RawAnswers -ne 0 -or
+        [int]$state.counts.q11Published -ne 0 -or
+        [int]$state.counts.invalidNumericRawAnswers -ne 0
+    )
+) {
+    throw "First-run import did not match the reviewed workbook contract: $($state.counts | ConvertTo-Json -Compress)"
+}
+
+$node = (Get-Command node -ErrorAction Stop).Source
+Remove-Item -LiteralPath $StdoutLog, $StderrLog -Force -ErrorAction SilentlyContinue
+$process = Start-Process `
+    -FilePath $node `
+    -ArgumentList @(
+        '--preserve-symlinks',
+        '--preserve-symlinks-main',
+        "`"$ServerEntrypoint`""
+    ) `
+    -WorkingDirectory $AppRoot `
+    -PassThru `
+    -WindowStyle Hidden `
+    -RedirectStandardOutput $StdoutLog `
+    -RedirectStandardError $StderrLog
+
+$metadata = [ordered]@{
+    pid = $process.Id
+    startedAt = [DateTime]::UtcNow.ToString('o')
+    appRoot = $AppRoot
+    entrypoint = $ServerEntrypoint
+    database = $DatabasePath
+    port = $port
+}
+[IO.File]::WriteAllText(
+    $PidFile,
+    ($metadata | ConvertTo-Json -Depth 3),
+    [Text.UTF8Encoding]::new($false)
+)
+
+$deadline = [DateTime]::UtcNow.AddSeconds($HealthTimeoutSeconds)
+$healthy = $false
+while ([DateTime]::UtcNow -lt $deadline) {
+    if ($process.HasExited) { break }
+    try {
+        $health = Invoke-RestMethod -Uri "http://localhost:$port/api/health" -TimeoutSec 2
+        if ($health.status -eq 'ok' -and $health.components.database.status -eq 'ok') {
+            $healthy = $true
+            break
+        }
+    } catch {
+        Start-Sleep -Milliseconds 250
+    }
+}
+if (-not $healthy) {
+    if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+    Remove-Item -LiteralPath $PidFile -Force -ErrorAction SilentlyContinue
+    $diagnostics = @()
+    if (Test-Path -LiteralPath $StderrLog) {
+        $diagnostics += Get-Content -LiteralPath $StderrLog -Tail 30
+    }
+    if (Test-Path -LiteralPath $StdoutLog) {
+        $diagnostics += Get-Content -LiteralPath $StdoutLog -Tail 30
+    }
+    throw "Service health check failed. Logs: $StderrLog`n$($diagnostics -join [Environment]::NewLine)"
+}
+
+Write-Output "用户端：http://localhost:$port"
+Write-Output "本机审核后台：http://localhost:$port/admin"
+$addresses = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    Where-Object {
+        $_.IPAddress -notlike '127.*' -and
+        $_.IPAddress -notlike '169.254.*'
+    } |
+    Select-Object -ExpandProperty IPAddress -Unique
+foreach ($address in $addresses) {
+    Write-Output "同一 Wi-Fi 用户端：http://${address}:$port"
+}
+Write-Output "数据：意图 $($state.counts.intents)，原始回答 $($state.counts.rawAnswers)，已发布 $($state.counts.published)，Q11 原始回答 $($state.counts.q11RawAnswers)"
+Write-Output "PID：$($process.Id)"
+Write-Output "日志：$StdoutLog"
+if ($OpenBrowser) { Start-Process "http://localhost:$port" }

@@ -105,9 +105,9 @@ onMounted(load);
     <aside class="import-audit-notice">
       <strong>导入审计</strong>
       <span>
-        Task 8 完成后才会生成
-        <code>output/freshman-platform/import-report.json</code>
-        运行报告；当前请以导入命令输出的 JSON 审计结果为准，未加载的拒绝单元格不会被视为已接受。
+        请核对
+        <code>output/freshman-platform/import-report.json</code>；
+        未加载的拒绝单元格不会被视为已接受。
       </span>
     </aside>
 

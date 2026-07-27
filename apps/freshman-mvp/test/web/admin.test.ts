@@ -174,8 +174,9 @@ describe('operations console', () => {
     expect(wrapper.text()).toContain('内容与审核控制台');
     expect(wrapper.text()).toContain('共 3 个问题意图');
     expect(wrapper.text()).not.toContain('共 35 个问题意图');
-    expect(wrapper.text()).toContain('Task 8 完成后才会生成');
-    expect(wrapper.text()).not.toContain('中的最新导入报告');
+    expect(wrapper.text()).toContain('请核对');
+    expect(wrapper.text()).toContain('output/freshman-platform/import-report.json');
+    expect(wrapper.text()).not.toContain('Task 8 完成后才会生成');
     expect(wrapper.text()).not.toMatch(/拒绝\s*\d+/);
     expect(wrapper.text()).toContain('Q11 暂留问题');
     await wrapper.get('[data-intent-id="q11"]').trigger('click');

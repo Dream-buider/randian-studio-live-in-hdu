@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from 'fastify';
+import fastifyStatic from '@fastify/static';
 import { BlockList, isIP } from 'node:net';
 import type { AppConfig } from './config.js';
 import {
@@ -24,6 +25,8 @@ export interface AppDependencies {
   content: ContentRepository;
   reviews: ReviewRepository;
   router: AnswerRouterContract;
+  health?: () => Promise<unknown>;
+  publicDir?: string;
 }
 
 const LOOPBACK_ADDRESSES = new BlockList();
@@ -92,6 +95,16 @@ export function createApp(deps: AppDependencies): FastifyInstance {
   const app = Fastify({ logger: false });
   const reviewService = new ContentReviewService(deps.content);
 
+  if (deps.publicDir) {
+    void app.register(fastifyStatic, {
+      root: deps.publicDir,
+      wildcard: false,
+    });
+    for (const route of ['/chat', '/admin']) {
+      app.get(route, (_request, reply) => reply.type('text/html').sendFile('index.html'));
+    }
+  }
+
   app.addHook('onRequest', async (request, reply) => {
     const pathname = request.raw.url?.split('?', 1)[0] ?? '';
     const isLocalOnlyRoute = pathname === '/api/reviews'
@@ -154,6 +167,10 @@ export function createApp(deps: AppDependencies): FastifyInstance {
   app.get('/api/questions', async () => ({
     items: await reviewService.listPublicQuestions(),
   }));
+
+  app.get('/api/health', async () => (
+    deps.health ? deps.health() : { status: 'ok' }
+  ));
 
   app.post<{
     Body: unknown;

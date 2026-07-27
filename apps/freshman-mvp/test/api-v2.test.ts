@@ -16,9 +16,7 @@ const CONFIG: AppConfig = {
   port: 3210,
   databasePath: 'runtime/test.db',
   publicDir: 'dist/client',
-  modelBaseUrl: 'https://model.invalid/v1',
   modelApiKey: '',
-  modelId: 'deepseek-v4-flash',
   modelEnabled: false,
   requestTimeoutMs: 20_000,
   disclaimer: '该条回复并不在我们的知识库以及 40 个预设问题中，请注意甄别',
@@ -575,11 +573,11 @@ test('publication API wraps 404, malformed input, and internal failures without 
     const failingContent = Object.create(content) as SqliteContentRepository;
     failingContent.listPublishedQuestions = async () => {
       throw new Error(
-        'SQLITE_CANTOPEN D:\\private\\live-in-hdu.db TOKENDANCE_API_KEY=top-secret',
+        'SQLITE_CANTOPEN D:\\private\\live-in-hdu.db TOKENDANCE_API_KEY=fake-test-secret',
       );
     };
     const failingApp = createApp({
-      config: { ...CONFIG, modelApiKey: 'top-secret', modelEnabled: true },
+      config: { ...CONFIG, modelApiKey: 'fake-test-secret', modelEnabled: true },
       content: failingContent,
       reviews,
       router: { async answer() { throw new Error('unused'); } },
@@ -590,7 +588,7 @@ test('publication API wraps 404, malformed input, and internal failures without 
       assert.deepEqual(internal.json(), {
         error: { code: 'INTERNAL_ERROR', message: 'Internal server error' },
       });
-      assert.doesNotMatch(internal.body, /SQLITE|D:\\|TOKENDANCE|top-secret|stack/i);
+      assert.doesNotMatch(internal.body, /SQLITE|D:\\|TOKENDANCE|fake-test-secret|stack/i);
     } finally {
       await failingApp.close();
     }

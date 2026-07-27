@@ -5,9 +5,7 @@ export type AppConfig = Readonly<{
   port: number;
   databasePath: string;
   publicDir: string;
-  modelBaseUrl: string;
   modelApiKey: string;
-  modelId: string;
   modelEnabled: boolean;
   requestTimeoutMs: number;
   disclaimer: string;
@@ -28,9 +26,7 @@ export function loadConfig(env: NodeJS.ProcessEnv, appRoot: string): AppConfig {
     port: numberFromEnv(env.PORT, 3210),
     databasePath: path.resolve(appRoot, env.DATABASE_PATH ?? 'runtime/live-in-hdu.db'),
     publicDir: path.resolve(appRoot, 'dist/client'),
-    modelBaseUrl: env.TOKENDANCE_BASE_URL ?? 'https://tokendance.space/gateway/v1',
     modelApiKey,
-    modelId: env.TOKENDANCE_MODEL ?? 'deepseek-v4-flash',
     modelEnabled: modelApiKey.length > 0,
     requestTimeoutMs: numberFromEnv(env.REQUEST_TIMEOUT_MS, 20000),
     disclaimer: DEFAULT_DISCLAIMER,
