@@ -20,10 +20,31 @@ export interface WebSearchResult {
   leads: SearchLead[];
 }
 
-export interface KnowledgeHit {
+export interface LegacyKnowledgeHit {
   answer: string;
   sources: SourceRef[];
 }
+
+export interface KnowledgeHit {
+  content: string;
+  score: number;
+  knowledgeId: string;
+  chunkId: string;
+  title: string;
+  sourceType: string;
+  sequence: number;
+  source: SourceRef;
+}
+
+export interface KnowledgeSearchResult {
+  status: ProviderStatus;
+  hits: KnowledgeHit[];
+}
+
+export type KnowledgeProviderResult =
+  | LegacyKnowledgeHit
+  | KnowledgeSearchResult
+  | null;
 
 export interface SynthesisInput {
   question: string;
@@ -44,7 +65,7 @@ export interface ModelProvider {
 }
 
 export interface KnowledgeProvider {
-  search(question: string): Promise<KnowledgeHit | null>;
+  search(question: string): Promise<KnowledgeProviderResult>;
 }
 
 export interface SearchProvider {

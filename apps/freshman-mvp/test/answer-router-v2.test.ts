@@ -10,6 +10,7 @@ import type { QuestionIntent, SourceRef } from '../src/domain/models.js';
 import { LocalKnowledgeProvider } from '../src/providers/local-knowledge-provider.js';
 import { TokenDanceProvider } from '../src/providers/tokendance-provider.js';
 import type {
+  KnowledgeProvider,
   ModelProvider,
   SearchProvider,
 } from '../src/providers/contracts.js';
@@ -54,6 +55,12 @@ const CONFIG = {
   modelApiKey: '',
   modelEnabled: false,
   requestTimeoutMs: 20_000,
+  knowledgeProvider: 'local',
+  weknoraBaseUrl: 'http://127.0.0.1:8080/api/v1',
+  weknoraApiKey: '',
+  weknoraDocumentKbId: '',
+  weknoraFaqKbId: '',
+  weknoraScoreThreshold: 0.55,
   searchProvider: 'unavailable',
   searxngBaseUrl: 'http://127.0.0.1:8888',
   searchTimeoutMs: 10_000,
@@ -101,7 +108,7 @@ function makeRouter(
   reviews: SqliteReviewRepository,
   options: {
     model?: ModelProvider;
-    knowledge?: LocalKnowledgeProvider;
+    knowledge?: KnowledgeProvider;
     search?: SearchProvider;
   } = {},
 ): AnswerRouter {
@@ -269,6 +276,72 @@ test('router v2 preserves preset then knowledge precedence without calling downs
     });
     assert.equal(searchCalls, 0);
     assert.equal(synthesisCalls, 0);
+  });
+});
+
+test('router v2 accepts status-aware WeKnora chunks while provider failure falls through safely', async () => {
+  await withRepositories(async ({ content, reviews }) => {
+    let searchCalls = 0;
+    const statusKnowledge: KnowledgeProvider = {
+      async search() {
+        return {
+          status: 'available',
+          hits: [{
+            content: '宿舍通常按学院和专业统一安排。',
+            score: 0.91,
+            knowledgeId: 'knowledge-1',
+            chunkId: 'chunk-1',
+            title: '2025年新生指南',
+            sourceType: 'community',
+            sequence: 0,
+            source: {
+              type: 'community',
+              title: '2025年新生指南',
+              url: '',
+              updatedAt: null,
+            },
+          }],
+        };
+      },
+    };
+    const router = makeRouter(content, reviews, {
+      knowledge: statusKnowledge,
+      search: {
+        async search() {
+          searchCalls += 1;
+          return { status: 'not-configured', leads: [] };
+        },
+      },
+    });
+    const result = await router.answer('宿舍怎么安排？');
+    assert.deepEqual(result, {
+      route: 'knowledge',
+      trustStatus: 'knowledge',
+      answer: '宿舍通常按学院和专业统一安排。',
+      sources: [{
+        type: 'community',
+        title: '2025年新生指南',
+        url: '',
+        updatedAt: null,
+      }],
+    });
+    assert.equal(searchCalls, 0);
+
+    const unavailable = makeRouter(content, reviews, {
+      knowledge: {
+        async search() {
+          return { status: 'temporarily-unavailable', hits: [] };
+        },
+      },
+      search: {
+        async search() {
+          searchCalls += 1;
+          return { status: 'not-configured', leads: [] };
+        },
+      },
+    });
+    assert.equal((await unavailable.answer('另一个未知问题')).route, 'web');
+    assert.equal(searchCalls, 1);
   });
 });
 

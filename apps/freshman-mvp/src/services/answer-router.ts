@@ -1,6 +1,8 @@
 import { ServiceUnavailableError } from '../domain/errors.js';
 import type { AnswerResult } from '../domain/models.js';
 import type {
+  KnowledgeProviderResult,
+  KnowledgeSearchResult,
   KnowledgeProvider,
   ModelAnswer,
   ModelProvider,
@@ -49,6 +51,49 @@ function searchSources(search: WebSearchResult): ModelAnswer['sources'] {
     url: item.url.trim(),
     updatedAt: null,
   }));
+}
+
+function isKnowledgeSearchResult(
+  value: KnowledgeProviderResult,
+): value is KnowledgeSearchResult {
+  return value !== null
+    && 'status' in value
+    && 'hits' in value
+    && Array.isArray(value.hits);
+}
+
+function normalizedKnowledge(
+  value: KnowledgeProviderResult,
+): { answer: string; sources: ModelAnswer['sources'] } | null {
+  if (value === null) {
+    return null;
+  }
+  if (!isKnowledgeSearchResult(value)) {
+    const answer = value.answer.trim();
+    return answer.length > 0 ? { answer, sources: value.sources } : null;
+  }
+  if (value.status !== 'available' || value.hits.length === 0) {
+    return null;
+  }
+  const answer = value.hits
+    .map((hit) => hit.content.trim())
+    .filter(Boolean)
+    .join('\n\n');
+  if (answer.length === 0) {
+    return null;
+  }
+  const seen = new Set<string>();
+  const sources = value.hits
+    .map((hit) => hit.source)
+    .filter((source) => {
+      const key = `${source.type}\0${source.title}\0${source.url}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+  return { answer, sources };
 }
 
 function deterministicFallback(search: WebSearchResult): ModelAnswer {
@@ -113,18 +158,19 @@ export class AnswerRouter {
       };
     }
 
-    let knowledge = null;
+    let knowledge: KnowledgeProviderResult = null;
     try {
       knowledge = await this.deps.knowledge.search(question);
     } catch {
       knowledge = null;
     }
-    if (knowledge && knowledge.answer.trim().length > 0) {
+    const normalized = normalizedKnowledge(knowledge);
+    if (normalized) {
       return {
         route: 'knowledge',
         trustStatus: 'knowledge',
-        answer: knowledge.answer.trim(),
-        sources: knowledge.sources,
+        answer: normalized.answer,
+        sources: normalized.sources,
       };
     }
 

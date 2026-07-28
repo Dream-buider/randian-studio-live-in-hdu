@@ -8,11 +8,30 @@ test('requires Node 24 and defaults to a local SQLite runtime', () => {
   assert.equal(config.port, 3210);
   assert.match(config.databasePath, /runtime[\\/]live-in-hdu\.db$/);
   assert.equal(config.modelEnabled, false);
+  assert.equal(config.knowledgeProvider, 'local');
+  assert.equal(config.weknoraScoreThreshold, 0.55);
   assert.equal('modelBaseUrl' in config, false);
   assert.equal('modelId' in config, false);
   assert.equal(config.searchProvider, 'unavailable');
   assert.equal(config.searxngBaseUrl, 'http://127.0.0.1:8888');
   assert.equal(config.searchMaxResults, 6);
+});
+
+test('enables WeKnora only explicitly and trims its server-only configuration', () => {
+  const config = loadConfig({
+    KNOWLEDGE_PROVIDER: 'weknora',
+    WEKNORA_BASE_URL: ' http://127.0.0.1:8080/api/v1 ',
+    WEKNORA_API_KEY: ' server-secret ',
+    WEKNORA_DOCUMENT_KB_ID: ' document-kb ',
+    WEKNORA_FAQ_KB_ID: ' faq-kb ',
+    WEKNORA_SCORE_THRESHOLD: '0.61',
+  }, 'C:/project/apps/freshman-mvp');
+  assert.equal(config.knowledgeProvider, 'weknora');
+  assert.equal(config.weknoraBaseUrl, 'http://127.0.0.1:8080/api/v1');
+  assert.equal(config.weknoraApiKey, 'server-secret');
+  assert.equal(config.weknoraDocumentKbId, 'document-kb');
+  assert.equal(config.weknoraFaqKbId, 'faq-kb');
+  assert.equal(config.weknoraScoreThreshold, 0.61);
 });
 
 test('enables only the explicit SearXNG search mode and caps result count', () => {

@@ -8,6 +8,7 @@ import { openDatabase, type SqliteDatabase } from '../db/sqlite.js';
 import type { SourceRef } from '../domain/models.js';
 import type {
   IntentClassification,
+  KnowledgeProvider,
   ModelAnswer,
   ModelProvider,
   SynthesisInput,
@@ -18,6 +19,7 @@ import {
 } from '../providers/local-knowledge-provider.js';
 import { TokenDanceProvider } from '../providers/tokendance-provider.js';
 import { SearxngProvider } from '../providers/searxng-provider.js';
+import { WeKnoraProvider } from '../providers/weknora-provider.js';
 import { UnavailableSearchProvider } from '../providers/unavailable-search-provider.js';
 import { SqliteContentRepository } from '../repositories/sqlite-content-repository.js';
 import { SqliteReviewRepository } from '../repositories/sqlite-review-repository.js';
@@ -182,7 +184,22 @@ export async function createProductionRuntime(
           timeoutMs: config.requestTimeoutMs,
         })
       : new DisabledModelProvider();
-    const knowledge = new LocalKnowledgeProvider(await loadLocalKnowledge(appRoot));
+    const weknora = config.knowledgeProvider === 'weknora'
+      ? new WeKnoraProvider({
+          baseUrl: config.weknoraBaseUrl,
+          apiKey: config.weknoraApiKey,
+          knowledgeBaseIds: [
+            config.weknoraDocumentKbId,
+            config.weknoraFaqKbId,
+          ],
+          scoreThreshold: config.weknoraScoreThreshold,
+          timeoutMs: 10_000,
+          maxHits: 8,
+          fetch: options.fetch,
+        })
+      : null;
+    const knowledge: KnowledgeProvider = weknora
+      ?? new LocalKnowledgeProvider(await loadLocalKnowledge(appRoot));
     const search = config.searchProvider === 'searxng'
       ? new SearxngProvider({
           baseUrl: config.searxngBaseUrl,
@@ -213,7 +230,9 @@ export async function createProductionRuntime(
           model: config.modelEnabled
             ? { status: 'configured', mode: 'tokendance' }
             : { status: 'disabled', mode: 'no-key' },
-          knowledge: { status: 'ok', mode: 'local-json' },
+          knowledge: weknora
+            ? { status: weknora.status(), mode: 'weknora' }
+            : { status: 'ok', mode: 'local-json' },
           search: config.searchProvider === 'searxng'
             ? { status: 'configured', mode: 'searxng' }
             : { status: 'unavailable', mode: 'phase-a-disabled' },

@@ -215,6 +215,57 @@ test('production composition uses TokenDance only for a trimmed real key and acc
   }
 });
 
+test('WeKnora missing configuration does not block preset answers or the local admin console', async () => {
+  const directory = await mkdtemp(path.join(TEST_TEMP, 'live-in-hdu-weknora-missing-'));
+  const databasePath = path.join(directory, 'weknora-missing.db');
+  let fetchCalls = 0;
+  let runtime: ProductionRuntime | null = null;
+  try {
+    runtime = await createProductionRuntime({
+      appRoot: APP_ROOT,
+      env: {
+        HOST: '127.0.0.1',
+        DATABASE_PATH: databasePath,
+        KNOWLEDGE_PROVIDER: 'weknora',
+        WEKNORA_BASE_URL: 'http://127.0.0.1:8080/api/v1',
+        WEKNORA_API_KEY: '',
+        WEKNORA_DOCUMENT_KB_ID: '',
+        WEKNORA_FAQ_KB_ID: '',
+      },
+      fetch: async () => {
+        fetchCalls += 1;
+        throw new Error('missing configuration must not call WeKnora');
+      },
+    });
+    await runtime.content.createIntent(INTENT);
+    await runtime.content.publishCanonicalAnswer({
+      intentId: INTENT.id,
+      summary: '校园卡通常会按学院通知统一领取，到校后请及时激活并修改密码。',
+      fullAnswer: '校园卡通常会按学院通知统一领取，到校后请及时激活并修改密码；具体地点以当年通知为准。',
+      sources: SOURCES,
+      reviewerId: 'e2e-reviewer',
+    });
+    const preset = await runtime.app.inject({
+      method: 'POST',
+      url: '/api/ask',
+      payload: { question: '学校怎么办校园卡' },
+    });
+    assert.equal(preset.statusCode, 200);
+    assert.equal(preset.json().route, 'preset');
+    const admin = await runtime.app.inject({ method: 'GET', url: '/api/admin/intents' });
+    assert.equal(admin.statusCode, 200);
+    const health = await runtime.app.inject({ method: 'GET', url: '/api/health' });
+    assert.deepEqual(health.json().components.knowledge, {
+      status: 'not-configured',
+      mode: 'weknora',
+    });
+    assert.equal(fetchCalls, 0);
+  } finally {
+    await closeQuietly(runtime);
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('production runtime refuses a missing C runtime junction without creating a C directory', async () => {
   const appRoot = path.join(
     APP_ROOT,

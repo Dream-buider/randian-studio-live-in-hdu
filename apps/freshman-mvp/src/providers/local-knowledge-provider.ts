@@ -1,6 +1,6 @@
 import type { SourceRef } from '../domain/models.js';
 import { bestLocalMatch } from '../services/intent-matcher.js';
-import type { KnowledgeHit, KnowledgeProvider } from './contracts.js';
+import type { KnowledgeProvider, LegacyKnowledgeHit } from './contracts.js';
 
 export interface LocalKnowledgeRecord {
   question: string;
@@ -20,7 +20,7 @@ export class LocalKnowledgeProvider implements KnowledgeProvider {
     this.threshold = threshold;
   }
 
-  async search(question: string): Promise<KnowledgeHit | null> {
+  async search(question: string): Promise<LegacyKnowledgeHit | null> {
     const match = bestLocalMatch(question, this.records, this.threshold);
     if (!match || match.entry.answer.trim().length === 0) {
       return null;
