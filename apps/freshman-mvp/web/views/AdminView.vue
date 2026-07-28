@@ -6,6 +6,7 @@ import {
   listKnowledgeImports,
   listPendingReviews,
   listRawAnswers,
+  retryKnowledgeImport,
   type AdminIntent,
   type KnowledgeImportStatus,
   type RawAnswer,
@@ -25,6 +26,7 @@ const loading = ref(true);
 const loadingRaw = ref(false);
 const localOnly = ref(false);
 const errorMessage = ref('');
+const retryingImportId = ref<string | null>(null);
 let rawRequestSequence = 0;
 
 function recordError(error: unknown): void {
@@ -71,20 +73,39 @@ function removeDecidedReview(reviewId: string): void {
   reviews.value = reviews.value.filter((review) => review.id !== reviewId);
 }
 
+async function retryImport(id: string): Promise<void> {
+  retryingImportId.value = id;
+  try {
+    await retryKnowledgeImport(id);
+    const loadedImports = await listKnowledgeImports();
+    knowledgeImports.value = loadedImports.items;
+    knowledgeImportsConfigured.value = loadedImports.configured;
+  } catch (error) {
+    recordError(error);
+  } finally {
+    retryingImportId.value = null;
+  }
+}
+
 async function load(): Promise<void> {
   loading.value = true;
   errorMessage.value = '';
   localOnly.value = false;
   try {
-    const [loadedIntents, loadedReviews, loadedImports] = await Promise.all([
+    const [loadedIntents, loadedReviews] = await Promise.all([
       listAdminIntents(),
       listPendingReviews(),
-      listKnowledgeImports(),
     ]);
     intents.value = loadedIntents;
     reviews.value = loadedReviews;
-    knowledgeImports.value = loadedImports.items;
-    knowledgeImportsConfigured.value = loadedImports.configured;
+    try {
+      const loadedImports = await listKnowledgeImports();
+      knowledgeImports.value = loadedImports.items;
+      knowledgeImportsConfigured.value = loadedImports.configured;
+    } catch {
+      knowledgeImports.value = [];
+      knowledgeImportsConfigured.value = false;
+    }
     if (loadedIntents[0]) {
       await selectIntent(loadedIntents[0]);
     }
@@ -134,7 +155,19 @@ onMounted(load);
           · {{ item.parseStatus }}
           · {{ item.approvedBy }}
           · {{ item.contentSha256.slice(0, 12) }}
+          · 审批于 {{ item.approvedAt }}
+          · WeKnora {{ item.weknoraKnowledgeId ?? '尚未生成' }}
+          · 更新于 {{ item.updatedAt }}
           <span v-if="item.lastError"> · {{ item.lastError }}</span>
+          <button
+            v-if="item.parseStatus === 'failed' || item.parseStatus === 'cancelled'"
+            type="button"
+            data-action="retry-knowledge-import"
+            :disabled="retryingImportId === item.id"
+            @click="retryImport(item.id)"
+          >
+            {{ retryingImportId === item.id ? '正在重试…' : '按原审批清单重试' }}
+          </button>
         </li>
       </ul>
     </section>

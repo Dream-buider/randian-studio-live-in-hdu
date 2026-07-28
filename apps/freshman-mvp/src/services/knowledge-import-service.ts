@@ -672,4 +672,102 @@ export class KnowledgeImportService {
       items: imported,
     };
   }
+
+  async retry(
+    id: string,
+    options: {
+      approvedRoot: string;
+      wait?: boolean;
+      timeoutMs?: number;
+    },
+  ): Promise<KnowledgeImportRecord> {
+    const record = (await this.store.list()).find((item) => item.id === id);
+    if (!record) {
+      throw new Error('Knowledge import record was not found');
+    }
+    const manifest = await validateApprovedKnowledgeManifest(
+      record.manifestPath,
+      options.approvedRoot,
+    );
+    const approvedItem = manifest.items.find((item) => (
+      item.itemPath === record.itemPath
+      && item.approvedBy === record.approvedBy
+      && Date.parse(item.approvedAt) === Date.parse(record.approvedAt)
+    ));
+    if (
+      !approvedItem
+      || approvedItem.contentSha256 !== record.contentSha256
+      || record.knowledgeBaseId !== this.knowledgeBaseId
+    ) {
+      throw new Error(
+        'Approved manifest no longer matches the failed import; create a new approval before retrying',
+      );
+    }
+    if (record.parseStatus !== 'failed' && record.parseStatus !== 'cancelled') {
+      throw new Error(`Knowledge import in state ${record.parseStatus} cannot be retried`);
+    }
+
+    try {
+      const upload = await this.client.upload(approvedItem, this.knowledgeBaseId);
+      record.weknoraKnowledgeId = upload.knowledgeId;
+      record.parseStatus = upload.parseStatus;
+      record.lastError = null;
+      await this.store.updateState(record.id, {
+        weknoraKnowledgeId: upload.knowledgeId,
+        parseStatus: upload.parseStatus,
+        lastError: null,
+      });
+      await this.store.appendEvent(record.id, upload.parseStatus, 'manual retry');
+      if (!options.wait) {
+        return record;
+      }
+
+      const timeoutMs = Number.isFinite(options.timeoutMs)
+        ? Math.max(1, Number(options.timeoutMs))
+        : 30 * 60_000;
+      const deadline = this.now() + timeoutMs;
+      let state = {
+        parseStatus: upload.parseStatus,
+        error: null as string | null,
+      };
+      while (!TERMINAL_PARSE_STATES.has(state.parseStatus) && this.now() < deadline) {
+        state = await this.client.getParseState(
+          this.knowledgeBaseId,
+          upload.knowledgeId,
+        );
+        await this.store.updateState(record.id, {
+          parseStatus: state.parseStatus,
+          lastError: state.error,
+        });
+        await this.store.appendEvent(record.id, state.parseStatus, state.error);
+        if (!TERMINAL_PARSE_STATES.has(state.parseStatus)) {
+          await this.sleep(this.pollIntervalMs);
+        }
+      }
+      if (!TERMINAL_PARSE_STATES.has(state.parseStatus)) {
+        state = {
+          parseStatus: 'failed',
+          error: 'Timed out waiting for WeKnora parsing',
+        };
+      }
+      record.parseStatus = state.parseStatus;
+      record.lastError = state.error;
+      await this.store.updateState(record.id, {
+        parseStatus: state.parseStatus,
+        lastError: state.error,
+      });
+      await this.store.appendEvent(record.id, state.parseStatus, state.error);
+      return record;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Knowledge import retry failed';
+      record.parseStatus = 'failed';
+      record.lastError = message;
+      await this.store.updateState(record.id, {
+        parseStatus: 'failed',
+        lastError: message,
+      });
+      await this.store.appendEvent(record.id, 'failed', message);
+      throw error;
+    }
+  }
 }

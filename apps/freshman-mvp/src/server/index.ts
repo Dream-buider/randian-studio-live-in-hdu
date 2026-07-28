@@ -157,6 +157,9 @@ export async function createProductionRuntime(
   let knowledgeImports: import(
     '../repositories/postgres-knowledge-import-store.js'
   ).PostgresKnowledgeImportStore | null = null;
+  let knowledgeImportRetry: {
+    retry(id: string): Promise<unknown>;
+  } | null = null;
   let closed = false;
   try {
     if (config.databaseProvider === 'sqlite') {
@@ -216,6 +219,35 @@ export async function createProductionRuntime(
     const knowledge: KnowledgeProvider = weknora
       ?? new LocalKnowledgeProvider(await loadLocalKnowledge(appRoot));
     if (
+      knowledgeImports
+      && config.weknoraApiKey.length > 0
+      && config.weknoraDocumentKbId.length > 0
+    ) {
+      const { KnowledgeImportService, WeKnoraKnowledgeClient } = await import(
+        '../services/knowledge-import-service.js'
+      );
+      const importService = new KnowledgeImportService(
+        knowledgeImports,
+        new WeKnoraKnowledgeClient({
+          baseUrl: config.weknoraBaseUrl,
+          apiKey: config.weknoraApiKey,
+          fetch: options.fetch,
+        }),
+        { knowledgeBaseId: config.weknoraDocumentKbId },
+      );
+      const approvedRoot = path.resolve(
+        appRoot,
+        '..',
+        '..',
+        'output',
+        'freshman-platform',
+        'approved-knowledge',
+      );
+      knowledgeImportRetry = {
+        retry: (id: string) => importService.retry(id, { approvedRoot }),
+      };
+    }
+    if (
       postgresPool
       && config.weknoraApiKey.length > 0
       && config.weknoraFaqKbId.length > 0
@@ -269,6 +301,7 @@ export async function createProductionRuntime(
       publicDir: config.publicDir,
       faqSync: faqSync ?? undefined,
       knowledgeImports: knowledgeImports ?? undefined,
+      knowledgeImportRetry: knowledgeImportRetry ?? undefined,
       health: async () => ({
         status: 'ok',
         components: {

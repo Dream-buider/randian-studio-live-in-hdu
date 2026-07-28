@@ -339,6 +339,17 @@ export async function listKnowledgeImports(): Promise<{
   return { configured: body.configured, items: body.items };
 }
 
+export async function retryKnowledgeImport(id: string): Promise<void> {
+  const response = await fetch(
+    `/api/admin/knowledge-imports/${encodeURIComponent(id)}/retry`,
+    { method: 'POST' },
+  );
+  const body = await readJson(response);
+  if (!response.ok || !isRecord(body) || body.status !== 'queued') {
+    throw new ApiResponseError(response.status);
+  }
+}
+
 export async function publishAnswer(
   intentId: string,
   input: PublishAnswerInput,

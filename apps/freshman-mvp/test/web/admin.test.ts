@@ -138,6 +138,37 @@ function adminFetch(records: Array<{ url: string; init?: RequestInit }> = []) {
     if (url === '/api/reviews?status=pending') {
       return jsonResponse({ items: reviews });
     }
+    if (url === '/api/admin/knowledge-imports') {
+      return jsonResponse({
+        configured: true,
+        items: [{
+          id: 'knowledge-import-1',
+          itemPath: 'guide.md',
+          version: 1,
+          contentSha256: 'a'.repeat(64),
+          title: '2025 年新生指北',
+          sourceType: 'community',
+          sourceUrl: '',
+          publishedAt: '2025-08-01',
+          applicableYear: 2025,
+          approvedBy: 'local-admin',
+          approvedAt: '2026-07-28T04:00:00.000Z',
+          ingestMode: 'file',
+          knowledgeBaseId: 'kb-documents',
+          weknoraKnowledgeId: 'weknora-guide-1',
+          parseStatus: 'failed',
+          lastError: '解析失败',
+          createdAt: '2026-07-28T04:01:00.000Z',
+          updatedAt: '2026-07-28T04:02:00.000Z',
+        }],
+      });
+    }
+    if (url === '/api/admin/knowledge-imports/knowledge-import-1/retry') {
+      return jsonResponse({
+        status: 'queued',
+        item: { id: 'knowledge-import-1', parseStatus: 'pending' },
+      });
+    }
     if (url.includes('/publish')) {
       return jsonResponse({
         id: 'dormitory:v1',
@@ -192,6 +223,25 @@ describe('operations console', () => {
     expect(wrapper.text()).toContain('回答（一）');
     expect(wrapper.text()).toContain('E9');
     expect(wrapper.html()).not.toContain('v-html');
+  });
+
+  it('shows traceable knowledge import details and retries a failed approved item', async () => {
+    const records: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal('fetch', adminFetch(records));
+    const wrapper = await mountAdmin();
+
+    expect(wrapper.text()).toContain('2025 年新生指北');
+    expect(wrapper.text()).toContain('weknora-guide-1');
+    expect(wrapper.text()).toContain('local-admin');
+    expect(wrapper.text()).toContain('2026-07-28T04:00:00.000Z');
+    expect(wrapper.text()).toContain('2026-07-28T04:02:00.000Z');
+    await wrapper.get('[data-action="retry-knowledge-import"]').trigger('click');
+    await flushPromises();
+
+    const request = records.find(({ url }) => (
+      url === '/api/admin/knowledge-imports/knowledge-import-1/retry'
+    ));
+    expect(request?.init?.method).toBe('POST');
   });
 
   it('ignores an older raw-answer response after the operator selects a different intent', async () => {

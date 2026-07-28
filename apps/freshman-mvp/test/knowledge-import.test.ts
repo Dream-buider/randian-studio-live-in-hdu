@@ -428,3 +428,88 @@ test('admin knowledge import status is visible locally without contacting WeKnor
     await app.close();
   }
 });
+
+test('failed knowledge import retry revalidates the approved manifest before upload', async () => {
+  await withApprovedFiles(async ({ approvedRoot, manifestPath }) => {
+    const filePath = path.join(approvedRoot, 'guide.md');
+    await writeFile(filePath, '# approved retry\n', 'utf8');
+    await writeManifest(manifestPath, [manifestItem()]);
+    const manifest = await validateApprovedKnowledgeManifest(manifestPath, approvedRoot);
+    const store = new MemoryImportStore();
+    store.records.push({
+      id: 'retry-1',
+      manifestPath: manifest.manifestPath,
+      itemPath: 'guide.md',
+      version: 1,
+      contentSha256: manifest.items[0].contentSha256,
+      title: '2025年新生指南',
+      sourceType: 'community',
+      sourceUrl: '',
+      publishedAt: '2025-08-01',
+      applicableYear: 2025,
+      approvedBy: 'local-admin',
+      approvedAt: new Date('2026-07-28T12:00:00+08:00').toISOString(),
+      ingestMode: 'file',
+      knowledgeBaseId: 'kb-documents',
+      weknoraKnowledgeId: 'failed-knowledge',
+      parseStatus: 'failed',
+      lastError: 'parse failed',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    let uploadCount = 0;
+    const service = new KnowledgeImportService(store, {
+      async upload() {
+        uploadCount += 1;
+        return { knowledgeId: 'retry-knowledge', parseStatus: 'pending' };
+      },
+      async getParseState() {
+        return { parseStatus: 'completed', error: null };
+      },
+    }, {
+      knowledgeBaseId: 'kb-documents',
+      sleep: async () => {},
+    });
+
+    const retried = await service.retry('retry-1', { approvedRoot, wait: true });
+    assert.equal(retried.parseStatus, 'completed');
+    assert.equal(uploadCount, 1);
+
+    await writeFile(filePath, '# changed after approval\n', 'utf8');
+    await assert.rejects(
+      service.retry('retry-1', { approvedRoot }),
+      /approved manifest|hash|changed/i,
+    );
+    assert.equal(uploadCount, 1);
+  });
+});
+
+test('admin retry endpoint delegates only to the configured approved import service', async () => {
+  const retried: string[] = [];
+  const app = createApp({
+    config: {} as never,
+    content: {} as never,
+    reviews: {} as never,
+    router: { async answer() { return {}; } },
+    knowledgeImportRetry: {
+      async retry(id: string) {
+        retried.push(id);
+        return { id, parseStatus: 'pending' };
+      },
+    },
+  });
+  try {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/knowledge-imports/import-1/retry',
+    });
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.json(), {
+      status: 'queued',
+      item: { id: 'import-1', parseStatus: 'pending' },
+    });
+    assert.deepEqual(retried, ['import-1']);
+  } finally {
+    await app.close();
+  }
+});

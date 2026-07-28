@@ -31,6 +31,9 @@ export interface AppDependencies {
   publicDir?: string;
   faqSync?: Pick<FaqSyncService, 'retry'>;
   knowledgeImports?: Pick<KnowledgeImportStore, 'list'>;
+  knowledgeImportRetry?: {
+    retry(id: string): Promise<unknown>;
+  };
 }
 
 const LOOPBACK_ADDRESSES = new BlockList();
@@ -196,6 +199,18 @@ export function createApp(deps: AppDependencies): FastifyInstance {
     configured: Boolean(deps.knowledgeImports),
     items: deps.knowledgeImports ? await deps.knowledgeImports.list() : [],
   }));
+
+  app.post<{
+    Params: { id: string };
+  }>('/api/admin/knowledge-imports/:id/retry', async (request) => {
+    if (!deps.knowledgeImportRetry) {
+      throw new ServiceUnavailableError('Knowledge import retry is not configured');
+    }
+    return {
+      status: 'queued',
+      item: await deps.knowledgeImportRetry.retry(request.params.id),
+    };
+  });
 
   app.get<{
     Params: { id: string };
