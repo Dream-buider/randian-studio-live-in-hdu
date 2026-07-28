@@ -117,6 +117,15 @@ test('Phase B preflight emits the D-drive fallback truthfully and exits zero onl
   assert.deepEqual(report.failures, []);
 });
 
+test('Phase B preflight accepts port 11434 when the expected Ollama model is already serving', async () => {
+  const fixture = passingFixture();
+  fixture.portsAvailable = fixture.portsAvailable.filter((port) => port !== 11434);
+  const { result, report } = await runFixture(fixture);
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.equal(report.ready, true);
+  assert.deepEqual(report.failures, []);
+});
+
 test('Phase B prerequisite boundary keeps secrets blank and large runtime paths on D', async () => {
   const [script, environment, gitignore] = await Promise.all([
     readFile(SCRIPT, 'utf8'),

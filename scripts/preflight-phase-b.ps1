@@ -190,8 +190,11 @@ if (-not [bool]$probe.ollamaCli) {
 }
 $availablePorts = @($probe.portsAvailable | ForEach-Object { [int]$_ })
 $unavailablePorts = @($RequiredPorts | Where-Object { $_ -notin $availablePorts })
-if ($unavailablePorts.Count -gt 0) {
-    Add-Failure $failures 'ports-in-use' "Required ports are unavailable: $($unavailablePorts -join ', ')." 'Stop or reconfigure the owning services before Phase B startup.'
+$unexpectedPortConflicts = @($unavailablePorts | Where-Object {
+    $_ -ne 11434 -or -not [bool]$probe.embeddingModelAvailable
+})
+if ($unexpectedPortConflicts.Count -gt 0) {
+    Add-Failure $failures 'ports-in-use' "Required ports are unavailable: $($unexpectedPortConflicts -join ', ')." 'Stop or reconfigure the owning services before Phase B startup.'
 }
 
 $report = [ordered]@{
@@ -217,6 +220,9 @@ $report = [ordered]@{
     requiredPorts = $RequiredPorts
     portsAvailable = $availablePorts
     portsUnavailable = $unavailablePorts
+    expectedServicePortsInUse = @($unavailablePorts | Where-Object {
+        $_ -eq 11434 -and [bool]$probe.embeddingModelAvailable
+    })
     failures = @($failures)
 }
 
