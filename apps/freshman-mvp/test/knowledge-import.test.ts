@@ -191,6 +191,11 @@ test('approved knowledge manifest rejects unsafe, ambiguous, or unapproved entri
         items: [manifestItem({ approvedAt: 'tomorrow' })],
         pattern: /approvedAt/i,
       },
+      {
+        name: 'impossible approval timestamp',
+        items: [manifestItem({ approvedAt: '2026-02-30T25:00:00+08:00' })],
+        pattern: /approvedAt/i,
+      },
     ];
 
     for (const item of cases) {
@@ -205,6 +210,25 @@ test('approved knowledge manifest rejects unsafe, ambiguous, or unapproved entri
         );
       });
     }
+  });
+});
+
+test('approved knowledge manifest rejects malformed JSON and unsupported versions', async () => {
+  await withApprovedFiles(async ({ approvedRoot, manifestPath }) => {
+    await writeFile(manifestPath, '{not json', 'utf8');
+    await assert.rejects(
+      validateApprovedKnowledgeManifest(manifestPath, approvedRoot),
+      /valid JSON/i,
+    );
+    await writeFile(
+      manifestPath,
+      JSON.stringify({ version: 2, items: [] }),
+      'utf8',
+    );
+    await assert.rejects(
+      validateApprovedKnowledgeManifest(manifestPath, approvedRoot),
+      /version 1/i,
+    );
   });
 });
 
