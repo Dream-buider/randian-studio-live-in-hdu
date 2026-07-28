@@ -1,5 +1,4 @@
-import type { PoolClient } from 'pg';
-import type { PostgresPool } from '../db/postgres.js';
+import type { PostgresClient, PostgresPool } from '../db/postgres.js';
 import { NotFoundError } from '../domain/errors.js';
 import { assertSourceRefs, assertStringArray } from '../domain/validation.js';
 import type { CanonicalAnswerVersion, PublishedQuestion, QuestionIntent, RawAnswer, SourceRef } from '../domain/models.js';
@@ -24,7 +23,7 @@ export class PostgresContentRepository implements ContentRepository {
     this.pool = pool;
   }
 
-  private async writeIntent(client: PoolClient, input: QuestionIntent): Promise<void> {
+  private async writeIntent(client: PostgresClient, input: QuestionIntent): Promise<void> {
     assertStringArray('aliases', input.aliases); assertStringArray('keywords', input.keywords); assertStringArray('excludeKeywords', input.excludeKeywords);
     await client.query(`INSERT INTO question_intents (id, external_id, category, question, intent_description, aliases_json, keywords_json, exclude_keywords_json, active, featured, display_order, created_at, updated_at)
       VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9,$10,$11,NOW(),NOW())

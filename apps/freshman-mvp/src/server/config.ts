@@ -4,6 +4,8 @@ export type AppConfig = Readonly<{
   host: string;
   port: number;
   databasePath: string;
+  databaseProvider: 'sqlite' | 'postgres';
+  postgresUrl: string;
   publicDir: string;
   modelApiKey: string;
   modelEnabled: boolean;
@@ -40,5 +42,9 @@ export function loadConfig(env: NodeJS.ProcessEnv, appRoot: string): AppConfig {
     searchTimeoutMs: numberFromEnv(env.SEARCH_TIMEOUT_MS, 10000),
     searchMaxResults: Math.min(numberFromEnv(env.SEARCH_MAX_RESULTS, 6), 6),
     disclaimer: DEFAULT_DISCLAIMER,
+    databaseProvider: env.DATABASE_PROVIDER?.trim().toLowerCase() === 'postgres'
+      ? 'postgres'
+      : 'sqlite',
+    postgresUrl: env.POSTGRES_URL?.trim() ?? '',
   };
 }

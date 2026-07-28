@@ -50,7 +50,7 @@ export interface ProductionRuntime {
   config: AppConfig;
   content: ContentRepository;
   reviews: ReviewRepository;
-  database: SqliteDatabase;
+  database: SqliteDatabase | null;
   listen(overrides?: { host?: string; port?: number }): Promise<string>;
   close(): Promise<void>;
 }
@@ -141,14 +141,40 @@ export async function createProductionRuntime(
 ): Promise<ProductionRuntime> {
   const appRoot = path.resolve(options.appRoot ?? defaultAppRoot());
   const config = loadConfig(options.env ?? process.env, appRoot);
-  await ensureDDriveRuntimePath(config.databasePath);
-
-  const database = openDatabase(config.databasePath);
+  let database: SqliteDatabase | null = null;
+  let content: ContentRepository;
+  let reviews: ReviewRepository;
+  let closeStorage: () => Promise<void> = async () => { database?.close(); };
   let closed = false;
   try {
-    migrateDatabase(database);
-    const content = new SqliteContentRepository(database);
-    const reviews = new SqliteReviewRepository(database);
+    if (config.databaseProvider === 'sqlite') {
+      await ensureDDriveRuntimePath(config.databasePath);
+      database = openDatabase(config.databasePath);
+      migrateDatabase(database);
+      content = new SqliteContentRepository(database);
+      reviews = new SqliteReviewRepository(database);
+      closeStorage = async () => { database?.close(); };
+    } else {
+      if (!config.postgresUrl) {
+        throw new Error('POSTGRES_URL is required when DATABASE_PROVIDER=postgres');
+      }
+      const [{ createPostgresPool }, { migratePostgres }, { PostgresContentRepository }, { PostgresReviewRepository }] = await Promise.all([
+        import('../db/postgres.js'),
+        import('../db/postgres-migrations.js'),
+        import('../repositories/postgres-content-repository.js'),
+        import('../repositories/postgres-review-repository.js'),
+      ]);
+      const pool = await createPostgresPool(config.postgresUrl);
+      try {
+        await migratePostgres(pool);
+      } catch (error) {
+        await pool.end();
+        throw error;
+      }
+      content = new PostgresContentRepository(pool);
+      reviews = new PostgresReviewRepository(pool);
+      closeStorage = async () => { await pool.end(); };
+    }
     const model: ModelProvider = config.modelEnabled
       ? new TokenDanceProvider({
           apiKey: config.modelApiKey,
@@ -183,7 +209,7 @@ export async function createProductionRuntime(
       health: async () => ({
         status: 'ok',
         components: {
-          database: { status: 'ok', mode: 'sqlite' },
+          database: { status: 'ok', mode: config.databaseProvider },
           model: config.modelEnabled
             ? { status: 'configured', mode: 'tokendance' }
             : { status: 'disabled', mode: 'no-key' },
@@ -217,11 +243,11 @@ export async function createProductionRuntime(
         }
         closed = true;
         await app.close();
-        database.close();
+        await closeStorage();
       },
     };
   } catch (error) {
-    database.close();
+    await closeStorage?.();
     throw error;
   }
 }
