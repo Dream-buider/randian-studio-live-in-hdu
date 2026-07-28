@@ -18,9 +18,8 @@ export class PostgresReviewRepository implements ReviewRepository {
   async enqueue(input: EnqueueReviewInput): Promise<ReviewTask> {
     assertSourceRefs(input.sources); const client = await this.pool.connect();
     try {
-      await client.query('BEGIN'); await client.query('LOCK TABLE review_tasks IN EXCLUSIVE MODE');
-      const next = await client.query('SELECT COALESCE(MAX(ordinal), 0) + 1 AS ordinal FROM review_tasks'); const ordinal = Number(next.rows[0]?.ordinal ?? 1);
-      const result = await client.query(`INSERT INTO review_tasks (id,question,answer_text,sources_json,risk_level,status,ordinal,created_at,decided_at,reviewer_id,decision_note,reviewed_answer,feedback_target,provider_status,raw_search_leads_json) VALUES ($1,$2,$3,$4::jsonb,'medium','pending',$5,NOW(),NULL,NULL,NULL,NULL,NULL,$6,$7::jsonb) RETURNING *`, [randomUUID(),input.question,input.answer,JSON.stringify(input.sources),ordinal,input.providerStatus ?? null,input.rawSearchLeads === undefined ? null : JSON.stringify(input.rawSearchLeads)]);
+      await client.query('BEGIN');
+      const result = await client.query(`INSERT INTO review_tasks (id,question,answer_text,sources_json,risk_level,status,ordinal,created_at,decided_at,reviewer_id,decision_note,reviewed_answer,feedback_target,provider_status,raw_search_leads_json) VALUES ($1,$2,$3,$4::jsonb,'medium','pending',nextval('review_ordinal_seq'),NOW(),NULL,NULL,NULL,NULL,NULL,$5,$6::jsonb) RETURNING *`, [randomUUID(),input.question,input.answer,JSON.stringify(input.sources),input.providerStatus ?? null,JSON.stringify(input.rawSearchLeads ?? [])]);
       await client.query('COMMIT'); return asReviewTask(result.rows[0] as Row);
     } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
   }

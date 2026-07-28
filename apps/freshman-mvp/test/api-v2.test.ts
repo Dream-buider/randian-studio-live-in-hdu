@@ -19,6 +19,10 @@ const CONFIG: AppConfig = {
   modelApiKey: '',
   modelEnabled: false,
   requestTimeoutMs: 20_000,
+  searchProvider: 'unavailable',
+  searxngBaseUrl: 'http://127.0.0.1:8888',
+  searchTimeoutMs: 10_000,
+  searchMaxResults: 6,
   disclaimer: '该条回复并不在我们的知识库以及 40 个预设问题中，请注意甄别',
 };
 

@@ -5,7 +5,7 @@ import type {
   ModelAnswer,
   ModelProvider,
   SearchProvider,
-  SearchResult,
+  WebSearchResult,
 } from '../providers/contracts.js';
 import type {
   ContentRepository,
@@ -31,18 +31,18 @@ export function isUsableAnswer(value: string): boolean {
     && !UNUSABLE_ANSWER_PATTERNS.some((pattern) => pattern.test(normalized));
 }
 
-function usableSearchItems(search: SearchResult): SearchResult['items'] {
-  if (!search.available) {
+function usableSearchItems(search: WebSearchResult): WebSearchResult['leads'] {
+  if (search.status !== 'available') {
     return [];
   }
-  return search.items.filter((item) => (
+  return search.leads.filter((item) => (
     item.title.trim().length > 0
     && item.url.trim().length > 0
     && item.snippet.trim().length > 0
   ));
 }
 
-function searchSources(search: SearchResult): ModelAnswer['sources'] {
+function searchSources(search: WebSearchResult): ModelAnswer['sources'] {
   return usableSearchItems(search).map((item) => ({
     type: 'web',
     title: item.title.trim(),
@@ -51,7 +51,7 @@ function searchSources(search: SearchResult): ModelAnswer['sources'] {
   }));
 }
 
-function deterministicFallback(search: SearchResult): ModelAnswer {
+function deterministicFallback(search: WebSearchResult): ModelAnswer {
   const items = usableSearchItems(search);
   if (items.length > 0) {
     const evidence = items
@@ -66,7 +66,7 @@ function deterministicFallback(search: SearchResult): ModelAnswer {
       sources: searchSources(search),
     };
   }
-  const availability = search.available
+  const availability = search.status === 'available'
     ? '当前检索没有返回可直接引用的公开线索。'
     : '当前自动检索服务暂时不可用。';
   return {
@@ -128,11 +128,11 @@ export class AnswerRouter {
       };
     }
 
-    let search: SearchResult;
+    let search: WebSearchResult;
     try {
       search = await this.deps.search.search(question);
     } catch {
-      search = { available: false, items: [] };
+      search = { status: 'temporarily-unavailable', leads: [] };
     }
     let modelAnswer: ModelAnswer | null;
     try {
@@ -157,6 +157,8 @@ export class AnswerRouter {
         question,
         answer,
         sources,
+        providerStatus: search.status,
+        rawSearchLeads: search.leads,
       });
     } catch {
       throw new ServiceUnavailableError('Answer review queue is temporarily unavailable');

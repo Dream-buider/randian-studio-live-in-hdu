@@ -10,6 +10,20 @@ test('requires Node 24 and defaults to a local SQLite runtime', () => {
   assert.equal(config.modelEnabled, false);
   assert.equal('modelBaseUrl' in config, false);
   assert.equal('modelId' in config, false);
+  assert.equal(config.searchProvider, 'unavailable');
+  assert.equal(config.searxngBaseUrl, 'http://127.0.0.1:8888');
+  assert.equal(config.searchMaxResults, 6);
+});
+
+test('enables only the explicit SearXNG search mode and caps result count', () => {
+  const config = loadConfig({
+    SEARCH_PROVIDER: 'searxng',
+    SEARXNG_BASE_URL: 'http://127.0.0.1:9999',
+    SEARCH_MAX_RESULTS: '99',
+  }, 'C:/project/apps/freshman-mvp');
+  assert.equal(config.searchProvider, 'searxng');
+  assert.equal(config.searxngBaseUrl, 'http://127.0.0.1:9999');
+  assert.equal(config.searchMaxResults, 6);
 });
 
 test('does not enable the model for a whitespace-only TokenDance key', () => {

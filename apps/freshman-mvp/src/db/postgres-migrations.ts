@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
   applied_at TIMESTAMPTZ NOT NULL
 );
 
+CREATE SEQUENCE IF NOT EXISTS review_ordinal_seq;
+
 CREATE TABLE IF NOT EXISTS question_intents (
   id TEXT PRIMARY KEY, external_id TEXT, category TEXT NOT NULL, question TEXT NOT NULL,
   intent_description TEXT NOT NULL, aliases_json JSONB NOT NULL, keywords_json JSONB NOT NULL,
@@ -36,9 +38,15 @@ CREATE TABLE IF NOT EXISTS review_tasks (
   id UUID PRIMARY KEY, question TEXT NOT NULL, answer_text TEXT NOT NULL, sources_json JSONB NOT NULL,
   risk_level TEXT NOT NULL CHECK (risk_level IN ('low', 'medium', 'high')),
   status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'rejected', 'needs_more')),
-  ordinal INTEGER NOT NULL UNIQUE, created_at TIMESTAMPTZ NOT NULL, decided_at TIMESTAMPTZ,
+  ordinal BIGINT NOT NULL UNIQUE DEFAULT nextval('review_ordinal_seq'),
+  created_at TIMESTAMPTZ NOT NULL, decided_at TIMESTAMPTZ,
   reviewer_id TEXT, decision_note TEXT, reviewed_answer TEXT, feedback_target TEXT,
-  provider_status TEXT, raw_search_leads_json JSONB
+  provider_status TEXT CHECK (
+    provider_status IS NULL OR provider_status IN (
+      'available', 'not-configured', 'configuration-error', 'temporarily-unavailable'
+    )
+  ),
+  raw_search_leads_json JSONB NOT NULL DEFAULT '[]'::jsonb
 );
 CREATE TABLE IF NOT EXISTS conversations (
   id TEXT PRIMARY KEY, created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL
@@ -59,8 +67,33 @@ export async function migratePostgres(pool: PostgresPool): Promise<void> {
     await client.query('ALTER TABLE review_tasks ADD COLUMN IF NOT EXISTS provider_status TEXT');
     await client.query('ALTER TABLE review_tasks ADD COLUMN IF NOT EXISTS raw_search_leads_json JSONB');
     await client.query(
+      `ALTER TABLE review_tasks
+       ALTER COLUMN ordinal SET DEFAULT nextval('review_ordinal_seq')`,
+    );
+    await client.query(
+      `SELECT setval(
+        'review_ordinal_seq',
+        GREATEST(COALESCE((SELECT MAX(ordinal) FROM review_tasks), 0), 1),
+        COALESCE((SELECT MAX(ordinal) FROM review_tasks), 0) > 0
+      )`,
+    );
+    await client.query(
+      `UPDATE review_tasks
+       SET raw_search_leads_json = '[]'::jsonb
+       WHERE raw_search_leads_json IS NULL`,
+    );
+    await client.query(
+      `ALTER TABLE review_tasks
+       ALTER COLUMN raw_search_leads_json SET DEFAULT '[]'::jsonb,
+       ALTER COLUMN raw_search_leads_json SET NOT NULL`,
+    );
+    await client.query(
       'INSERT INTO schema_migrations (version, applied_at) VALUES ($1, NOW()) ON CONFLICT (version) DO NOTHING',
       [1],
+    );
+    await client.query(
+      'INSERT INTO schema_migrations (version, applied_at) VALUES ($1, NOW()) ON CONFLICT (version) DO NOTHING',
+      [2],
     );
     await client.query('COMMIT');
   } catch (error) {

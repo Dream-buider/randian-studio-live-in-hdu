@@ -6,6 +6,8 @@ import type {
   ReviewTask,
   SourceRef,
   PublishedQuestion,
+  ReviewProviderStatus,
+  ReviewSearchLead,
 } from '../domain/models.js';
 
 export interface PublishCanonicalAnswerInput {
@@ -20,6 +22,8 @@ export interface EnqueueReviewInput {
   question: string;
   answer: string;
   sources: SourceRef[];
+  providerStatus?: ReviewProviderStatus | null;
+  rawSearchLeads?: ReviewSearchLead[];
 }
 
 export interface ReviewDecision {

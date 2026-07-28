@@ -2,7 +2,13 @@ import { randomUUID } from 'node:crypto';
 import type { SqliteDatabase } from '../db/sqlite.js';
 import { ConflictError, NotFoundError } from '../domain/errors.js';
 import { assertSourceRefs } from '../domain/validation.js';
-import type { ReviewStatus, ReviewTask, SourceRef } from '../domain/models.js';
+import type {
+  ReviewProviderStatus,
+  ReviewSearchLead,
+  ReviewStatus,
+  ReviewTask,
+  SourceRef,
+} from '../domain/models.js';
 import type {
   EnqueueReviewInput,
   ReviewDecision,
@@ -26,6 +32,10 @@ function asReviewTask(row: Row): ReviewTask {
     decisionNote: row.decision_note === null ? null : String(row.decision_note),
     reviewedAnswer: row.reviewed_answer === null ? null : String(row.reviewed_answer),
     feedbackTarget: row.feedback_target === null ? null : String(row.feedback_target),
+    providerStatus: row.provider_status === null
+      ? null
+      : String(row.provider_status) as ReviewProviderStatus,
+    rawSearchLeads: JSON.parse(String(row.raw_search_leads_json ?? '[]')) as ReviewSearchLead[],
   };
 }
 
@@ -49,9 +59,19 @@ export class SqliteReviewRepository implements ReviewRepository {
       this.database.prepare(`
         INSERT INTO review_tasks (
           id, question, answer_text, sources_json, risk_level, status, ordinal,
-          created_at, decided_at, reviewer_id, decision_note
-        ) VALUES (?, ?, ?, ?, 'medium', 'pending', ?, ?, NULL, NULL, NULL)
-      `).run(id, input.question, input.answer, JSON.stringify(input.sources), ordinal, createdAt);
+          created_at, decided_at, reviewer_id, decision_note, provider_status,
+          raw_search_leads_json
+        ) VALUES (?, ?, ?, ?, 'medium', 'pending', ?, ?, NULL, NULL, NULL, ?, ?)
+      `).run(
+        id,
+        input.question,
+        input.answer,
+        JSON.stringify(input.sources),
+        ordinal,
+        createdAt,
+        input.providerStatus ?? null,
+        JSON.stringify(input.rawSearchLeads ?? []),
+      );
       this.database.exec('COMMIT');
       return {
         id,
@@ -67,6 +87,8 @@ export class SqliteReviewRepository implements ReviewRepository {
         decisionNote: null,
         reviewedAnswer: null,
         feedbackTarget: null,
+        providerStatus: input.providerStatus ?? null,
+        rawSearchLeads: input.rawSearchLeads ?? [],
       };
     } catch (error) {
       this.database.exec('ROLLBACK');

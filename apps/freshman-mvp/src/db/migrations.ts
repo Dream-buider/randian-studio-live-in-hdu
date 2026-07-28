@@ -74,7 +74,13 @@ CREATE TABLE IF NOT EXISTS review_tasks (
   reviewer_id TEXT,
   decision_note TEXT,
   reviewed_answer TEXT,
-  feedback_target TEXT
+  feedback_target TEXT,
+  provider_status TEXT CHECK (
+    provider_status IS NULL OR provider_status IN (
+      'available', 'not-configured', 'configuration-error', 'temporarily-unavailable'
+    )
+  ),
+  raw_search_leads_json TEXT NOT NULL DEFAULT '[]'
 );
 
 CREATE TABLE IF NOT EXISTS conversations (
@@ -110,12 +116,31 @@ export function migrateDatabase(database: SqliteDatabase): void {
     database.exec(INITIAL_SCHEMA);
     addColumnIfMissing(database, 'review_tasks', 'reviewed_answer', 'reviewed_answer TEXT');
     addColumnIfMissing(database, 'review_tasks', 'feedback_target', 'feedback_target TEXT');
+    addColumnIfMissing(
+      database,
+      'review_tasks',
+      'provider_status',
+      `provider_status TEXT CHECK (
+        provider_status IS NULL OR provider_status IN (
+          'available', 'not-configured', 'configuration-error', 'temporarily-unavailable'
+        )
+      )`,
+    );
+    addColumnIfMissing(
+      database,
+      'review_tasks',
+      'raw_search_leads_json',
+      `raw_search_leads_json TEXT NOT NULL DEFAULT '[]'`,
+    );
     database.prepare(
       'INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)',
     ).run(1, new Date().toISOString());
     database.prepare(
       'INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)',
     ).run(2, new Date().toISOString());
+    database.prepare(
+      'INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)',
+    ).run(3, new Date().toISOString());
     database.exec('COMMIT');
   } catch (error) {
     database.exec('ROLLBACK');

@@ -2,6 +2,19 @@ export type TrustStatus = 'approved' | 'knowledge' | 'web-unverified';
 export type AnswerStatus = 'draft' | 'pending' | 'published' | 'needs_update' | 'disabled';
 export type ReviewStatus = 'pending' | 'approved' | 'rejected' | 'needs_more';
 export type ReviewRiskLevel = 'low' | 'medium' | 'high';
+export type ReviewProviderStatus =
+  | 'available'
+  | 'not-configured'
+  | 'configuration-error'
+  | 'temporarily-unavailable';
+
+export interface ReviewSearchLead {
+  title: string;
+  url: string;
+  snippet: string;
+  engines: string[];
+  retrievedAt: string;
+}
 
 export interface SourceRef {
   type: 'official' | 'community' | 'student' | 'web';
@@ -73,6 +86,8 @@ export interface ReviewTask {
   decisionNote: string | null;
   reviewedAnswer: string | null;
   feedbackTarget: string | null;
+  providerStatus: ReviewProviderStatus | null;
+  rawSearchLeads: ReviewSearchLead[];
 }
 
 export interface QuestionContext {

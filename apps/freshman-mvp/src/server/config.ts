@@ -8,6 +8,10 @@ export type AppConfig = Readonly<{
   modelApiKey: string;
   modelEnabled: boolean;
   requestTimeoutMs: number;
+  searchProvider: 'unavailable' | 'searxng';
+  searxngBaseUrl: string;
+  searchTimeoutMs: number;
+  searchMaxResults: number;
   disclaimer: string;
 }>;
 
@@ -29,6 +33,12 @@ export function loadConfig(env: NodeJS.ProcessEnv, appRoot: string): AppConfig {
     modelApiKey,
     modelEnabled: modelApiKey.length > 0,
     requestTimeoutMs: numberFromEnv(env.REQUEST_TIMEOUT_MS, 20000),
+    searchProvider: env.SEARCH_PROVIDER?.trim().toLowerCase() === 'searxng'
+      ? 'searxng'
+      : 'unavailable',
+    searxngBaseUrl: env.SEARXNG_BASE_URL?.trim() ?? 'http://127.0.0.1:8888',
+    searchTimeoutMs: numberFromEnv(env.SEARCH_TIMEOUT_MS, 10000),
+    searchMaxResults: Math.min(numberFromEnv(env.SEARCH_MAX_RESULTS, 6), 6),
     disclaimer: DEFAULT_DISCLAIMER,
   };
 }

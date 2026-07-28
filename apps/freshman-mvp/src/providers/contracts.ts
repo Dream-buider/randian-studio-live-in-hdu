@@ -1,4 +1,9 @@
-import type { QuestionIntent, SourceRef } from '../domain/models.js';
+import type {
+  QuestionIntent,
+  ReviewProviderStatus,
+  ReviewSearchLead,
+  SourceRef,
+} from '../domain/models.js';
 
 export interface IntentClassification {
   intentId: string | null;
@@ -6,15 +11,13 @@ export interface IntentClassification {
   reason: string;
 }
 
-export interface SearchItem {
-  title: string;
-  url: string;
-  snippet: string;
-}
+export type ProviderStatus = ReviewProviderStatus;
 
-export interface SearchResult {
-  available: boolean;
-  items: SearchItem[];
+export interface SearchLead extends ReviewSearchLead {}
+
+export interface WebSearchResult {
+  status: ProviderStatus;
+  leads: SearchLead[];
 }
 
 export interface KnowledgeHit {
@@ -24,7 +27,7 @@ export interface KnowledgeHit {
 
 export interface SynthesisInput {
   question: string;
-  search: SearchResult;
+  search: WebSearchResult;
 }
 
 export interface ModelAnswer {
@@ -45,5 +48,5 @@ export interface KnowledgeProvider {
 }
 
 export interface SearchProvider {
-  search(question: string): Promise<SearchResult>;
+  search(question: string): Promise<WebSearchResult>;
 }

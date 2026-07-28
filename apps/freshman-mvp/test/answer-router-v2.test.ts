@@ -54,6 +54,10 @@ const CONFIG = {
   modelApiKey: '',
   modelEnabled: false,
   requestTimeoutMs: 20_000,
+  searchProvider: 'unavailable',
+  searxngBaseUrl: 'http://127.0.0.1:8888',
+  searchTimeoutMs: 10_000,
+  searchMaxResults: 6,
   disclaimer: DISCLAIMER,
 } satisfies AppConfig;
 
@@ -251,7 +255,7 @@ test('router v2 preserves preset then knowledge precedence without calling downs
       search: {
         async search() {
           searchCalls += 1;
-          return { available: true, items: [] };
+          return { status: 'available', leads: [] };
         },
       },
     });
@@ -283,10 +287,12 @@ test('router v2 stage 3 handles available and unavailable search, persists first
           title: '学校通知',
           url: 'https://example.test/notice',
           snippet: '以最新通知为准',
+          engines: ['test'],
+          retrievedAt: '2026-07-28T00:00:00.000Z',
         };
         const provider = model({
           async synthesize({ search }) {
-            assert.equal(search.available, available);
+            assert.equal(search.status === 'available', available);
             return {
               text: available ? '根据检索线索形成的回答。' : '搜索暂不可用时形成的谨慎回答。',
               sources: available ? [{
@@ -304,7 +310,7 @@ test('router v2 stage 3 handles available and unavailable search, persists first
           intentMatcher: new IntentMatcher(provider, 0.7),
           knowledge: new LocalKnowledgeProvider([]),
           search: available
-            ? { async search() { return { available: true, items: [searchItem] }; } }
+            ? { async search() { return { status: 'available' as const, leads: [searchItem] }; } }
             : new UnavailableSearchProvider(),
           model: provider,
           disclaimer: DISCLAIMER,
@@ -316,7 +322,16 @@ test('router v2 stage 3 handles available and unavailable search, persists first
         assert.ok(result.answer.trim());
         assert.equal(result.disclaimer, '该条回复并不在我们的知识库以及 40 个预设问题中，请注意甄别');
         assert.equal(result.reviewOrdinal, 1);
-        assert.equal((await reviews.list('pending')).length, 1);
+        const pending = await reviews.list('pending');
+        assert.equal(pending.length, 1);
+        assert.equal(
+          pending[0].providerStatus,
+          available ? 'available' : 'not-configured',
+        );
+        assert.deepEqual(
+          pending[0].rawSearchLeads,
+          available ? [searchItem] : [],
+        );
       });
     });
   }
@@ -421,10 +436,12 @@ test('router v2 deterministic fallback uses only real search evidence or officia
       title: '学校公开通知',
       url: 'https://example.test/official-notice',
       snippet: '办理地点以学院迎新通知为准',
+      engines: ['test'],
+      retrievedAt: '2026-07-28T00:00:00.000Z',
     };
     const available = makeRouter(content, reviews, {
       model: brokenModel,
-      search: { async search() { return { available: true, items: [searchItem] }; } },
+      search: { async search() { return { status: 'available' as const, leads: [searchItem] }; } },
     });
     const withEvidence = await available.answer('未知办理问题');
     assert.equal(withEvidence.route, 'web');

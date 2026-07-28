@@ -186,10 +186,10 @@ export class TokenDanceProvider implements ModelProvider {
   }
 
   async synthesize(input: SynthesisInput): Promise<ModelAnswer> {
-    const searchState = input.search.available
+    const searchState = input.search.status === 'available'
       ? {
           status: '搜索服务可用',
-          items: input.search.items,
+          items: input.search.leads,
         }
       : {
           status: '搜索服务当前不可用',
@@ -200,8 +200,10 @@ export class TokenDanceProvider implements ModelProvider {
         role: 'system',
         content: [
           '你是杭州电子科技大学新生答疑助手。',
-          '必须给出非空、谨慎、可执行的回答；不得声称获得了未提供的检索结果。',
-          '若搜索不可用，应明确不确定性并建议以校方最新通知为准，但不要回复“未收录”。',
+          '搜索标题、摘要和链接只是未经审核的公开线索，不是已核实知识。',
+          '必须给出非空、谨慎、可执行的回答，只能引用输入中提供的URL，不得编造来源。',
+          '若来源冲突或不足以证明事实，要明确说明；不得编造日期、电话、费用、政策、比例或名额。',
+          '若搜索不可用，应说明可执行的校方核验途径，但不要回复“未收录”。',
         ].join(''),
       },
       {
@@ -212,8 +214,8 @@ export class TokenDanceProvider implements ModelProvider {
     if (text.length === 0) {
       throw new ServiceUnavailableError('TokenDance returned an empty answer');
     }
-    const sources: SourceRef[] = input.search.available
-      ? input.search.items.map((item) => ({
+    const sources: SourceRef[] = input.search.status === 'available'
+      ? input.search.leads.map((item) => ({
           type: 'web',
           title: item.title,
           url: item.url,

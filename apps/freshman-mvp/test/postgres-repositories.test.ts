@@ -78,7 +78,7 @@ test('Postgres content repository persists an intent and publishes the next answ
 
 test('Postgres review repository allocates a FIFO ordinal inside one transaction', async () => {
   const pool = new FakePool([], [
-    { rows: [] }, { rows: [] }, { rows: [{ ordinal: 7 }] },
+    { rows: [] },
     { rows: [{ id: 'review-7', question: '宿舍几点断电？', answer_text: '请以宿管通知为准。', sources_json: '[]', risk_level: 'medium', status: 'pending', ordinal: 7, created_at: '2026-07-28T00:00:00.000Z', decided_at: null, reviewer_id: null, decision_note: null, reviewed_answer: null, feedback_target: null, provider_status: 'available', raw_search_leads_json: JSON.stringify([{ title: '校方公告', url: 'https://example.edu/notice', snippet: '宿舍管理通知', engines: ['searxng'], retrievedAt: '2026-07-28T00:00:00.000Z' }]) }] }, { rows: [] },
   ]);
   const reviews = new PostgresReviewRepository(pool as never);
@@ -91,6 +91,8 @@ test('Postgres review repository allocates a FIFO ordinal inside one transaction
   assert.equal(task.providerStatus, 'available');
   const insert = pool.client.queries.find(({ text }) => text.includes('INSERT INTO review_tasks'));
   assert.match(insert?.text ?? '', /provider_status/);
+  assert.match(insert?.text ?? '', /nextval\('review_ordinal_seq'\)/);
+  assert.ok(!pool.client.queries.some(({ text }) => /LOCK TABLE|MAX\(ordinal\)/i.test(text)));
   assert.ok(insert?.values.includes('available'));
   assert.deepEqual(pool.client.queries.map(({ text }) => text).filter((text) => text === 'BEGIN' || text === 'COMMIT'), ['BEGIN', 'COMMIT']);
   assert.equal(pool.client.released, true);
@@ -107,6 +109,8 @@ test('Postgres migration defines the content and review schema without starting 
   assert.match(sql, /UNIQUE \(intent_id, version\)/);
   assert.match(sql, /provider_status TEXT/);
   assert.match(sql, /raw_search_leads_json JSONB/);
+  assert.match(sql, /CREATE SEQUENCE IF NOT EXISTS review_ordinal_seq/);
+  assert.match(sql, /nextval\('review_ordinal_seq'\)/);
 });
 
 test('real Postgres contract is skipped without PHASE_B_POSTGRES_TEST_URL', async (context) => {

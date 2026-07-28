@@ -17,6 +17,7 @@ import {
   type LocalKnowledgeRecord,
 } from '../providers/local-knowledge-provider.js';
 import { TokenDanceProvider } from '../providers/tokendance-provider.js';
+import { SearxngProvider } from '../providers/searxng-provider.js';
 import { UnavailableSearchProvider } from '../providers/unavailable-search-provider.js';
 import { SqliteContentRepository } from '../repositories/sqlite-content-repository.js';
 import { SqliteReviewRepository } from '../repositories/sqlite-review-repository.js';
@@ -156,7 +157,14 @@ export async function createProductionRuntime(
         })
       : new DisabledModelProvider();
     const knowledge = new LocalKnowledgeProvider(await loadLocalKnowledge(appRoot));
-    const search = new UnavailableSearchProvider();
+    const search = config.searchProvider === 'searxng'
+      ? new SearxngProvider({
+          baseUrl: config.searxngBaseUrl,
+          fetch: options.fetch,
+          timeoutMs: config.searchTimeoutMs,
+          maxResults: config.searchMaxResults,
+        })
+      : new UnavailableSearchProvider();
     const router = new AnswerRouter({
       content,
       reviews,
@@ -180,7 +188,9 @@ export async function createProductionRuntime(
             ? { status: 'configured', mode: 'tokendance' }
             : { status: 'disabled', mode: 'no-key' },
           knowledge: { status: 'ok', mode: 'local-json' },
-          search: { status: 'unavailable', mode: 'phase-a-disabled' },
+          search: config.searchProvider === 'searxng'
+            ? { status: 'configured', mode: 'searxng' }
+            : { status: 'unavailable', mode: 'phase-a-disabled' },
           reviewQueue: {
             status: 'ok',
             pending: (await reviews.list('pending')).length,

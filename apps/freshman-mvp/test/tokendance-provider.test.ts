@@ -133,9 +133,15 @@ test('TokenDance synthesizes a non-empty answer from available or unavailable se
       const result = await provider.synthesize({
         question: '食堂几点关门？',
         search: {
-          available,
-          items: available
-            ? [{ title: '食堂通知', url: 'https://example.test', snippet: '营业时间以通知为准' }]
+          status: available ? 'available' : 'temporarily-unavailable',
+          leads: available
+            ? [{
+                title: '食堂通知',
+                url: 'https://example.test',
+                snippet: '营业时间以通知为准',
+                engines: ['test'],
+                retrievedAt: '2026-07-28T00:00:00.000Z',
+              }]
             : [],
         },
       });
