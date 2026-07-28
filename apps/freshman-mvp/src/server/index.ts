@@ -28,6 +28,7 @@ import type {
   ReviewRepository,
 } from '../repositories/contracts.js';
 import { AnswerRouter } from '../services/answer-router.js';
+import { FaqSyncService, WeKnoraFaqClient } from '../services/faq-sync-service.js';
 import { IntentMatcher } from '../services/intent-matcher.js';
 import { createApp } from './app.js';
 import { loadConfig, type AppConfig } from './config.js';
@@ -147,6 +148,12 @@ export async function createProductionRuntime(
   let content: ContentRepository;
   let reviews: ReviewRepository;
   let closeStorage: () => Promise<void> = async () => { database?.close(); };
+  let postgresPool: import('../db/postgres.js').PostgresPool | null = null;
+  let faqSync: FaqSyncService | null = null;
+  let faqStore: import(
+    '../repositories/postgres-faq-sync-store.js'
+  ).PostgresFaqSyncStore | null = null;
+  let faqTimer: NodeJS.Timeout | null = null;
   let closed = false;
   try {
     if (config.databaseProvider === 'sqlite') {
@@ -167,6 +174,7 @@ export async function createProductionRuntime(
         import('../repositories/postgres-review-repository.js'),
       ]);
       const pool = await createPostgresPool(config.postgresUrl);
+      postgresPool = pool;
       try {
         await migratePostgres(pool);
       } catch (error) {
@@ -200,6 +208,35 @@ export async function createProductionRuntime(
       : null;
     const knowledge: KnowledgeProvider = weknora
       ?? new LocalKnowledgeProvider(await loadLocalKnowledge(appRoot));
+    if (
+      postgresPool
+      && config.weknoraApiKey.length > 0
+      && config.weknoraFaqKbId.length > 0
+    ) {
+      const { PostgresFaqSyncStore } = await import(
+        '../repositories/postgres-faq-sync-store.js'
+      );
+      faqStore = new PostgresFaqSyncStore(postgresPool);
+      faqSync = new FaqSyncService(
+        faqStore,
+        new WeKnoraFaqClient({
+          baseUrl: config.weknoraBaseUrl,
+          apiKey: config.weknoraApiKey,
+          knowledgeBaseId: config.weknoraFaqKbId,
+          fetch: options.fetch,
+        }),
+      );
+      const processFaqOutbox = async () => {
+        try {
+          await faqSync?.processBatch(10);
+        } catch {
+          // Persistent row state and component health retain the failure boundary.
+        }
+      };
+      faqTimer = setInterval(() => void processFaqOutbox(), 15_000);
+      faqTimer.unref();
+      void processFaqOutbox();
+    }
     const search = config.searchProvider === 'searxng'
       ? new SearxngProvider({
           baseUrl: config.searxngBaseUrl,
@@ -223,6 +260,7 @@ export async function createProductionRuntime(
       reviews,
       router,
       publicDir: config.publicDir,
+      faqSync: faqSync ?? undefined,
       health: async () => ({
         status: 'ok',
         components: {
@@ -240,6 +278,14 @@ export async function createProductionRuntime(
             status: 'ok',
             pending: (await reviews.list('pending')).length,
           },
+          ...(faqStore
+            ? {
+                integrationOutbox: {
+                  status: 'ok',
+                  ...await faqStore.counts(),
+                },
+              }
+            : {}),
         },
       }),
     });
@@ -261,11 +307,19 @@ export async function createProductionRuntime(
           return;
         }
         closed = true;
+        if (faqTimer) {
+          clearInterval(faqTimer);
+          faqTimer = null;
+        }
         await app.close();
         await closeStorage();
       },
     };
   } catch (error) {
+    if (faqTimer) {
+      clearInterval(faqTimer);
+      faqTimer = null;
+    }
     await closeStorage?.();
     throw error;
   }

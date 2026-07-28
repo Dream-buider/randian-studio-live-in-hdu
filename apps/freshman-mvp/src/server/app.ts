@@ -15,6 +15,7 @@ import type {
 } from '../repositories/contracts.js';
 import type { ReviewStatus } from '../domain/models.js';
 import { ContentReviewService } from '../services/content-review-service.js';
+import type { FaqSyncService } from '../services/faq-sync-service.js';
 
 export interface AnswerRouterContract {
   answer(question: string): Promise<unknown>;
@@ -27,6 +28,7 @@ export interface AppDependencies {
   router: AnswerRouterContract;
   health?: () => Promise<unknown>;
   publicDir?: string;
+  faqSync?: Pick<FaqSyncService, 'retry'>;
 }
 
 const LOOPBACK_ADDRESSES = new BlockList();
@@ -236,6 +238,16 @@ export function createApp(deps: AppDependencies): FastifyInstance {
       parseReviewDecision(request.body),
     ),
   }));
+
+  app.post<{
+    Params: { id: string };
+  }>('/api/admin/integrations/faq/:id/retry', async (request) => {
+    if (!deps.faqSync) {
+      throw new ServiceUnavailableError('FAQ synchronization is not configured');
+    }
+    await deps.faqSync.retry(request.params.id);
+    return { status: 'queued' };
+  });
 
   return app;
 }

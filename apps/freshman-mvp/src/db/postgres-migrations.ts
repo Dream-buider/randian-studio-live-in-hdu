@@ -57,6 +57,30 @@ CREATE TABLE IF NOT EXISTS feedback (
 );
 CREATE TABLE IF NOT EXISTS app_settings (
   key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TIMESTAMPTZ NOT NULL
+);
+CREATE TABLE IF NOT EXISTS integration_outbox (
+  id UUID PRIMARY KEY,
+  event_type TEXT NOT NULL,
+  intent_id TEXT NOT NULL REFERENCES question_intents(id) ON DELETE CASCADE,
+  canonical_version INTEGER NOT NULL,
+  idempotency_key TEXT NOT NULL UNIQUE,
+  payload_json JSONB NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+  attempts INTEGER NOT NULL DEFAULT 0,
+  available_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  leased_until TIMESTAMPTZ,
+  last_error TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS integration_outbox_claim_idx
+  ON integration_outbox (status, available_at, created_at);
+CREATE TABLE IF NOT EXISTS external_content_links (
+  intent_id TEXT NOT NULL REFERENCES question_intents(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL,
+  external_seq_id BIGINT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (intent_id, provider)
 );`;
 
 export async function migratePostgres(pool: PostgresPool): Promise<void> {
@@ -94,6 +118,10 @@ export async function migratePostgres(pool: PostgresPool): Promise<void> {
     await client.query(
       'INSERT INTO schema_migrations (version, applied_at) VALUES ($1, NOW()) ON CONFLICT (version) DO NOTHING',
       [2],
+    );
+    await client.query(
+      'INSERT INTO schema_migrations (version, applied_at) VALUES ($1, NOW()) ON CONFLICT (version) DO NOTHING',
+      [3],
     );
     await client.query('COMMIT');
   } catch (error) {

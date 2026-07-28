@@ -3,6 +3,7 @@ import test from 'node:test';
 import { migratePostgres } from '../src/db/postgres-migrations.js';
 import { PostgresContentRepository } from '../src/repositories/postgres-content-repository.js';
 import { PostgresReviewRepository } from '../src/repositories/postgres-review-repository.js';
+import { PostgresFaqSyncStore } from '../src/repositories/postgres-faq-sync-store.js';
 
 type QueryResult = { rows: Record<string, unknown>[]; rowCount?: number | null };
 
@@ -111,6 +112,98 @@ test('Postgres migration defines the content and review schema without starting 
   assert.match(sql, /raw_search_leads_json JSONB/);
   assert.match(sql, /CREATE SEQUENCE IF NOT EXISTS review_ordinal_seq/);
   assert.match(sql, /nextval\('review_ordinal_seq'\)/);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS integration_outbox/);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS external_content_links/);
+});
+
+test('Postgres publication commits the canonical version and FAQ outbox in one transaction', async () => {
+  const pool = new FakePool([], [
+    { rows: [] },
+    {
+      rows: [{
+        id: intent.id,
+        question: intent.question,
+        aliases_json: JSON.stringify(intent.aliases),
+        exclude_keywords_json: JSON.stringify(intent.excludeKeywords),
+        featured: true,
+      }],
+      rowCount: 1,
+    },
+    { rows: [] },
+    { rows: [{ version: 0 }] },
+    {
+      rows: [{
+        id: 'campus-card:v1',
+        intent_id: intent.id,
+        version: 1,
+        summary: '校园卡领取摘要。',
+        full_answer: '按学院通知领取并激活校园卡。',
+        sources_json: '[]',
+        status: 'published',
+        reviewer_id: 'admin',
+        published_at: '2026-07-28T00:00:00.000Z',
+        updated_at: '2026-07-28T00:00:00.000Z',
+      }],
+      rowCount: 1,
+    },
+    { rows: [], rowCount: 1 },
+    { rows: [] },
+  ]);
+  const content = new PostgresContentRepository(pool as never);
+
+  await content.publishCanonicalAnswer({
+    intentId: intent.id,
+    summary: '校园卡领取摘要。',
+    fullAnswer: '按学院通知领取并激活校园卡。',
+    sources: [],
+    reviewerId: 'admin',
+  });
+
+  const texts = pool.client.queries.map(({ text }) => text);
+  const outboxIndex = texts.findIndex((text) => text.includes('INSERT INTO integration_outbox'));
+  assert.ok(outboxIndex > 0);
+  assert.ok(outboxIndex < texts.lastIndexOf('COMMIT'));
+  const outbox = pool.client.queries[outboxIndex];
+  assert.ok(outbox.values.includes('campus-card:1:weknora-faq'));
+  assert.match(String(outbox.values.at(-1)), /校园一卡通如何领取/);
+});
+
+test('Postgres FAQ store claims bounded work, records links, and retries safely', async () => {
+  const event = {
+    id: 'event-1',
+    intent_id: intent.id,
+    canonical_version: 1,
+    idempotency_key: 'campus-card:1:weknora-faq',
+    status: 'processing',
+    attempts: 1,
+    last_error: null,
+    payload_json: JSON.stringify({
+      standardQuestion: intent.question,
+      similarQuestions: intent.aliases,
+      negativeQuestions: intent.excludeKeywords,
+      answers: ['已审核回答'],
+      isEnabled: true,
+      isRecommended: true,
+    }),
+  };
+  const claimPool = new FakePool([], [
+    { rows: [] },
+    { rows: [event], rowCount: 1 },
+    { rows: [] },
+  ]);
+  const store = new PostgresFaqSyncStore(claimPool as never);
+  const claimed = await store.claimBatch(99);
+  assert.equal(claimed.length, 1);
+  assert.equal(claimed[0].payload.standardQuestion, intent.question);
+  assert.ok(claimPool.client.queries.some(({ values }) => values.includes(10)));
+
+  const completePool = new FakePool([], [
+    { rows: [] }, { rows: [], rowCount: 1 }, { rows: [], rowCount: 1 }, { rows: [] },
+  ]);
+  await new PostgresFaqSyncStore(completePool as never).complete('event-1', 72);
+  const completeSql = completePool.client.queries.map(({ text }) => text).join('\n');
+  assert.match(completeSql, /external_content_links/);
+  assert.match(completeSql, /status='completed'/);
 });
 
 test('real Postgres contract is skipped without PHASE_B_POSTGRES_TEST_URL', async (context) => {

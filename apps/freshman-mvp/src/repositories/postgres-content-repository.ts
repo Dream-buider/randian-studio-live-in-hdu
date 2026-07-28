@@ -56,13 +56,41 @@ export class PostgresContentRepository implements ContentRepository {
     assertSourceRefs(input.sources); const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      const exists = await client.query('SELECT id FROM question_intents WHERE id = $1 FOR SHARE', [input.intentId]);
+      const exists = await client.query(
+        `SELECT id, question, aliases_json, exclude_keywords_json, featured
+         FROM question_intents WHERE id = $1 FOR SHARE`,
+        [input.intentId],
+      );
       if (exists.rowCount !== 1) throw new NotFoundError(`Question intent not found: ${input.intentId}`);
       await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [input.intentId]);
       const versionRow = await client.query('SELECT COALESCE(MAX(version), 0) AS version FROM canonical_answers WHERE intent_id = $1', [input.intentId]);
       const version = Number(versionRow.rows[0]?.version ?? 0) + 1; const id = `${input.intentId}:v${version}`;
       const inserted = await client.query(`INSERT INTO canonical_answers (id,intent_id,version,summary,full_answer,sources_json,status,reviewer_id,published_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6::jsonb,'published',$7,NOW(),NOW()) RETURNING *`, [id,input.intentId,version,input.summary,input.fullAnswer,JSON.stringify(input.sources),input.reviewerId]);
       for (const [position, source] of input.sources.entries()) await client.query('INSERT INTO canonical_answer_sources (canonical_answer_id,position,source_type,title,url,updated_at) VALUES ($1,$2,$3,$4,$5,$6)', [id,position,source.type,source.title,source.url,source.updatedAt]);
+      const intent = exists.rows[0] ?? {};
+      const faqPayload = {
+        standardQuestion: String(intent.question ?? ''),
+        similarQuestions: parseJson<string[]>(intent.aliases_json ?? '[]'),
+        negativeQuestions: parseJson<string[]>(intent.exclude_keywords_json ?? '[]'),
+        answers: [input.fullAnswer],
+        isEnabled: true,
+        isRecommended: Boolean(intent.featured),
+      };
+      await client.query(
+        `INSERT INTO integration_outbox (
+          id, event_type, intent_id, canonical_version, idempotency_key,
+          payload_json, status, attempts, available_at, created_at, updated_at
+        ) VALUES ($1, 'weknora-faq-upsert', $2, $3, $4, $5::jsonb,
+          'pending', 0, NOW(), NOW(), NOW())
+        ON CONFLICT (idempotency_key) DO NOTHING`,
+        [
+          randomUUID(),
+          input.intentId,
+          version,
+          `${input.intentId}:${version}:weknora-faq`,
+          JSON.stringify(faqPayload),
+        ],
+      );
       await client.query('COMMIT');
       return asCanonical(inserted.rows[0] as Row);
     } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
@@ -70,3 +98,4 @@ export class PostgresContentRepository implements ContentRepository {
 
   async listRawAnswers(intentId: string): Promise<RawAnswer[]> { const result = await this.pool.query('SELECT id,intent_id,answer_text,source_label,source_cell,created_at FROM raw_answers WHERE intent_id = $1 ORDER BY created_at ASC, id ASC', [intentId]); return result.rows.map((row: Row) => ({ id:String(row.id), intentId:String(row.intent_id), answer:String(row.answer_text), sourceLabel:String(row.source_label), sourceCell:String(row.source_cell), createdAt:String(row.created_at) })); }
 }
+import { randomUUID } from 'node:crypto';
