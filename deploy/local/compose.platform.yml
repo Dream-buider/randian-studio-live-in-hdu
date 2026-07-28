@@ -1,17 +1,18 @@
 services:
-  postgres:
-    image: postgres:16-alpine
+  live-in-hdu-db:
+    image: postgres:17-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: live_in_hdu
-      POSTGRES_USER: live_in_hdu
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in an untracked deploy/local/.env.local file}
+      POSTGRES_DB: ${LIVE_IN_HDU_DB_NAME:-live_in_hdu}
+      POSTGRES_USER: ${LIVE_IN_HDU_DB_USER:-live_in_hdu}
+      POSTGRES_PASSWORD: ${LIVE_IN_HDU_DB_PASSWORD:?set LIVE_IN_HDU_DB_PASSWORD in untracked deploy/local/.env.local}
     ports:
-      - "127.0.0.1:5433:5432"
+      - "127.0.0.1:${LIVE_IN_HDU_DB_PORT:-5433}:5432"
     volumes:
-      - "D:/Star/LIVE_IN_HDU_RUNTIME/postgres:/var/lib/postgresql/data"
+      - "${POSTGRES_DATA_DIR:-D:/Star/LIVE_IN_HDU_RUNTIME/phase-b/postgres}:/var/lib/postgresql/data"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U live_in_hdu -d live_in_hdu"]
+      test: ["CMD-SHELL", "pg_isready -U ${LIVE_IN_HDU_DB_USER:-live_in_hdu} -d ${LIVE_IN_HDU_DB_NAME:-live_in_hdu}"]
       interval: 10s
       timeout: 5s
       retries: 6
+      start_period: 15s

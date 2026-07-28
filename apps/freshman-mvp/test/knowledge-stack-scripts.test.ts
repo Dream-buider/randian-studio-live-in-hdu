@@ -9,6 +9,7 @@ const START_SCRIPT = path.join(REPO_ROOT, 'scripts', 'start-knowledge-stack.ps1'
 const STOP_SCRIPT = path.join(REPO_ROOT, 'scripts', 'stop-knowledge-stack.ps1');
 const CHECK_SCRIPT = path.join(REPO_ROOT, 'scripts', 'test-knowledge-stack.ps1');
 const BACKUP_SCRIPT = path.join(REPO_ROOT, 'scripts', 'backup-knowledge-stack.ps1');
+const PLATFORM_COMPOSE = path.join(REPO_ROOT, 'deploy', 'local', 'compose.platform.yml');
 const TEMP_ROOT = 'D:\\Star\\LIVE_IN_HDU_RUNTIME\\temp';
 const PINNED_COMMIT = '150c07368b84b4f50421b8957255213cbbadc175';
 
@@ -89,9 +90,36 @@ test('knowledge stack static operations expose a D-drive-only safe plan without 
   const checkPlan = JSON.parse(check.stdout);
   const backupPlan = JSON.parse(backup.stdout);
   assert.equal(checkPlan.dockerInvoked, false);
-  assert.deepEqual(checkPlan.startOrder, ['postgres', 'weknora-and-searxng', 'gateway']);
+  assert.deepEqual(checkPlan.startOrder, ['business-postgres', 'weknora-and-searxng', 'gateway']);
+  assert.deepEqual(checkPlan.verification, [
+    'backend-tests',
+    'web-tests',
+    'legacy-regression',
+    'production-build',
+    'secret-scan',
+    'live-health',
+  ]);
   assert.equal(backupPlan.dockerInvoked, false);
   assert.match(backupPlan.backupRoot, /^D:\\Star\\LIVE_IN_HDU_RUNTIME\\backups$/i);
   assert.match(backupPlan.manifest, /manifest\.json$/);
   assert.match(backupPlan.redactedConfig, /config\.redacted\.json$/);
+  assert.deepEqual(backupPlan.artifacts, [
+    'live-in-hdu.sql.gz',
+    'weknora.sql.gz',
+    'weknora-data-files.tar.gz',
+    'config.redacted.json',
+    'manifest.json',
+  ]);
+  assert.equal(backupPlan.retentionCount, 14);
+});
+
+test('business PostgreSQL is isolated, pinned to 17, and stores its database on D', async () => {
+  const compose = await import('node:fs/promises').then(({ readFile }) =>
+    readFile(PLATFORM_COMPOSE, 'utf8'),
+  );
+  assert.match(compose, /live-in-hdu-db:/);
+  assert.match(compose, /image:\s*postgres:17-alpine/);
+  assert.match(compose, /\$\{LIVE_IN_HDU_DB_PASSWORD:/);
+  assert.match(compose, /D:\/Star\/LIVE_IN_HDU_RUNTIME\/phase-b\/postgres/);
+  assert.doesNotMatch(compose, /^\s{2}postgres:/m);
 });

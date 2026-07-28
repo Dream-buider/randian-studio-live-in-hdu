@@ -19,6 +19,8 @@ $LicenseFile = Join-Path $VendorRoot 'LICENSE'
 $BaseCompose = Join-Path $VendorRoot 'docker-compose.yml'
 $BaselineDocument = Join-Path $RepoRoot 'docs\WEKNORA_UPSTREAM_BASELINE.md'
 $OverrideCompose = Join-Path $RepoRoot 'deploy\local\compose.weknora.override.yml'
+$PlatformCompose = Join-Path $RepoRoot 'deploy\local\compose.platform.yml'
+$PlatformEnvironment = Join-Path $RepoRoot 'deploy\local\.env.local'
 $VendorEnvironment = Join-Path $VendorRoot '.env'
 $PreflightScript = Join-Path $RepoRoot 'scripts\preflight-phase-b.ps1'
 $GatewayStartScript = Join-Path $RepoRoot 'scripts\start-freshman-platform.ps1'
@@ -72,6 +74,20 @@ function New-RandomHex([int]$ByteCount = 32) {
     return [Convert]::ToHexString(
         [Security.Cryptography.RandomNumberGenerator]::GetBytes($ByteCount)
     ).ToLowerInvariant()
+}
+
+function Import-LocalEnvironment([string]$PathValue) {
+    if (-not (Test-Path -LiteralPath $PathValue -PathType Leaf)) {
+        throw "Required untracked local environment file is missing: $PathValue"
+    }
+    foreach ($line in Get-Content -LiteralPath $PathValue -Encoding UTF8) {
+        $trimmed = $line.Trim()
+        if (-not $trimmed -or $trimmed.StartsWith('#') -or -not $trimmed.Contains('=')) { continue }
+        $parts = $trimmed.Split('=', 2)
+        $name = $parts[0].Trim()
+        $value = $parts[1].Trim().Trim('"').Trim("'")
+        [Environment]::SetEnvironmentVariable($name, $value, 'Process')
+    }
 }
 
 function Write-MinimalVendorEnvironment {
@@ -181,7 +197,7 @@ if ($StaticOnly) {
     [ordered]@{
         dockerInvoked = $false
         runtimeRoot = $RuntimeRoot
-        startOrder = @('postgres', 'weknora-and-searxng', 'gateway')
+        startOrder = @('business-postgres', 'weknora-and-searxng', 'gateway')
         volumesDeleted = $false
     } | ConvertTo-Json -Compress
     exit 0
@@ -230,7 +246,29 @@ if (-not (Test-Path -LiteralPath $ollamaManifest -PathType Leaf)) {
     throw "Ollama reports the model, but its manifest is not under the required D-drive location: $ollamaManifest"
 }
 
+Import-LocalEnvironment $PlatformEnvironment
+foreach ($requiredName in @('LIVE_IN_HDU_DB_PASSWORD')) {
+    if (-not [Environment]::GetEnvironmentVariable($requiredName, 'Process')) {
+        throw "$requiredName must be set in $PlatformEnvironment"
+    }
+}
+$postgresData = if ($env:POSTGRES_DATA_DIR) {
+    [IO.Path]::GetFullPath($env:POSTGRES_DATA_DIR)
+} else {
+    Join-Path $RuntimeRoot 'phase-b\postgres'
+}
+if ([IO.Path]::GetPathRoot($postgresData).ToUpperInvariant() -ne 'D:\') {
+    throw "POSTGRES_DATA_DIR must be on D:, found $postgresData"
+}
+New-Item -ItemType Directory -Force -Path $postgresData | Out-Null
+
 Write-MinimalVendorEnvironment
+$businessComposeArgs = @(
+    'compose',
+    '--project-name', 'live-in-hdu',
+    '--env-file', $PlatformEnvironment,
+    '-f', $PlatformCompose
+)
 $composeArgs = @(
     'compose',
     '--project-directory', $VendorRoot,
@@ -239,10 +277,27 @@ $composeArgs = @(
     '-f', $OverrideCompose,
     '--profile', 'searxng'
 )
+& docker @businessComposeArgs config | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Business PostgreSQL compose validation failed.' }
 & docker @composeArgs config | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'docker compose config validation failed.' }
+& docker @businessComposeArgs up -d live-in-hdu-db
+if ($LASTEXITCODE -ne 0) { throw 'LIVE IN HDU PostgreSQL failed to start.' }
+$databaseName = if ($env:LIVE_IN_HDU_DB_NAME) { $env:LIVE_IN_HDU_DB_NAME } else { 'live_in_hdu' }
+$databaseUser = if ($env:LIVE_IN_HDU_DB_USER) { $env:LIVE_IN_HDU_DB_USER } else { 'live_in_hdu' }
+$postgresDeadline = [DateTime]::UtcNow.AddMinutes(2)
+$postgresReady = $false
+while ([DateTime]::UtcNow -lt $postgresDeadline) {
+    & docker @businessComposeArgs exec -T live-in-hdu-db pg_isready -U $databaseUser -d $databaseName *> $null
+    if ($LASTEXITCODE -eq 0) {
+        $postgresReady = $true
+        break
+    }
+    Start-Sleep -Milliseconds 500
+}
+if (-not $postgresReady) { throw 'LIVE IN HDU PostgreSQL did not become ready within two minutes.' }
 & docker @composeArgs up -d postgres redis
-if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL and Redis failed to start.' }
+if ($LASTEXITCODE -ne 0) { throw 'WeKnora PostgreSQL and Redis failed to start.' }
 & docker @composeArgs up -d docreader app frontend searxng-init searxng
 if ($LASTEXITCODE -ne 0) { throw 'WeKnora minimum stack failed to start.' }
 
@@ -265,6 +320,12 @@ if (-not $ready) {
 }
 
 if (Test-Path -LiteralPath $GatewayStartScript) {
+    $databasePort = if ($env:LIVE_IN_HDU_DB_PORT) { $env:LIVE_IN_HDU_DB_PORT } else { '5433' }
+    $escapedPassword = [Uri]::EscapeDataString($env:LIVE_IN_HDU_DB_PASSWORD)
+    $env:DATABASE_PROVIDER = 'postgres'
+    $env:POSTGRES_URL = "postgresql://${databaseUser}:${escapedPassword}@127.0.0.1:${databasePort}/${databaseName}"
+    $env:KNOWLEDGE_PROVIDER = 'weknora'
+    $env:SEARCH_PROVIDER = 'searxng'
     & $GatewayStartScript
     if ($LASTEXITCODE -ne 0) { throw 'LIVE IN HDU gateway failed to start.' }
 }
