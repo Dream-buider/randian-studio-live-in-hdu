@@ -195,13 +195,14 @@ export async function createProductionRuntime(
       knowledgeImports = new PostgresKnowledgeImportStore(pool);
       closeStorage = async () => { await pool.end(); };
     }
-    const model: ModelProvider = config.modelEnabled
+    const tokenDance = config.modelEnabled
       ? new TokenDanceProvider({
           apiKey: config.modelApiKey,
           fetch: options.fetch,
           timeoutMs: config.requestTimeoutMs,
         })
-      : new DisabledModelProvider();
+      : null;
+    const model: ModelProvider = tokenDance ?? new DisabledModelProvider();
     const weknora = config.knowledgeProvider === 'weknora'
       ? new WeKnoraProvider({
           baseUrl: config.weknoraBaseUrl,
@@ -276,14 +277,15 @@ export async function createProductionRuntime(
       faqTimer.unref();
       void processFaqOutbox();
     }
-    const search = config.searchProvider === 'searxng'
+    const searxng = config.searchProvider === 'searxng'
       ? new SearxngProvider({
           baseUrl: config.searxngBaseUrl,
           fetch: options.fetch,
           timeoutMs: config.searchTimeoutMs,
           maxResults: config.searchMaxResults,
         })
-      : new UnavailableSearchProvider();
+      : null;
+    const search = searxng ?? new UnavailableSearchProvider();
     const router = new AnswerRouter({
       content,
       reviews,
@@ -302,33 +304,55 @@ export async function createProductionRuntime(
       faqSync: faqSync ?? undefined,
       knowledgeImports: knowledgeImports ?? undefined,
       knowledgeImportRetry: knowledgeImportRetry ?? undefined,
-      health: async () => ({
-        status: 'ok',
-        components: {
-          database: { status: 'ok', mode: config.databaseProvider },
-          model: config.modelEnabled
-            ? { status: 'configured', mode: 'tokendance' }
-            : { status: 'disabled', mode: 'no-key' },
-          knowledge: weknora
-            ? { status: weknora.status(), mode: 'weknora' }
-            : { status: 'ok', mode: 'local-json' },
-          search: config.searchProvider === 'searxng'
-            ? { status: 'configured', mode: 'searxng' }
-            : { status: 'unavailable', mode: 'phase-a-disabled' },
-          reviewQueue: {
-            status: 'ok',
-            pending: (await reviews.list('pending')).length,
-          },
-          ...(faqStore
-            ? {
-                integrationOutbox: {
-                  status: 'ok',
-                  ...await faqStore.counts(),
+      health: async () => {
+        const outboxCounts = faqStore
+          ? await faqStore.counts()
+          : { pending: 0, failed: 0 };
+        const weknoraStatus = weknora?.status() ?? 'not-configured';
+        return {
+          status: 'ok',
+          components: {
+            gateway: { status: 'healthy' },
+            businessDatabase: {
+              status: 'healthy',
+              mode: config.databaseProvider,
+            },
+            database: { status: 'ok', mode: config.databaseProvider },
+            model: config.modelEnabled
+              ? { status: 'configured', mode: 'tokendance' }
+              : { status: 'disabled', mode: 'no-key' },
+            tokenDance: tokenDance?.status() ?? {
+              status: 'disabled',
+              lastCallStatus: 'never',
+              lastCallAt: null,
+            },
+            knowledge: weknora
+              ? { status: weknoraStatus, mode: 'weknora' }
+              : { status: 'ok', mode: 'local-json' },
+            weknora: { status: weknoraStatus },
+            embedding: {
+              status: weknora ? 'configured' : 'not-configured',
+              mode: 'ollama',
+            },
+            search: searxng
+              ? { ...searxng.status(), mode: 'searxng' }
+              : {
+                  status: 'unavailable',
+                  mode: 'phase-a-disabled',
+                  lastSearchStatus: 'never',
+                  lastSearchAt: null,
                 },
-              }
-            : {}),
-        },
-      }),
+            reviewQueue: {
+              status: 'ok',
+              pending: (await reviews.list('pending')).length,
+            },
+            integrationOutbox: {
+              status: faqStore ? 'ok' : 'not-configured',
+              ...outboxCounts,
+            },
+          },
+        };
+      },
     });
 
     return {

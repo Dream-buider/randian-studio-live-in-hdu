@@ -80,7 +80,12 @@ test('full local flow reports honest health, serves SPA routes, and persists rev
         knowledge: { status: 'ok', mode: 'local-json' },
         weknora: { status: 'not-configured' },
         embedding: { status: 'not-configured', mode: 'ollama' },
-        search: { status: 'unavailable', mode: 'phase-a-disabled' },
+        search: {
+          status: 'unavailable',
+          mode: 'phase-a-disabled',
+          lastSearchStatus: 'never',
+          lastSearchAt: null,
+        },
         reviewQueue: { status: 'ok', pending: 0 },
         integrationOutbox: {
           status: 'not-configured',

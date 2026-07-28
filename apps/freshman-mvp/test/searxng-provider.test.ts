@@ -36,6 +36,11 @@ test('SearXNG provider encodes the query and returns at most six normalized lead
     engines: ['bing', 'duckduckgo'],
     retrievedAt: '2026-07-28T03:00:00.000Z',
   });
+  assert.deepEqual(provider.status(), {
+    status: 'configured',
+    lastSearchStatus: 'available',
+    lastSearchAt: '2026-07-28T03:00:00.000Z',
+  });
 });
 
 test('SearXNG provider drops unsafe, duplicate, and unusable results', async () => {
@@ -104,6 +109,8 @@ test('SearXNG provider reports explicit unavailable states without throwing', as
         status: item.expected,
         leads: [],
       });
+      assert.equal(provider.status().lastSearchStatus, item.expected);
+      assert.match(provider.status().lastSearchAt ?? '', /^\d{4}-\d{2}-\d{2}T/);
     });
   }
 
@@ -111,6 +118,11 @@ test('SearXNG provider reports explicit unavailable states without throwing', as
   assert.deepEqual(await unconfigured.search('测试'), {
     status: 'configuration-error',
     leads: [],
+  });
+  assert.deepEqual(unconfigured.status(), {
+    status: 'configuration-error',
+    lastSearchStatus: 'configuration-error',
+    lastSearchAt: null,
   });
 });
 

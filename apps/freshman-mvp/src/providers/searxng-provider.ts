@@ -1,4 +1,5 @@
 import type {
+  ProviderStatus,
   SearchLead,
   SearchProvider,
   WebSearchResult,
@@ -85,6 +86,9 @@ export class SearxngProvider implements SearchProvider {
   private readonly timeoutMs: number;
   private readonly maxResults: number;
   private readonly now: () => Date;
+  private readonly configurationStatus: 'configured' | 'configuration-error';
+  private lastSearchStatus: 'never' | ProviderStatus = 'never';
+  private lastSearchAt: string | null = null;
 
   constructor(options: SearxngProviderOptions) {
     this.baseUrl = options.baseUrl.trim();
@@ -92,20 +96,56 @@ export class SearxngProvider implements SearchProvider {
     this.timeoutMs = options.timeoutMs ?? 10_000;
     this.maxResults = Math.max(1, Math.min(options.maxResults ?? 6, 6));
     this.now = options.now ?? (() => new Date());
+    try {
+      const configured = new URL(
+        '/search',
+        this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`,
+      );
+      this.configurationStatus = (
+        this.baseUrl.length > 0
+        && ['http:', 'https:'].includes(configured.protocol)
+      )
+        ? 'configured'
+        : 'configuration-error';
+    } catch {
+      this.configurationStatus = 'configuration-error';
+    }
+  }
+
+  status(): {
+    status: 'configured' | 'configuration-error';
+    lastSearchStatus: 'never' | ProviderStatus;
+    lastSearchAt: string | null;
+  } {
+    return {
+      status: this.configurationStatus,
+      lastSearchStatus: this.lastSearchStatus,
+      lastSearchAt: this.lastSearchAt,
+    };
+  }
+
+  private result(
+    status: ProviderStatus,
+    leads: SearchLead[] = [],
+    attempted = true,
+  ): WebSearchResult {
+    this.lastSearchStatus = status;
+    this.lastSearchAt = attempted ? this.now().toISOString() : null;
+    return { status, leads };
   }
 
   async search(question: string): Promise<WebSearchResult> {
-    if (this.baseUrl.length === 0) {
-      return { status: 'configuration-error', leads: [] };
+    if (this.configurationStatus !== 'configured') {
+      return this.result('configuration-error', [], false);
     }
     let endpoint: URL;
     try {
       endpoint = new URL('/search', this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`);
     } catch {
-      return { status: 'configuration-error', leads: [] };
+      return this.result('configuration-error', [], false);
     }
     if (!['http:', 'https:'].includes(endpoint.protocol)) {
-      return { status: 'configuration-error', leads: [] };
+      return this.result('configuration-error', [], false);
     }
     endpoint.searchParams.set('q', question);
     endpoint.searchParams.set('format', 'json');
@@ -117,11 +157,11 @@ export class SearxngProvider implements SearchProvider {
     try {
       const response = await this.fetch(endpoint, { signal: controller.signal });
       if (!response.ok) {
-        return { status: 'temporarily-unavailable', leads: [] };
+        return this.result('temporarily-unavailable');
       }
       const body = await response.json() as { results?: unknown };
       if (!Array.isArray(body.results)) {
-        return { status: 'temporarily-unavailable', leads: [] };
+        return this.result('temporarily-unavailable');
       }
       const retrievedAt = this.now().toISOString();
       const seen = new Set<string>();
@@ -149,9 +189,9 @@ export class SearxngProvider implements SearchProvider {
           break;
         }
       }
-      return { status: 'available', leads };
+      return this.result('available', leads);
     } catch {
-      return { status: 'temporarily-unavailable', leads: [] };
+      return this.result('temporarily-unavailable');
     } finally {
       clearTimeout(timeout);
     }

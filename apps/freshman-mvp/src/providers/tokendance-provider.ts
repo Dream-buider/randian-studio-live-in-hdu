@@ -95,6 +95,8 @@ export class TokenDanceProvider implements ModelProvider {
   private readonly modelId: string;
   private readonly timeoutMs: number;
   private readonly confidenceThreshold: number;
+  private lastCallStatus: 'never' | 'ok' | 'error' = 'never';
+  private lastCallAt: string | null = null;
 
   constructor(options: TokenDanceOptions) {
     const apiKey = options.apiKey.trim();
@@ -107,6 +109,23 @@ export class TokenDanceProvider implements ModelProvider {
     this.modelId = options.modelId ?? DEFAULT_MODEL;
     this.timeoutMs = options.timeoutMs ?? 20_000;
     this.confidenceThreshold = options.confidenceThreshold ?? 0.7;
+  }
+
+  status(): {
+    status: 'configured';
+    lastCallStatus: 'never' | 'ok' | 'error';
+    lastCallAt: string | null;
+  } {
+    return {
+      status: 'configured',
+      lastCallStatus: this.lastCallStatus,
+      lastCallAt: this.lastCallAt,
+    };
+  }
+
+  private recordCall(status: 'ok' | 'error'): void {
+    this.lastCallStatus = status;
+    this.lastCallAt = new Date().toISOString();
   }
 
   private async complete(messages: Array<{ role: 'system' | 'user'; content: string }>): Promise<string> {
@@ -134,8 +153,10 @@ export class TokenDanceProvider implements ModelProvider {
       if (content === null) {
         throw new ServiceUnavailableError('TokenDance returned an invalid response');
       }
+      this.recordCall('ok');
       return content;
     } catch (error) {
+      this.recordCall('error');
       if (error instanceof ServiceUnavailableError) {
         throw error;
       }
