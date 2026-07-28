@@ -1058,10 +1058,15 @@ Expected: all Node tests, Vitest tests, build, secret scan, and HTTP smoke check
 
 - [ ] **Step 7: Perform a real browser and phone-width smoke test**
 
-Status 2026-07-28: Edge at 390×844, console-error check, localhost routes, LAN HTTP
-reachability, restart persistence, and administrator FIFO behavior passed. A physical
-phone interaction check remains a human acceptance item; it is not represented as
-completed by viewport emulation alone.
+Status 2026-07-28: the automated portion passed again against an isolated D-drive
+database. Edge at 390×844 verified the question card, summary, full-answer expansion,
+source/update metadata, catalog, ask sheet, chat context, exact disclaimer, and return
+position. The desktop admin page showed the synthetic published version and
+`第 1 个未收录 / pending`; after restart the one published answer and ordinal 1 review
+both remained. Console errors and page errors were zero. Evidence is under
+`output/playwright/runtime/live-in-hdu-final-acceptance/`. A physical phone interaction
+check remains a human acceptance item; it is not represented as completed by viewport
+emulation alone.
 
 Run:
 

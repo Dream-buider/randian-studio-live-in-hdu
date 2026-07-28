@@ -1084,6 +1084,12 @@ Expected: both runs pass from clean gateway processes and do not duplicate impor
 
 - [ ] **Step 8: Perform browser and same-Wi-Fi phone acceptance**
 
+Status 2026-07-28: the Phase A browser surface passed at 390×844 using an isolated
+D-drive SQLite database, including the exact fallback disclaimer and FIFO admin row.
+This does not satisfy this Phase B step: WeKnora/SearXNG/PostgreSQL were not running,
+knowledge-route UI and provider degradation were not exercised, and no physical phone
+was tested.
+
 At 390×844 and on a real phone:
 
 - question-card browsing still works;
