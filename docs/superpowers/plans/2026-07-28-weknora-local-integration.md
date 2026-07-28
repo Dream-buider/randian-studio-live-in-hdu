@@ -93,7 +93,7 @@ output/freshman-platform/
 - Consumes: Windows 11, WSL2, Docker Desktop, Node.js 24, Ollama.
 - Produces: a machine-readable preflight JSON report and a human-readable remediation summary.
 
-- [ ] **Step 1: Write the preflight script before installing anything**
+- [x] **Step 1: Write the preflight script before installing anything**
 
 `preflight-phase-b.ps1` must check and report:
 
@@ -114,7 +114,7 @@ output/freshman-platform/
 
 The script exits `0` only when all required checks pass. It must distinguish “Docker CLI missing” from “Docker Desktop installed but engine stopped”.
 
-- [ ] **Step 2: Run preflight and preserve the initial failure report**
+- [x] **Step 2: Run preflight and preserve the initial failure report**
 
 Run:
 
@@ -148,7 +148,7 @@ Invoke-RestMethod -Uri http://127.0.0.1:11434/api/embed -Method Post -ContentTyp
 
 Expected: the model appears in `ollama list` and the embedding response contains a non-empty numeric vector. Do not pull a local chat model.
 
-- [ ] **Step 5: Define local secret names without values**
+- [x] **Step 5: Define local secret names without values**
 
 `deploy/local/.env.example` must document:
 
@@ -170,7 +170,7 @@ OLLAMA_BASE_URL=http://host.docker.internal:11434
 
 Generate local password and SearXNG secret with cryptographic randomness in the setup script; never place example secrets in the real `.env.local`.
 
-- [ ] **Step 6: Protect all Phase B runtime material**
+- [x] **Step 6: Protect all Phase B runtime material**
 
 Add:
 
@@ -192,7 +192,7 @@ Run:
 
 Expected: exit `0`, all required booleans are true, and all listed ports are available.
 
-- [ ] **Step 8: Commit the prerequisite boundary**
+- [x] **Step 8: Commit the prerequisite boundary**
 
 ```powershell
 git add .gitignore scripts/preflight-phase-b.ps1 deploy/local/.env.example README.md
@@ -216,7 +216,7 @@ git commit -m "chore: define local knowledge stack prerequisites"
 - Consumes: existing `ContentRepository` and `ReviewRepository` contracts.
 - Produces: PostgreSQL implementations with behavior identical to Phase A SQLite repositories.
 
-- [ ] **Step 1: Write PostgreSQL contract tests**
+- [x] **Step 1: Write PostgreSQL contract tests**
 
 Run the same repository behavior suite against both SQLite and PostgreSQL. Required assertions:
 
@@ -227,7 +227,7 @@ Run the same repository behavior suite against both SQLite and PostgreSQL. Requi
 - restart preserves intents, canonical versions, conversations, feedback, and review tasks;
 - transaction rollback leaves no partial answer or source rows.
 
-- [ ] **Step 2: Run tests and verify the PostgreSQL implementation is missing**
+- [x] **Step 2: Run tests and verify the PostgreSQL implementation is missing**
 
 ```powershell
 npm --prefix apps/freshman-mvp test -- --test-name-pattern="PostgreSQL repository contract"
@@ -235,7 +235,7 @@ npm --prefix apps/freshman-mvp test -- --test-name-pattern="PostgreSQL repositor
 
 Expected: FAIL because the PostgreSQL modules do not exist.
 
-- [ ] **Step 3: Create the isolated database service**
+- [x] **Step 3: Create the isolated database service**
 
 `deploy/local/compose.platform.yml` must define only:
 
@@ -273,7 +273,7 @@ docker compose --env-file deploy/local/.env.local -f deploy/local/compose.platfo
 
 Expected: `live-in-hdu-db` becomes healthy and only `127.0.0.1:5433` is published.
 
-- [ ] **Step 5: Implement the PostgreSQL connection and migrations**
+- [x] **Step 5: Implement the PostgreSQL connection and migrations**
 
 Install `pg` and `@types/pg`. Export:
 
@@ -290,7 +290,7 @@ CREATE SEQUENCE review_ordinal_seq;
 
 and assign `nextval('review_ordinal_seq')` within the insert transaction. Store aliases, keywords, and sources as `jsonb`. Use UTC `timestamptz`.
 
-- [ ] **Step 6: Implement both PostgreSQL repositories**
+- [x] **Step 6: Implement both PostgreSQL repositories**
 
 The implementations must satisfy the existing repository contracts without changing the answer router or API handlers. Parameterize all queries. No application query may use WeKnora's database.
 
@@ -304,7 +304,7 @@ npm --prefix apps/freshman-mvp test -- --test-name-pattern="PostgreSQL repositor
 
 Expected: PASS, including 20 unique ordered review ordinals.
 
-- [ ] **Step 8: Commit the database implementation**
+- [x] **Step 8: Commit the database implementation**
 
 ```powershell
 git add deploy/local/compose.platform.yml apps/freshman-mvp/package.json apps/freshman-mvp/package-lock.json apps/freshman-mvp/src/db/postgres.ts apps/freshman-mvp/src/db/postgres-migrations.ts apps/freshman-mvp/src/repositories/postgres-content-repository.ts apps/freshman-mvp/src/repositories/postgres-review-repository.ts apps/freshman-mvp/test/postgres-repositories.test.ts
@@ -326,7 +326,7 @@ git commit -m "feat: add isolated PostgreSQL business persistence"
 - Consumes: Phase A SQLite database and empty migrated PostgreSQL database.
 - Produces: idempotent migration report and `DATABASE_DRIVER=postgres` runtime selection.
 
-- [ ] **Step 1: Write migration tests**
+- [x] **Step 1: Write migration tests**
 
 Create a SQLite fixture with:
 
@@ -338,7 +338,7 @@ Create a SQLite fixture with:
 
 Assert dry-run counts, actual copy counts, stable IDs, JSON equivalence, timestamps, current-version references, and a second-run no-op.
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 ```powershell
 npm --prefix apps/freshman-mvp test -- --test-name-pattern="SQLite to PostgreSQL"
@@ -346,7 +346,7 @@ npm --prefix apps/freshman-mvp test -- --test-name-pattern="SQLite to PostgreSQL
 
 Expected: FAIL because the migrator does not exist.
 
-- [ ] **Step 3: Implement ordered migration**
+- [x] **Step 3: Implement ordered migration**
 
 Copy inside one PostgreSQL transaction in this order:
 
@@ -362,7 +362,7 @@ Copy inside one PostgreSQL transaction in this order:
 
 Preserve IDs and timestamps. Advance `review_ordinal_seq` to at least the imported maximum ordinal. Abort the transaction on any count or foreign-key mismatch.
 
-- [ ] **Step 4: Implement dry-run and reconciliation output**
+- [x] **Step 4: Implement dry-run and reconciliation output**
 
 Command:
 
@@ -383,7 +383,7 @@ npm --prefix apps/freshman-mvp exec -- tsx scripts/migrate-sqlite-to-postgres.mt
 
 Expected: the real migration reconciles all tables; the second run inserts zero rows.
 
-- [ ] **Step 6: Select the repository through configuration**
+- [x] **Step 6: Select the repository through configuration**
 
 Add:
 
@@ -406,7 +406,7 @@ npm --prefix apps/freshman-mvp start
 
 Verify `/api/questions` and `/api/reviews` match the pre-migration SQLite snapshot, then restart the service and compare again.
 
-- [ ] **Step 8: Commit the migration boundary**
+- [x] **Step 8: Commit the migration boundary**
 
 ```powershell
 git add apps/freshman-mvp/src/services/sqlite-postgres-migrator.ts apps/freshman-mvp/scripts/migrate-sqlite-to-postgres.mts apps/freshman-mvp/test/sqlite-postgres-migrator.test.ts apps/freshman-mvp/src/server/config.ts apps/freshman-mvp/src/server/index.ts apps/freshman-mvp/.env.example
@@ -431,7 +431,7 @@ git commit -m "feat: migrate local business data to PostgreSQL"
 - Consumes: pinned vendor source, Docker Desktop, Ollama embedding endpoint.
 - Produces: healthy loopback-only WeKnora API, generated local API key, document KB ID, and FAQ KB ID.
 
-- [ ] **Step 1: Enforce the vendor baseline before startup**
+- [x] **Step 1: Enforce the vendor baseline before startup**
 
 `start-knowledge-stack.ps1` must fail unless:
 
@@ -525,7 +525,7 @@ Get-NetTCPConnection -State Listen | Where-Object LocalPort -in 5432,6379,50051,
 
 Expected: WeKnora and SearXNG respond; WeKnora ports bind to loopback; PostgreSQL, Redis, and DocReader are not host-published.
 
-- [ ] **Step 8: Commit scripts and runbook, never secrets**
+- [x] **Step 8: Commit scripts and runbook, never secrets**
 
 ```powershell
 git add scripts/start-knowledge-stack.ps1 scripts/stop-knowledge-stack.ps1 deploy/local/compose.weknora.override.yml deploy/local/README.md
@@ -548,7 +548,7 @@ git commit -m "chore: add secured pinned WeKnora lifecycle"
 - Consumes: `POST /api/v1/knowledge-search`, `X-API-Key`, document and FAQ KB IDs.
 - Produces: `KnowledgeProvider.search(question, context)` with normalized citations and explicit availability state.
 
-- [ ] **Step 1: Write provider contract tests with fake HTTP responses**
+- [x] **Step 1: Write provider contract tests with fake HTTP responses**
 
 Assert:
 
@@ -562,7 +562,7 @@ Assert:
 - timeout, 429, and 5xx are `temporarily-unavailable`;
 - error bodies and keys are not logged.
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 ```powershell
 npm --prefix apps/freshman-mvp test -- --test-name-pattern="WeKnora provider"
@@ -570,7 +570,7 @@ npm --prefix apps/freshman-mvp test -- --test-name-pattern="WeKnora provider"
 
 Expected: FAIL because the provider does not exist.
 
-- [ ] **Step 3: Define the exact knowledge contract**
+- [x] **Step 3: Define the exact knowledge contract**
 
 ```ts
 export interface KnowledgeHit {
@@ -600,7 +600,7 @@ export interface KnowledgeProvider {
 
 `KnowledgeProvider.search` returns a miss only when status is `available` and no qualifying hit exists. Provider failure is tracked separately in health output.
 
-- [ ] **Step 4: Implement the documented API adapter**
+- [x] **Step 4: Implement the documented API adapter**
 
 Request:
 
@@ -624,7 +624,7 @@ Use a 10-second timeout, maximum 8 hits, a configuration-driven score threshold,
 
 Preserve knowledge and chunk IDs in internal metadata for admin traceability.
 
-- [ ] **Step 5: Compose the real provider**
+- [x] **Step 5: Compose the real provider**
 
 Add:
 
@@ -648,7 +648,7 @@ npm --prefix apps/freshman-mvp exec -- tsx scripts/check-weknora.mts
 
 Expected: unit tests pass and live check confirms both KB IDs are readable.
 
-- [ ] **Step 7: Commit the provider**
+- [x] **Step 7: Commit the provider**
 
 ```powershell
 git add apps/freshman-mvp/src/providers/contracts.ts apps/freshman-mvp/src/providers/weknora-provider.ts apps/freshman-mvp/scripts/check-weknora.mts apps/freshman-mvp/src/server/config.ts apps/freshman-mvp/src/server/index.ts apps/freshman-mvp/test/weknora-provider.test.ts apps/freshman-mvp/.env.example
@@ -671,7 +671,7 @@ git commit -m "feat: connect the business gateway to WeKnora retrieval"
 - Consumes: administrator-approved manifest and files under `output/freshman-platform/approved-knowledge/`.
 - Produces: idempotent WeKnora uploads, parse-status tracking, content hash records, and visible admin import status.
 
-- [ ] **Step 1: Write manifest and idempotency tests**
+- [x] **Step 1: Write manifest and idempotency tests**
 
 Manifest entries must be:
 
@@ -695,7 +695,7 @@ Manifest entries must be:
 
 Tests must reject path traversal, missing files, unsupported extensions, duplicate paths, blank approver, impossible dates, and changed files whose SHA-256 no longer matches an already imported version.
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 ```powershell
 npm --prefix apps/freshman-mvp test -- --test-name-pattern="approved knowledge manifest"
@@ -703,7 +703,7 @@ npm --prefix apps/freshman-mvp test -- --test-name-pattern="approved knowledge m
 
 Expected: FAIL because the import service does not exist.
 
-- [ ] **Step 3: Implement manifest validation and import records**
+- [x] **Step 3: Implement manifest validation and import records**
 
 Add business-database tables:
 
@@ -714,7 +714,7 @@ knowledge_import_events
 
 Store manifest path, SHA-256, WeKnora knowledge ID, parse status, applicable year, approval identity, timestamps, and last error. Never infer approval from a file merely being present in the workspace.
 
-- [ ] **Step 4: Implement uploads through documented WeKnora endpoints**
+- [x] **Step 4: Implement uploads through documented WeKnora endpoints**
 
 Use:
 
@@ -743,7 +743,7 @@ npm --prefix apps/freshman-mvp exec -- tsx scripts/import-approved-knowledge.mts
 
 Expected: every imported item reaches `completed`; failed or cancelled items remain visible with exact WeKnora error text and are not counted as searchable.
 
-- [ ] **Step 7: Add admin corpus status**
+- [x] **Step 7: Add admin corpus status**
 
 The admin page shows title, hash, applicable year, approval, WeKnora ID, parse state, last import time, and error. It provides retry for failed entries but cannot bypass the approved manifest.
 
@@ -756,7 +756,7 @@ Create at least 20 queries whose expected source article and key fact are known.
 - year-sensitive questions expose source year to the answer composer;
 - failed imports never appear in citations.
 
-- [ ] **Step 9: Commit the import workflow**
+- [x] **Step 9: Commit the import workflow**
 
 ```powershell
 git add deploy/local/knowledge-manifest.example.json apps/freshman-mvp/src/db/postgres-migrations.ts apps/freshman-mvp/src/services/knowledge-import-service.ts apps/freshman-mvp/scripts/import-approved-knowledge.mts apps/freshman-mvp/test/knowledge-import.test.ts apps/freshman-mvp/web/views/AdminView.vue
@@ -778,7 +778,7 @@ git commit -m "feat: add approved and traceable knowledge imports"
 - Consumes: `GET http://127.0.0.1:8888/search?q=...&format=json`.
 - Produces: normalized search leads for the existing third-stage answer composer.
 
-- [ ] **Step 1: Write provider tests with fake responses**
+- [x] **Step 1: Write provider tests with fake responses**
 
 Assert:
 
@@ -790,7 +790,7 @@ Assert:
 - timeout, 429, malformed JSON, and empty results return explicit statuses;
 - provider errors never masquerade as a successful search.
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 ```powershell
 npm --prefix apps/freshman-mvp test -- --test-name-pattern="SearXNG provider"
@@ -798,7 +798,7 @@ npm --prefix apps/freshman-mvp test -- --test-name-pattern="SearXNG provider"
 
 Expected: FAIL because the provider does not exist.
 
-- [ ] **Step 3: Define the exact search contract**
+- [x] **Step 3: Define the exact search contract**
 
 ```ts
 export interface SearchLead {
@@ -819,7 +819,7 @@ export interface SearchProvider {
 }
 ```
 
-- [ ] **Step 4: Implement SearXNG search**
+- [x] **Step 4: Implement SearXNG search**
 
 Use a 10-second timeout and:
 
@@ -829,7 +829,7 @@ GET /search?q=URL_ENCODED_QUERY&format=json&language=zh-CN&safesearch=1
 
 Never fetch arbitrary result URLs in the first implementation. The answer model receives only SearXNG titles, snippets, URLs, and timestamps.
 
-- [ ] **Step 5: Update third-stage composition**
+- [x] **Step 5: Update third-stage composition**
 
 The TokenDance prompt must:
 
@@ -842,7 +842,7 @@ The TokenDance prompt must:
 
 The review task stores raw leads and provider status before the response is returned.
 
-- [ ] **Step 6: Configure the provider**
+- [x] **Step 6: Configure the provider**
 
 Add:
 
@@ -864,7 +864,7 @@ Invoke-RestMethod 'http://127.0.0.1:8888/search?q=杭州电子科技大学新生
 
 Expected: unit tests pass and live response includes a `results` array; zero results are accepted as an honest search miss, not a system crash.
 
-- [ ] **Step 8: Commit the search adapter**
+- [x] **Step 8: Commit the search adapter**
 
 ```powershell
 git add apps/freshman-mvp/src/providers/contracts.ts apps/freshman-mvp/src/providers/searxng-provider.ts apps/freshman-mvp/src/server/config.ts apps/freshman-mvp/src/server/index.ts apps/freshman-mvp/test/searxng-provider.test.ts apps/freshman-mvp/.env.example
@@ -886,7 +886,7 @@ git commit -m "feat: add independent SearXNG fallback search"
 - Consumes: published canonical answers and WeKnora FAQ endpoints.
 - Produces: retryable outbox events and matching WeKnora FAQ entries.
 
-- [ ] **Step 1: Write outbox and retry tests**
+- [x] **Step 1: Write outbox and retry tests**
 
 Assert:
 
@@ -897,7 +897,7 @@ Assert:
 - a newly approved previously-unrecorded question becomes a new intent and FAQ entry;
 - rejecting a review never deletes historical answers or FAQ records.
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 ```powershell
 npm --prefix apps/freshman-mvp test -- --test-name-pattern="FAQ synchronization"
@@ -905,7 +905,7 @@ npm --prefix apps/freshman-mvp test -- --test-name-pattern="FAQ synchronization"
 
 Expected: FAIL because the sync service and outbox do not exist.
 
-- [ ] **Step 3: Add the outbox schema**
+- [x] **Step 3: Add the outbox schema**
 
 Create:
 
@@ -916,7 +916,7 @@ external_content_links
 
 Outbox events use a unique idempotency key `intentId:canonicalVersion:weknora-faq`. Statuses are `pending`, `processing`, `completed`, and `failed`; attempts and last error are retained.
 
-- [ ] **Step 4: Implement documented FAQ upsert behavior**
+- [x] **Step 4: Implement documented FAQ upsert behavior**
 
 Use:
 
@@ -939,7 +939,7 @@ export interface FaqSyncService {
 }
 ```
 
-- [ ] **Step 5: Process the outbox asynchronously**
+- [x] **Step 5: Process the outbox asynchronously**
 
 Run a bounded background worker in the gateway:
 
@@ -960,7 +960,7 @@ Invoke-RestMethod -Headers @{ 'X-API-Key'=$env:WEKNORA_API_KEY } -Uri "http://12
 
 Expected: the FAQ entry exists with the published answer and aliases.
 
-- [ ] **Step 7: Commit synchronization**
+- [x] **Step 7: Commit synchronization**
 
 ```powershell
 git add apps/freshman-mvp/src/db/postgres-migrations.ts apps/freshman-mvp/src/services/faq-sync-service.ts apps/freshman-mvp/src/services/content-review-service.ts apps/freshman-mvp/src/server/app.ts apps/freshman-mvp/test/faq-sync.test.ts
@@ -1029,7 +1029,7 @@ Expected: FAIL until health, lifecycle, and degradation work is complete.
 
 Do not call TokenDance on every health request; report configuration plus the latest real-call state and time.
 
-- [ ] **Step 4: Implement ordered startup and stop**
+- [x] **Step 4: Implement ordered startup and stop**
 
 `start-knowledge-stack.ps1`:
 
@@ -1043,7 +1043,7 @@ Do not call TokenDance on every health request; report configuration plus the la
 
 `stop-knowledge-stack.ps1` stops the gateway first, then WeKnora/SearXNG, then the business database, without deleting volumes.
 
-- [ ] **Step 5: Implement restorable backups**
+- [x] **Step 5: Implement restorable backups**
 
 `backup-knowledge-stack.ps1` must create a timestamped directory containing:
 
@@ -1090,7 +1090,7 @@ At 390×844 and on a real phone:
 - stopping WeKnora does not break preset browsing;
 - restarting the complete stack preserves position-independent server data.
 
-- [ ] **Step 9: Update runbooks and status**
+- [x] **Step 9: Update runbooks and status**
 
 Document:
 

@@ -76,4 +76,5 @@ npm --prefix apps/freshman-mvp exec -- tsx apps/freshman-mvp/scripts/backup-sqli
 - 这是本地部署：电脑关机、休眠、断网或进程停止后，客户端无法继续访问。接入 TokenDance 只提供模型能力，不会替你托管本地服务。
 - 当前没有公网域名、ICP、HTTPS、管理员登录、限流或微信小程序审核。
 - Phase B 才考虑 WeKnora、PostgreSQL、向量检索和经验证的独立全网搜索。
+- Phase B 的非依赖代码与运维入口已经就绪，但真实容器、模型和知识库尚未完成联调；详见仓库根目录的 `docs/PHASE_B_LOCAL_RUNBOOK.md`。
 - 已完成 Microsoft Edge 390×844 模拟手机视口与桌面管理页验收；尚未在实体手机上验证，同一 Wi-Fi 真机访问仍需人工补测。

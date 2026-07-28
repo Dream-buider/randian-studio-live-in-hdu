@@ -68,11 +68,25 @@ test('full local flow reports honest health, serves SPA routes, and persists rev
     assert.deepEqual(health.json(), {
       status: 'ok',
       components: {
+        gateway: { status: 'healthy' },
+        businessDatabase: { status: 'healthy', mode: 'sqlite' },
         database: { status: 'ok', mode: 'sqlite' },
         model: { status: 'disabled', mode: 'no-key' },
+        tokenDance: {
+          status: 'disabled',
+          lastCallStatus: 'never',
+          lastCallAt: null,
+        },
         knowledge: { status: 'ok', mode: 'local-json' },
+        weknora: { status: 'not-configured' },
+        embedding: { status: 'not-configured', mode: 'ollama' },
         search: { status: 'unavailable', mode: 'phase-a-disabled' },
         reviewQueue: { status: 'ok', pending: 0 },
+        integrationOutbox: {
+          status: 'not-configured',
+          pending: 0,
+          failed: 0,
+        },
       },
     });
     assert.doesNotMatch(health.body, /api[_-]?key|test-key|tokendance_api_key/i);
@@ -208,6 +222,12 @@ test('production composition uses TokenDance only for a trimmed real key and acc
       status: 'configured',
       mode: 'tokendance',
     });
+    assert.equal(health.json().components.tokenDance.status, 'configured');
+    assert.equal(health.json().components.tokenDance.lastCallStatus, 'ok');
+    assert.match(
+      health.json().components.tokenDance.lastCallAt,
+      /^\d{4}-\d{2}-\d{2}T/,
+    );
     assert.doesNotMatch(health.body, /test-key/);
   } finally {
     await closeQuietly(runtime);

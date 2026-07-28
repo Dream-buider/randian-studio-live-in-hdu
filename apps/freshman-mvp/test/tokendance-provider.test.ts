@@ -55,6 +55,8 @@ test('TokenDance sends the exact endpoint, model, trimmed authorization, and saf
   assert.equal(body.model, 'deepseek-v4-flash');
   assert.doesNotMatch(JSON.stringify(result), /test-key/);
   assert.doesNotMatch(JSON.stringify(body), /test-key/);
+  assert.equal(provider.status().lastCallStatus, 'ok');
+  assert.match(provider.status().lastCallAt ?? '', /^\d{4}-\d{2}-\d{2}T/);
 });
 
 test('TokenDance rejects a whitespace-only key without revealing it', () => {

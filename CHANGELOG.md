@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## 2026-07-28
+
+### Added
+
+- 完成 Phase A 本地新生问答平台：Vue 手机端、Fastify API、SQLite 内容与审核库、动态问题卡片、三段路由、FIFO 审核、人工发布版本、启停、健康检查与在线备份。
+- 增加 Phase B 非依赖代码：独立 PostgreSQL 17 仓储、SQLite 迁移器、WeKnora REST 检索、SearXNG、FAQ 同步 outbox、审批知识清单导入和失败重试。
+- 新增 `scripts/start-knowledge-stack.ps1`、`stop-knowledge-stack.ps1`、`test-knowledge-stack.ps1` 和 `backup-knowledge-stack.ps1`。
+- 新增 `docs/PHASE_B_LOCAL_RUNBOOK.md`，记录 D 盘存储、配置、启停、测试、审批导入、备份、密钥轮换与腾讯云迁移边界。
+
+### Changed
+
+- 所有持续写入或大体积运行材料统一到 `D:\Star\LIVE_IN_HDU_RUNTIME`；业务 PostgreSQL 与 WeKnora PostgreSQL 完全分离，备份分别导出并保存获批知识清单。
+- 管理页增加知识导入的哈希、年份、审批、WeKnora ID、解析状态、时间和错误信息；失败重试必须重新核对原审批清单与原 SHA-256。
+- 保持 Q11 空白，拒绝把纯数字 `19` 当作回答；预设问题数量、回答数量和发布数量全部由数据动态计算。
+
+### Verification
+
+- Phase A 已完成后端、前端、旧 MVP、生产构建、密钥扫描、HTTP、备份恢复与 Edge 390×844 模拟视口验收。
+- Phase B 的无容器单元测试、脚本静态契约和生产构建已验证；真实 Docker/WeKnora/PostgreSQL/Ollama 联调仍未执行。
+
+### Notes
+
+- 当前本机缺 Docker Desktop 和 Ollama，npm registry 连接超时，真实密钥和两个 WeKnora 知识库 ID 未配置。
+- 工作区未找到可明确确认且获批的《2025年新生指南》原始文件，因此未复制、导入或虚构首批语料。
+- 本地电脑关机、休眠、断网或服务停止后，客户端访问会中断；TokenDance 只提供模型能力，不托管本地服务。
+
 本文件记录 HDU Feishu Community OS 的执行变更。
 
 ## 2026-07-28

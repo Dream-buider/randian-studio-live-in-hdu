@@ -120,7 +120,7 @@ output/freshman-platform/              # runtime only; ignored
 - Consumes: Existing `apps/freshman-mvp/` source and root Node.js 24 runtime.
 - Produces: `npm run dev`, `npm run build`, `npm test`, `npm run test:web`; a typed module boundary for all later tasks.
 
-- [ ] **Step 1: Protect runtime and credential files before initializing Git**
+- [x] **Step 1: Protect runtime and credential files before initializing Git**
 
 Create `.gitignore` with:
 
@@ -136,7 +136,7 @@ output/
 *.log
 ```
 
-- [ ] **Step 2: Recover the empty Git metadata and record the design baseline**
+- [x] **Step 2: Recover the empty Git metadata and record the design baseline**
 
 Run:
 
@@ -148,7 +148,7 @@ git commit -m "docs: define local freshman agent platform"
 
 Expected: a new local repository exists and no `.env.local`, browser profile, runtime database, or output file is staged.
 
-- [ ] **Step 3: Write a failing Node-version and configuration test**
+- [x] **Step 3: Write a failing Node-version and configuration test**
 
 Create `apps/freshman-mvp/test/baseline.test.ts`:
 
@@ -167,7 +167,7 @@ test('requires Node 24 and defaults to a local SQLite runtime', () => {
 });
 ```
 
-- [ ] **Step 4: Run the test and verify the missing TypeScript config module fails**
+- [x] **Step 4: Run the test and verify the missing TypeScript config module fails**
 
 Run:
 
@@ -177,7 +177,7 @@ npm --prefix apps/freshman-mvp test -- --test-name-pattern="requires Node 24"
 
 Expected: FAIL because `src/server/config.ts` and the application package do not exist.
 
-- [ ] **Step 5: Create the application package and compiler configuration**
+- [x] **Step 5: Create the application package and compiler configuration**
 
 Create `apps/freshman-mvp/package.json` with scripts:
 
@@ -236,7 +236,7 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 6: Implement typed configuration**
+- [x] **Step 6: Implement typed configuration**
 
 Create `src/server/config.ts` exporting:
 
@@ -269,7 +269,7 @@ TOKENDANCE_MODEL=deepseek-v4-flash
 REQUEST_TIMEOUT_MS=20000
 ```
 
-- [ ] **Step 7: Install dependencies and run the baseline test**
+- [x] **Step 7: Install dependencies and run the baseline test**
 
 Run:
 
@@ -280,7 +280,7 @@ npm --prefix apps/freshman-mvp test -- --test-name-pattern="requires Node 24"
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit the baseline**
+- [x] **Step 8: Commit the baseline**
 
 ```powershell
 git add .gitignore package.json apps/freshman-mvp/package.json apps/freshman-mvp/package-lock.json apps/freshman-mvp/tsconfig.json apps/freshman-mvp/tsconfig.server.json apps/freshman-mvp/vite.config.ts apps/freshman-mvp/.env.example apps/freshman-mvp/src/server/config.ts apps/freshman-mvp/test/baseline.test.ts
@@ -305,7 +305,7 @@ git commit -m "chore: establish typed local platform baseline"
 - Consumes: `AppConfig.databasePath`.
 - Produces: `ContentRepository`, `ReviewRepository`, `openDatabase(path)`, `migrateDatabase(db)`.
 
-- [ ] **Step 1: Write failing persistence and FIFO tests**
+- [x] **Step 1: Write failing persistence and FIFO tests**
 
 Create tests asserting:
 
@@ -337,7 +337,7 @@ assert.equal((await content.listPublishedQuestions())[0].trustStatus, 'approved'
 
 Also enqueue two review items and assert ordinals `[1, 2]` after closing and reopening the database.
 
-- [ ] **Step 2: Run the repository tests and verify they fail**
+- [x] **Step 2: Run the repository tests and verify they fail**
 
 Run:
 
@@ -347,7 +347,7 @@ npm --prefix apps/freshman-mvp test -- --test-name-pattern="SQLite"
 
 Expected: FAIL because the database modules do not exist.
 
-- [ ] **Step 3: Define exact domain types**
+- [x] **Step 3: Define exact domain types**
 
 In `models.ts`, define:
 
@@ -379,7 +379,7 @@ export interface PublishedQuestion {
 
 Define `RawAnswer`, `QuestionIntent`, `CanonicalAnswerVersion`, `ReviewTask`, `QuestionContext`, and `AnswerResult` in the same file with no optional state fields that can become ambiguous.
 
-- [ ] **Step 4: Implement idempotent migrations**
+- [x] **Step 4: Implement idempotent migrations**
 
 `migrations.ts` must create:
 
@@ -398,7 +398,7 @@ app_settings
 
 Use foreign keys, unique `question_intents.id`, unique `(intent_id, version)`, and an integer `review_tasks.ordinal` assigned inside an immediate transaction.
 
-- [ ] **Step 5: Implement repository methods**
+- [x] **Step 5: Implement repository methods**
 
 `contracts.ts` must export:
 
@@ -421,7 +421,7 @@ export interface ReviewRepository {
 
 Implement both SQLite repositories with prepared statements and JSON serialization only for alias, keyword, and source arrays.
 
-- [ ] **Step 6: Run persistence tests**
+- [x] **Step 6: Run persistence tests**
 
 Run:
 
@@ -431,7 +431,7 @@ npm --prefix apps/freshman-mvp test -- --test-name-pattern="SQLite"
 
 Expected: PASS and temporary test databases are removed by test cleanup.
 
-- [ ] **Step 7: Commit the database boundary**
+- [x] **Step 7: Commit the database boundary**
 
 ```powershell
 git add apps/freshman-mvp/src/domain apps/freshman-mvp/src/db apps/freshman-mvp/src/repositories apps/freshman-mvp/test/sqlite-repositories.test.ts
@@ -452,7 +452,7 @@ git commit -m "feat: add versioned SQLite content repositories"
 - Consumes: `ContentRepository.createIntent`, `ContentRepository.upsertRawAnswers`.
 - Produces: `parseWorkbookRows(rows)`, `importWorkbook(path, repository)`, `ImportReport`.
 
-- [ ] **Step 1: Write failing cleanup tests with representative workbook rows**
+- [x] **Step 1: Write failing cleanup tests with representative workbook rows**
 
 Use this fixture:
 
@@ -471,7 +471,7 @@ assert.equal(report.rejectedCells[0].cell, 'G3');
 
 Also test that repeated import preserves existing raw-answer IDs using a deterministic SHA-256 fingerprint.
 
-- [ ] **Step 2: Run importer tests and verify failure**
+- [x] **Step 2: Run importer tests and verify failure**
 
 Run:
 
@@ -481,7 +481,7 @@ npm --prefix apps/freshman-mvp test -- --test-name-pattern="workbook"
 
 Expected: FAIL because `content-importer.ts` does not exist.
 
-- [ ] **Step 3: Implement row normalization**
+- [x] **Step 3: Implement row normalization**
 
 `parseWorkbookRows` must:
 
@@ -493,7 +493,7 @@ Expected: FAIL because `content-importer.ts` does not exist.
 - preserve the original question number as `externalId`;
 - set imported answers to `raw` only; never auto-publish.
 
-- [ ] **Step 4: Implement the command-line importer**
+- [x] **Step 4: Implement the command-line importer**
 
 Command:
 
@@ -514,7 +514,7 @@ The dry-run JSON must include:
 
 If actual accepted counts differ because the source workbook changed, the command must print the exact row/cell differences and require a non-dry run to proceed; it must not silently hard-code these counts.
 
-- [ ] **Step 5: Run dry-run and import tests**
+- [x] **Step 5: Run dry-run and import tests**
 
 Run:
 
@@ -525,7 +525,7 @@ npm --prefix apps/freshman-mvp exec -- tsx scripts/import-feishu-xlsx.mts --inpu
 
 Expected: tests PASS; report identifies `19` cells as rejected and publishes nothing.
 
-- [ ] **Step 6: Perform the first real import and verify database totals**
+- [x] **Step 6: Perform the first real import and verify database totals**
 
 Run:
 
@@ -536,7 +536,7 @@ npm --prefix apps/freshman-mvp exec -- tsx scripts/import-feishu-xlsx.mts --inpu
 
 Expected: the second import reports zero new raw answers and zero duplicate rows.
 
-- [ ] **Step 7: Commit the importer**
+- [x] **Step 7: Commit the importer**
 
 ```powershell
 git add apps/freshman-mvp/src/services/content-importer.ts apps/freshman-mvp/scripts/import-feishu-xlsx.mts apps/freshman-mvp/test/content-importer.test.ts
@@ -556,7 +556,7 @@ git commit -m "feat: import and clean Feishu question workbook"
 - Consumes: `ContentRepository`, `ReviewRepository`.
 - Produces: Fastify routes `/api/questions`, `/api/admin/intents`, `/api/admin/intents/:id/raw-answers`, `/api/admin/intents/:id/publish`, `/api/reviews`.
 
-- [ ] **Step 1: Write failing API tests**
+- [x] **Step 1: Write failing API tests**
 
 Assert:
 
@@ -580,7 +580,7 @@ assert.equal((await app.inject({ method: 'GET', url: '/api/questions' })).json()
 
 Also assert 400 for summaries shorter than 20 or longer than 150 Chinese characters, missing full answers, and empty sources.
 
-- [ ] **Step 2: Run API tests and verify failure**
+- [x] **Step 2: Run API tests and verify failure**
 
 Run:
 
@@ -590,7 +590,7 @@ npm --prefix apps/freshman-mvp test -- --test-name-pattern="publication API"
 
 Expected: FAIL because the Fastify app factory does not exist.
 
-- [ ] **Step 3: Implement `ContentReviewService` validation**
+- [x] **Step 3: Implement `ContentReviewService` validation**
 
 Export:
 
@@ -605,7 +605,7 @@ export class ContentReviewService {
 
 Count Chinese code points with `Array.from(summary.trim()).length`, enforce 20–150, require full answer and at least one source, and reject publishing an inactive intent.
 
-- [ ] **Step 4: Implement the Fastify app factory**
+- [x] **Step 4: Implement the Fastify app factory**
 
 Export:
 
@@ -622,7 +622,7 @@ export function createApp(deps: AppDependencies): FastifyInstance;
 
 Return `{ items }` envelopes consistently and use `{ error: { code, message } }` for errors.
 
-- [ ] **Step 5: Run publication API tests**
+- [x] **Step 5: Run publication API tests**
 
 Run:
 
@@ -632,7 +632,7 @@ npm --prefix apps/freshman-mvp test -- --test-name-pattern="publication API"
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the review workflow**
+- [x] **Step 6: Commit the review workflow**
 
 ```powershell
 git add apps/freshman-mvp/src/services/content-review-service.ts apps/freshman-mvp/src/server/app.ts apps/freshman-mvp/test/api-v2.test.ts
@@ -657,7 +657,7 @@ git commit -m "feat: add canonical answer review APIs"
 - Consumes: repositories, `AppConfig`, TokenDance chat-completions endpoint.
 - Produces: `ModelProvider.classifyIntent`, `ModelProvider.synthesize`, `KnowledgeProvider.search`, `SearchProvider.search`, `AnswerRouter.answer`.
 
-- [ ] **Step 1: Write failing TokenDance request tests**
+- [x] **Step 1: Write failing TokenDance request tests**
 
 Use a fake `fetch` and assert:
 
@@ -670,7 +670,7 @@ assert.doesNotMatch(JSON.stringify(result), /test-key/);
 
 Test 20-second abort handling and invalid JSON classification returning `null` instead of throwing.
 
-- [ ] **Step 2: Write failing router precedence and persistence tests**
+- [x] **Step 2: Write failing router precedence and persistence tests**
 
 Cover:
 
@@ -682,7 +682,7 @@ Cover:
 6. every fallback contains the exact disclaimer;
 7. two fallbacks remain FIFO after repository restart.
 
-- [ ] **Step 3: Implement provider contracts**
+- [x] **Step 3: Implement provider contracts**
 
 ```ts
 export interface IntentClassification {
@@ -733,7 +733,7 @@ export interface SearchProvider {
 
 `UnavailableSearchProvider` must return `{ available: false, items: [] }`, never fake search results.
 
-- [ ] **Step 4: Implement intent matching and model classification**
+- [x] **Step 4: Implement intent matching and model classification**
 
 Reuse the proven normalization, aliases, keywords, and exclusion behavior from `src/matching.mjs`. Local high-confidence matches run first; otherwise TokenDance receives only the active intent catalog and must return JSON:
 
@@ -743,7 +743,7 @@ Reuse the proven normalization, aliases, keywords, and exclusion behavior from `
 
 Accept model classification only when the returned ID exists and confidence is at least the configured threshold.
 
-- [ ] **Step 5: Implement the router**
+- [x] **Step 5: Implement the router**
 
 Return:
 
@@ -763,7 +763,7 @@ const review = await reviews.enqueue({ question, answer: model.text, sources: mo
 return { route: 'web', answer: model.text, reviewOrdinal: review.ordinal, disclaimer: config.disclaimer, ... };
 ```
 
-- [ ] **Step 6: Run provider and router tests**
+- [x] **Step 6: Run provider and router tests**
 
 Run:
 
@@ -773,7 +773,7 @@ npm --prefix apps/freshman-mvp test -- --test-name-pattern="TokenDance|router v2
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit routing**
+- [x] **Step 7: Commit routing**
 
 ```powershell
 git add apps/freshman-mvp/src/providers apps/freshman-mvp/src/services/intent-matcher.ts apps/freshman-mvp/src/services/answer-router.ts apps/freshman-mvp/test/tokendance-provider.test.ts apps/freshman-mvp/test/answer-router-v2.test.ts
@@ -804,7 +804,7 @@ git commit -m "feat: route questions through presets knowledge and TokenDance"
 - Consumes: `GET /api/questions`, `POST /api/ask`.
 - Produces: `/` question deck, `/chat` full-screen conversation route.
 
-- [ ] **Step 1: Write failing component tests**
+- [x] **Step 1: Write failing component tests**
 
 Mount `QuestionDeckView` with 12 questions and assert:
 
@@ -821,7 +821,7 @@ expect(wrapper.get('[data-role="ask-sheet"]').exists()).toBe(true);
 
 Also assert that the catalog jumps to a selected question and `localStorage` restores the last index.
 
-- [ ] **Step 2: Run web tests and verify failure**
+- [x] **Step 2: Run web tests and verify failure**
 
 Run:
 
@@ -831,7 +831,7 @@ npm --prefix apps/freshman-mvp run test:web -- --testNamePattern="question deck"
 
 Expected: FAIL because the Vue components do not exist.
 
-- [ ] **Step 3: Implement API and route shells**
+- [x] **Step 3: Implement API and route shells**
 
 `api.ts` exports:
 
@@ -842,7 +842,7 @@ export async function askQuestion(question: string, context?: QuestionContext): 
 
 Create `env.d.ts` containing `/// <reference types="vite/client" />`. Create routes `/` and `/chat`; reject non-JSON API responses with a user-readable retry state.
 
-- [ ] **Step 4: Implement confirmed card behavior**
+- [x] **Step 4: Implement confirmed card behavior**
 
 `QuestionDeckView.vue` must:
 
@@ -855,7 +855,7 @@ Create `env.d.ts` containing `/// <reference types="vite/client" />`. Create rou
 - persist the current question ID, not an array index;
 - show `没有解决我的问题，直接提问` as a fixed action.
 
-- [ ] **Step 5: Implement the ask-sheet to chat handoff**
+- [x] **Step 5: Implement the ask-sheet to chat handoff**
 
 `AskSheet.vue` emits:
 
@@ -868,7 +868,7 @@ defineEmits<{
 
 On submit, store the pending payload in router state and navigate to `/chat`. `ChatView.vue` displays the context card, streams or waits for the answer, and offers a return button that preserves the deck position.
 
-- [ ] **Step 6: Run web tests and build**
+- [x] **Step 6: Run web tests and build**
 
 Run:
 
@@ -879,7 +879,7 @@ npm --prefix apps/freshman-mvp run build
 
 Expected: PASS; `dist/client/index.html` exists and no credential string occurs in `dist/client`.
 
-- [ ] **Step 7: Commit the mobile client**
+- [x] **Step 7: Commit the mobile client**
 
 ```powershell
 git add apps/freshman-mvp/web apps/freshman-mvp/test/web/question-deck.test.ts
@@ -901,7 +901,7 @@ git commit -m "feat: add mobile paged freshman question deck"
 - Consumes: admin intent, raw-answer, publish, review-list, and review-decision APIs.
 - Produces: `/admin` operations console.
 
-- [ ] **Step 1: Write failing operations-console tests**
+- [x] **Step 1: Write failing operations-console tests**
 
 Assert:
 
@@ -912,7 +912,7 @@ Assert:
 - pending reviews remain in oldest-first order;
 - approve, reject, and `需补充` actions send exact API payloads.
 
-- [ ] **Step 2: Run admin tests and verify failure**
+- [x] **Step 2: Run admin tests and verify failure**
 
 Run:
 
@@ -922,7 +922,7 @@ npm --prefix apps/freshman-mvp run test:web -- --testNamePattern="operations con
 
 Expected: FAIL because the admin components do not exist.
 
-- [ ] **Step 3: Implement content workspace**
+- [x] **Step 3: Implement content workspace**
 
 The left pane lists intents and states. The main pane shows:
 
@@ -936,11 +936,11 @@ The left pane lists intents and states. The main pane shows:
 
 No action may mutate a published answer without creating a new version.
 
-- [ ] **Step 4: Implement the FIFO review queue**
+- [x] **Step 4: Implement the FIFO review queue**
 
 Render `displayLabel`, question, temporary answer, sources, risk level, created time, and status. Sort using server order only; the client must not reprioritize high-risk entries above older items.
 
-- [ ] **Step 5: Run admin tests and build**
+- [x] **Step 5: Run admin tests and build**
 
 Run:
 
@@ -951,7 +951,7 @@ npm --prefix apps/freshman-mvp run build
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the console**
+- [x] **Step 6: Commit the console**
 
 ```powershell
 git add apps/freshman-mvp/web/views/AdminView.vue apps/freshman-mvp/web/components/AdminIntentList.vue apps/freshman-mvp/web/components/AdminAnswerEditor.vue apps/freshman-mvp/web/components/AdminReviewQueue.vue apps/freshman-mvp/test/web/admin.test.ts
@@ -979,7 +979,7 @@ git commit -m "feat: add local content and review console"
 - Consumes: completed app, database, built client.
 - Produces: one-command local operation and a verified LAN URL.
 
-- [ ] **Step 1: Write a failing full-flow end-to-end test**
+- [x] **Step 1: Write a failing full-flow end-to-end test**
 
 Start the app on an ephemeral port and assert:
 
@@ -991,7 +991,7 @@ Start the app on an ephemeral port and assert:
 6. the pending review remains after app restart;
 7. the built `/` and `/admin` routes return HTML.
 
-- [ ] **Step 2: Run the end-to-end test and verify failure**
+- [x] **Step 2: Run the end-to-end test and verify failure**
 
 Run:
 
@@ -1001,7 +1001,7 @@ npm --prefix apps/freshman-mvp test -- --test-name-pattern="full local flow"
 
 Expected: FAIL because the production entrypoint is incomplete.
 
-- [ ] **Step 3: Implement the production entrypoint**
+- [x] **Step 3: Implement the production entrypoint**
 
 `index.ts` must:
 
@@ -1020,7 +1020,7 @@ import './dist/server/index.js';
 
 until all old start references are updated.
 
-- [ ] **Step 4: Implement PowerShell lifecycle scripts**
+- [x] **Step 4: Implement PowerShell lifecycle scripts**
 
 `start-freshman-platform.ps1` must:
 
@@ -1036,7 +1036,7 @@ until all old start references are updated.
 
 `test-freshman-platform.ps1` must run backend tests, web tests, build, secret scan, and the HTTP smoke test.
 
-- [ ] **Step 5: Implement SQLite backup**
+- [x] **Step 5: Implement SQLite backup**
 
 Run:
 
@@ -1046,7 +1046,7 @@ npm --prefix apps/freshman-mvp exec -- tsx scripts/backup-sqlite.mts --database 
 
 The script must use SQLite backup/VACUUM INTO semantics, include UTC timestamp in the filename, retain the latest 14 backups, and verify the copied database opens.
 
-- [ ] **Step 6: Run all automated checks**
+- [x] **Step 6: Run all automated checks**
 
 Run:
 
@@ -1057,6 +1057,11 @@ Run:
 Expected: all Node tests, Vitest tests, build, secret scan, and HTTP smoke checks pass.
 
 - [ ] **Step 7: Perform a real browser and phone-width smoke test**
+
+Status 2026-07-28: Edge at 390×844, console-error check, localhost routes, LAN HTTP
+reachability, restart persistence, and administrator FIFO behavior passed. A physical
+phone interaction check remains a human acceptance item; it is not represented as
+completed by viewport emulation alone.
 
 Run:
 
@@ -1075,7 +1080,7 @@ Verify in Edge at 390×844 and on a phone on the same Wi-Fi:
 - admin publishing creates a new version;
 - pending reviews remain FIFO after restart.
 
-- [ ] **Step 8: Update documentation and execution records**
+- [x] **Step 8: Update documentation and execution records**
 
 Document:
 
@@ -1086,7 +1091,7 @@ Document:
 - backup and restore commands;
 - Phase B limitations: no WeKnora, PostgreSQL, or verified independent web search yet.
 
-- [ ] **Step 9: Commit the verified Phase A system**
+- [x] **Step 9: Commit the verified Phase A system**
 
 ```powershell
 git add apps/freshman-mvp scripts/start-freshman-platform.ps1 scripts/stop-freshman-platform.ps1 scripts/test-freshman-platform.ps1 README.md TASKS.md CHANGELOG.md

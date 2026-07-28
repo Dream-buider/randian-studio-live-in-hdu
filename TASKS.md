@@ -62,6 +62,8 @@
 | TODO | 部署新生问答 H5 | 需要云服务器/域名状态、DeepSeek 与搜索 Key、飞书凭证；当前本机未安装 Docker |
 | TODO | 并行适配并送审微信小程序 | 复用 `vendor/WeKnora/miniprogram/`，改为只访问新生问答网关，不阻塞 H5 上线 |
 | DONE | 交付 Phase A 本地新生问答平台 | Vue + Fastify + SQLite 已完成生产入口、D 盘存储、真实表格首次导入、无密钥诚实兜底、FIFO 审核、人工版本发布、启停、健康检查和在线备份恢复；Edge 390×844 已验收，实体手机仍待人工补测 |
+| DONE | 完成 Phase B 非依赖代码基础 | 已实现独立 PostgreSQL 17 适配、WeKnora REST、SearXNG、FAQ outbox、审批清单导入与重试、D 盘启停/测试/备份脚本；单元测试和构建可离线验证 |
+| BLOCKED | 完成 Phase B 真实本地联调 | 缺 Docker Desktop、Ollama、可用 npm 网络、真实密钥与两个知识库 ID；且尚无明确获批的《2025年新生指南》原始文件，故未启动容器、未导入语料、未做恢复演练和检索评测 |
 
 ## 运营管理
 
