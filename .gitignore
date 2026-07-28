@@ -6,6 +6,9 @@ apps/freshman-mvp/.env
 apps/freshman-mvp/.env.local
 vendor/WeKnora/.env
 deploy/local/.env.local
+output/freshman-platform/approved-knowledge/
+output/freshman-platform/knowledge-manifest.json
+output/freshman-platform/backups/
 output/
 outputs/
 tmp/
@@ -14,4 +17,3 @@ tmp/
 .superpowers/
 .worktrees/
 *.log
-

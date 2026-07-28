@@ -83,3 +83,32 @@ Codex 在本项目中的角色是执行协调器，只负责把 ChatGPT 总控�
 - [docs/社区补充资料发布清单_2026-07-15.md](docs/社区补充资料发布清单_2026-07-15.md)：本轮 23 份资料的分类、去重、页面链接与验收记录。
 - [docs/control/EXECUTION_RULES.md](docs/control/EXECUTION_RULES.md)：执行协调器规则。
 - [docs/control/TASK_CATEGORIES.md](docs/control/TASK_CATEGORIES.md)：五类任务边界。
+
+## Phase B 环境预检
+
+Phase B 会引入 Docker Desktop、WSL2、PostgreSQL、WeKnora、SearXNG 和
+Ollama 嵌入模型，但预检脚本只读取环境状态，不会安装软件、启动容器、拉取镜像或
+下载模型。
+
+先停止占用 3210 端口的 Phase A 服务，再运行：
+
+```powershell
+.\scripts\stop-freshman-platform.ps1
+.\scripts\preflight-phase-b.ps1 `
+  -JsonOutput .\output\freshman-platform\phase-b-preflight.json
+```
+
+脚本仅在所有前置条件满足时退出 `0`。失败报告仍会写入指定 JSON，并用不同错误码
+区分 `docker-cli-missing`（没有 Docker CLI）与
+`docker-engine-stopped`（CLI 已存在，但 Docker Desktop 引擎未运行）。
+
+本机请求的数据根目录是 `D:\`，但普通用户对 D 盘根目录没有写入权限，因此实际
+运行根目录固定为 `D:\Star\LIVE_IN_HDU_RUNTIME`。报告会同时保留
+`requestedRoot`、`actualRoot` 和 `fallbackReason`，避免把降级路径伪装成原始
+配置。数据库、WeKnora、SearXNG、Ollama 模型和预检报告等大体积数据均应放在该
+实际目录下。Docker Desktop 安装后，还需在其设置中把磁盘镜像位置迁移到此 D 盘
+目录；不要让 Docker 使用 C 盘默认数据目录。
+
+环境变量名称及空白密钥模板见
+[`deploy/local/.env.example`](deploy/local/.env.example)。真实密码、API Key 和
+SearXNG secret 只能写入被 Git 忽略的 `deploy/local/.env.local`，不得提交。
