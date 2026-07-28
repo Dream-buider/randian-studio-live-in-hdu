@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue';
 import {
   ApiResponseError,
+  getSystemHealth,
   listAdminIntents,
   listKnowledgeImports,
   listPendingReviews,
@@ -11,6 +12,7 @@ import {
   type KnowledgeImportStatus,
   type RawAnswer,
   type ReviewTask,
+  type SystemHealth,
 } from '../api.js';
 import AdminAnswerEditor from '../components/AdminAnswerEditor.vue';
 import AdminIntentList from '../components/AdminIntentList.vue';
@@ -27,7 +29,41 @@ const loadingRaw = ref(false);
 const localOnly = ref(false);
 const errorMessage = ref('');
 const retryingImportId = ref<string | null>(null);
+const systemHealth = ref<SystemHealth | null>(null);
+const healthUnavailable = ref(false);
 let rawRequestSequence = 0;
+
+function statusLabel(status: string): string {
+  if (status === 'healthy' || status === 'ok') {
+    return '正常';
+  }
+  if (status === 'configured' || status === 'available') {
+    return '已配置';
+  }
+  if (status === 'disabled' || status === 'not-configured') {
+    return '未配置';
+  }
+  if (status === 'temporarily-unavailable' || status === 'unavailable') {
+    return '不可用';
+  }
+  return status;
+}
+
+function databaseModeLabel(mode: string): string {
+  if (mode === 'sqlite') {
+    return 'SQLite';
+  }
+  if (mode === 'postgres') {
+    return 'PostgreSQL';
+  }
+  return mode;
+}
+
+function searchStatusLabel(health: SystemHealth): string {
+  return health.components.search.mode === 'phase-a-disabled'
+    ? 'Phase A 未启用'
+    : statusLabel(health.components.search.status);
+}
 
 function recordError(error: unknown): void {
   if (error instanceof ApiResponseError && error.status === 403) {
@@ -91,6 +127,15 @@ async function load(): Promise<void> {
   loading.value = true;
   errorMessage.value = '';
   localOnly.value = false;
+  healthUnavailable.value = false;
+  systemHealth.value = null;
+  void getSystemHealth()
+    .then((health) => {
+      systemHealth.value = health;
+    })
+    .catch(() => {
+      healthUnavailable.value = true;
+    });
   try {
     const [loadedIntents, loadedReviews] = await Promise.all([
       listAdminIntents(),
@@ -138,6 +183,58 @@ onMounted(load);
         未加载的拒绝单元格不会被视为已接受。
       </span>
     </aside>
+
+    <section
+      class="service-health-card"
+      data-role="service-health"
+      aria-labelledby="service-health-heading"
+    >
+      <header>
+        <div>
+          <p>只读取健康接口，不触发模型或搜索调用</p>
+          <h2 id="service-health-heading">服务状态</h2>
+        </div>
+        <span v-if="systemHealth">{{ statusLabel(systemHealth.status) }}</span>
+      </header>
+      <p v-if="healthUnavailable">服务状态暂时无法读取，内容与审核功能仍可继续使用。</p>
+      <p v-else-if="!systemHealth">正在读取服务状态…</p>
+      <dl v-else>
+        <div>
+          <dt>网关</dt>
+          <dd>{{ statusLabel(systemHealth.components.gateway.status) }}</dd>
+        </div>
+        <div>
+          <dt>业务数据库</dt>
+          <dd>
+            {{ databaseModeLabel(systemHealth.components.businessDatabase.mode) }}
+            · {{ statusLabel(systemHealth.components.businessDatabase.status) }}
+          </dd>
+        </div>
+        <div>
+          <dt>TokenDance</dt>
+          <dd>{{ statusLabel(systemHealth.components.tokenDance.status) }}</dd>
+        </div>
+        <div>
+          <dt>WeKnora</dt>
+          <dd>{{ statusLabel(systemHealth.components.weknora.status) }}</dd>
+        </div>
+        <div>
+          <dt>联网搜索</dt>
+          <dd>{{ searchStatusLabel(systemHealth) }}</dd>
+        </div>
+        <div>
+          <dt>队列</dt>
+          <dd>待审核 {{ systemHealth.components.reviewQueue.pending }}</dd>
+        </div>
+        <div>
+          <dt>FAQ 同步</dt>
+          <dd>
+            同步待处理 {{ systemHealth.components.integrationOutbox.pending }}
+            · 同步失败 {{ systemHealth.components.integrationOutbox.failed }}
+          </dd>
+        </div>
+      </dl>
+    </section>
 
     <section class="import-audit-notice" aria-labelledby="knowledge-import-heading">
       <strong id="knowledge-import-heading">已审批知识导入</strong>

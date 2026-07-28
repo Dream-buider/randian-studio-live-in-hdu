@@ -117,6 +117,34 @@ function adminFetch(records: Array<{ url: string; init?: RequestInit }> = []) {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     records.push({ url, init });
+    if (url === '/api/health') {
+      return jsonResponse({
+        status: 'ok',
+        components: {
+          gateway: { status: 'healthy' },
+          businessDatabase: { status: 'healthy', mode: 'sqlite' },
+          tokenDance: {
+            status: 'disabled',
+            lastCallStatus: 'never',
+            lastCallAt: null,
+          },
+          weknora: { status: 'not-configured' },
+          embedding: { status: 'not-configured', mode: 'ollama' },
+          search: {
+            status: 'unavailable',
+            mode: 'phase-a-disabled',
+            lastSearchStatus: 'never',
+            lastSearchAt: null,
+          },
+          reviewQueue: { status: 'ok', pending: 2 },
+          integrationOutbox: {
+            status: 'not-configured',
+            pending: 3,
+            failed: 1,
+          },
+        },
+      });
+    }
     if (url === '/api/admin/intents') {
       return jsonResponse({ items: intents });
     }
@@ -223,6 +251,64 @@ describe('operations console', () => {
     expect(wrapper.text()).toContain('回答（一）');
     expect(wrapper.text()).toContain('E9');
     expect(wrapper.html()).not.toContain('v-html');
+  });
+
+  it('shows honest component health without treating unavailable Phase B services as healthy', async () => {
+    vi.stubGlobal('fetch', adminFetch());
+    const wrapper = await mountAdmin();
+    const health = wrapper.get('[data-role="service-health"]');
+
+    expect(health.text()).toContain('服务状态');
+    expect(health.text()).toContain('网关');
+    expect(health.text()).toContain('正常');
+    expect(health.text()).toContain('业务数据库');
+    expect(health.text()).toContain('SQLite');
+    expect(health.text()).toContain('TokenDance');
+    expect(health.text()).toContain('未配置');
+    expect(health.text()).toContain('WeKnora');
+    expect(health.text()).toContain('联网搜索');
+    expect(health.text()).toContain('Phase A 未启用');
+    expect(health.text()).toContain('待审核 2');
+    expect(health.text()).toContain('同步待处理 3');
+    expect(health.text()).toContain('同步失败 1');
+    expect(health.text()).not.toContain('API Key');
+  });
+
+  it('keeps content operations usable when only the health endpoint fails', async () => {
+    const fallback = adminFetch();
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === '/api/health') {
+        return jsonResponse(
+          { error: { code: 'UNAVAILABLE', message: 'health unavailable' } },
+          { status: 503 },
+        );
+      }
+      return fallback(input, init);
+    }));
+    const wrapper = await mountAdmin();
+
+    expect(wrapper.get('[data-role="service-health"]').text()).toContain(
+      '服务状态暂时无法读取',
+    );
+    expect(wrapper.text()).toContain('共 3 个问题意图');
+    expect(wrapper.text()).not.toContain('管理数据暂时加载失败');
+  });
+
+  it('does not keep content operations loading while the health request is still pending', async () => {
+    const fallback = adminFetch();
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === '/api/health') {
+        return new Promise<Response>(() => undefined);
+      }
+      return fallback(input, init);
+    }));
+    const wrapper = await mountAdmin();
+
+    expect(wrapper.get('[data-role="service-health"]').text()).toContain(
+      '正在读取服务状态',
+    );
+    expect(wrapper.text()).toContain('共 3 个问题意图');
+    expect(wrapper.text()).not.toContain('正在加载管理数据');
   });
 
   it('shows traceable knowledge import details and retries a failed approved item', async () => {

@@ -87,6 +87,33 @@ export interface KnowledgeImportStatus {
   updatedAt: string;
 }
 
+export interface SystemHealth {
+  status: string;
+  components: {
+    gateway: { status: string };
+    businessDatabase: { status: string; mode: string };
+    tokenDance: {
+      status: string;
+      lastCallStatus: string;
+      lastCallAt: string | null;
+    };
+    weknora: { status: string };
+    embedding: { status: string; mode: string };
+    search: {
+      status: string;
+      mode: string;
+      lastSearchStatus: string;
+      lastSearchAt: string | null;
+    };
+    reviewQueue: { status: string; pending: number };
+    integrationOutbox: {
+      status: string;
+      pending: number;
+      failed: number;
+    };
+  };
+}
+
 export interface PublishAnswerInput {
   summary: string;
   fullAnswer: string;
@@ -235,6 +262,51 @@ function isKnowledgeImportStatus(value: unknown): value is KnowledgeImportStatus
     && typeof value.updatedAt === 'string';
 }
 
+function isSystemHealth(value: unknown): value is SystemHealth {
+  if (!isRecord(value) || typeof value.status !== 'string' || !isRecord(value.components)) {
+    return false;
+  }
+  const {
+    gateway,
+    businessDatabase,
+    tokenDance,
+    weknora,
+    embedding,
+    search,
+    reviewQueue,
+    integrationOutbox,
+  } = value.components;
+  return isRecord(gateway)
+    && typeof gateway.status === 'string'
+    && isRecord(businessDatabase)
+    && typeof businessDatabase.status === 'string'
+    && typeof businessDatabase.mode === 'string'
+    && isRecord(tokenDance)
+    && typeof tokenDance.status === 'string'
+    && typeof tokenDance.lastCallStatus === 'string'
+    && (tokenDance.lastCallAt === null || typeof tokenDance.lastCallAt === 'string')
+    && isRecord(weknora)
+    && typeof weknora.status === 'string'
+    && isRecord(embedding)
+    && typeof embedding.status === 'string'
+    && typeof embedding.mode === 'string'
+    && isRecord(search)
+    && typeof search.status === 'string'
+    && typeof search.mode === 'string'
+    && typeof search.lastSearchStatus === 'string'
+    && (search.lastSearchAt === null || typeof search.lastSearchAt === 'string')
+    && isRecord(reviewQueue)
+    && typeof reviewQueue.status === 'string'
+    && Number.isSafeInteger(reviewQueue.pending)
+    && Number(reviewQueue.pending) >= 0
+    && isRecord(integrationOutbox)
+    && typeof integrationOutbox.status === 'string'
+    && Number.isSafeInteger(integrationOutbox.pending)
+    && Number(integrationOutbox.pending) >= 0
+    && Number.isSafeInteger(integrationOutbox.failed)
+    && Number(integrationOutbox.failed) >= 0;
+}
+
 export function isAnswerResult(value: unknown): value is AnswerResult {
   if (
     !isRecord(value)
@@ -277,6 +349,15 @@ export async function listQuestions(): Promise<PublishedQuestion[]> {
     throw new ApiResponseError();
   }
   return body.items;
+}
+
+export async function getSystemHealth(): Promise<SystemHealth> {
+  const response = await fetch('/api/health');
+  const body = await readJson(response);
+  if (!isSystemHealth(body)) {
+    throw new ApiResponseError(response.status);
+  }
+  return body;
 }
 
 export async function askQuestion(

@@ -108,6 +108,58 @@ input:focus-visible,
   line-height: 1.6;
 }
 
+.service-health-card {
+  margin: 22px 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.service-health-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.service-health-card h2,
+.service-health-card p {
+  margin: 0;
+}
+
+.service-health-card header p,
+.service-health-card > p {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.service-health-card dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin: 16px 0 0;
+}
+
+.service-health-card dl > div {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f8fbfc;
+}
+
+.service-health-card dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.service-health-card dd {
+  margin: 4px 0 0;
+  color: var(--ink);
+  font-weight: 700;
+}
+
 .admin-workspace {
   display: grid;
   grid-template-columns: minmax(250px, 330px) minmax(0, 1fr);
