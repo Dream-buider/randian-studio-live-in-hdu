@@ -4,9 +4,9 @@
 
 - 工作区：`C:\Users\Star\Desktop\总项目文件\杭电飞书社区`
 - 分支：`codex/local-agent-platform`
-- 当前功能提交：`fa1f2a1 feat: expose honest component health state`
+- 当前代码提交：`536aefa test: add Phase B live API acceptance contract`
 - 当前状态：Phase A 已验证；Phase B 非依赖代码与静态运维检查已完成，但真实知识栈未部署。
-- 暂停状态：本地服务应处于停止状态，重启电脑后不会自动启动。
+- 暂停状态：已确认本地端口 `3210` 无监听，服务已停止；重启电脑后不会自动启动。
 - 运行根目录：`D:\Star\LIVE_IN_HDU_RUNTIME`
 
 恢复时先执行：
@@ -32,18 +32,25 @@ Invoke-RestMethod http://127.0.0.1:3210/api/health | ConvertTo-Json -Depth 8
   WeKnora、embedding、search、reviewQueue 和 integrationOutbox；健康检查不会调用模型。
 - Phase B 非依赖代码：PostgreSQL 17 仓储与迁移器、WeKnora REST、SearXNG、
   FAQ outbox、审批清单导入与失败重试、D 盘运维脚本。
-- 两次连续完整 Phase A 验证均通过：
-  - 后端 128 项：126 通过、2 项因真实外部环境缺失而明确跳过、0 失败；
+- 此轮最新一次完整平台验证通过：
+  - 后端 132 项：130 通过、2 项因真实外部环境缺失而明确跳过、0 失败；
   - 前端 31/31；
   - 旧 MVP 29/29；
-  - 生产构建、密钥扫描、HTTP 冒烟、SQLite 在线备份和两轮启停全部通过。
+  - 生产构建、密钥扫描、HTTP 冒烟、SQLite 在线备份和启停验证全部通过。
+- 新增 Phase B API 验收契约，覆盖预设问题、知识库、联网兜底精确批注、
+  “先入审核队列再返回”、并发未知问题唯一序号以及
+  `created_at ASC, ordinal ASC`；真实知识栈用例仍由
+  `PHASE_B_LIVE_E2E=1` 显式开启，不会在普通测试中擅自启动 Docker。
 - Phase B 静态检查通过：
   `start-knowledge-stack -StaticOnly`、
   `test-knowledge-stack -StaticOnly`、
   `backup-knowledge-stack -StaticOnly`。
-- 暂停前最后一次健康快照（2026-07-28 23:44 +08:00）为 `status=ok`：
+- 最近一次运行健康快照为 `status=ok`：
   SQLite healthy，TokenDance disabled/no-key，WeKnora not-configured，
   search unavailable/phase-a-disabled，待审核 0，outbox 0。
+- 隔离数据库浏览器验收已通过：390×844 手机界面、提问抽屉、第三阶段精确批注、
+  管理端“第 1 个未收录”、FIFO 待审核队列、重启后持久化均已验证；
+  浏览器控制台错误与页面错误均为 0。该验收使用合成隔离数据，不代表生产内容已发布。
 
 ## D 盘与本机状态
 
@@ -60,16 +67,17 @@ Invoke-RestMethod http://127.0.0.1:3210/api/health | ConvertTo-Json -Depth 8
 
 ## 下一步工作
 
-1. 重启后先按“恢复入口”启动 Phase A，确认健康接口和页面。
-2. 如继续 Phase A 验收，用隔离的 D 盘数据库完成浏览器自动验收；实体手机同一
-   Wi-Fi 测试仍需人工执行。
+1. 重启后先按“恢复入口”启动 Phase A，确认健康接口和页面；当前生产数据仍是
+   35 个意图、31 条原始回答、0 条已发布答案，因此用户首页空列表是预期结果。
+2. 自动浏览器验收已经完成；实体手机同一 Wi-Fi 测试仍需人工执行。
 3. 如进入 Phase B，先安装 Docker Desktop 与 Ollama，并在任何拉镜像/模型之前
    验证 Docker 磁盘镜像和 Ollama 模型目录实际位于 D 盘。
 4. 网络恢复后补装 `pg`、`@types/pg`，再配置真实的 TokenDance/WeKnora 密钥与
    两个知识库 ID。
 5. 取得明确获批的《2025年新生指南》原文件后，才可创建审批清单并导入。
 6. 完成 PostgreSQL 迁移、WeKnora 导入、20 问检索评测、新命名卷恢复演练、
-   两轮真实知识栈测试和实体手机验收。
+   两轮真实知识栈测试和实体手机验收；真实测试时按环境变量提供一条预设问题、
+   一条知识库问题和一条未知问题。
 
 ## 外部阻塞与禁止事项
 
