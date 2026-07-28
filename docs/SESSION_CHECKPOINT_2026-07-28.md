@@ -4,7 +4,7 @@
 
 - 工作区：`C:\Users\Star\Desktop\总项目文件\杭电飞书社区`
 - 分支：`codex/local-agent-platform`
-- 当前已验证提交：`3159414 docs: record consecutive local platform verification`
+- 当前功能提交：`1b7a5ad feat: show honest service health in admin console`
 - 当前状态：Phase A 已验证；Phase B 非依赖代码与静态运维检查已完成，但真实知识栈未部署。
 - 运行状态：2026-07-29 00:22（Asia/Shanghai）已实际启动，端口 `3210`
   由本项目 Node 进程监听；重启电脑后不会自动启动，届时仍需运行启动脚本。
@@ -37,7 +37,7 @@ Invoke-RestMethod http://127.0.0.1:3210/api/health | ConvertTo-Json -Depth 8
   FAQ outbox、审批清单导入与失败重试、D 盘运维脚本。
 - 2026-07-29 连续两次完整平台验证均通过：
   - 后端 132 项：130 通过、2 项因真实外部环境缺失而明确跳过、0 失败；
-  - 前端 31/31；
+  - 前端 34/34；
   - 旧 MVP 29/29；
   - 生产构建、密钥扫描、HTTP 冒烟、SQLite 在线备份和启停验证全部通过。
 - 新增 Phase B API 验收契约，覆盖预设问题、知识库、联网兜底精确批注、
@@ -54,6 +54,9 @@ Invoke-RestMethod http://127.0.0.1:3210/api/health | ConvertTo-Json -Depth 8
 - 隔离数据库浏览器验收已通过：390×844 手机界面、提问抽屉、第三阶段精确批注、
   管理端“第 1 个未收录”、FIFO 待审核队列、重启后持久化均已验证；
   浏览器控制台错误与页面错误均为 0。该验收使用合成隔离数据，不代表生产内容已发布。
+- 管理端已增加只读服务状态面板；真实 Edge 页面验证可如实显示 SQLite、
+  TokenDance、WeKnora、搜索、审核队列和 FAQ 同步状态。健康接口失败或悬挂时
+  不会阻塞内容审核区域。
 
 ## D 盘与本机状态
 

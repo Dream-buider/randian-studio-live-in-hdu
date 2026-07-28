@@ -942,6 +942,12 @@ Render `displayLabel`, question, temporary answer, sources, risk level, created 
 
 - [x] **Step 5: Run admin tests and build**
 
+Status 2026-07-29: the operations console also renders the existing component
+health contract without calling any provider. TDD covers honest disabled and
+unconfigured labels, an HTTP failure, and a health request that never resolves;
+content and review operations remain available in every case. The updated web
+suite is 34/34 and two consecutive full platform runs passed.
+
 Run:
 
 ```powershell

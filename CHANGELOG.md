@@ -2,12 +2,23 @@
 
 ## 2026-07-29
 
+### Added
+
+- 管理端新增只读服务状态面板，直接展示网关、业务数据库模式、TokenDance、
+  WeKnora、联网搜索、待审核队列及 FAQ 同步积压；只读取现有健康接口，不触发
+  模型或搜索调用，也不显示任何密钥。
+- 健康接口失败或长期无响应时，状态面板独立降级，问题整理、发布和审核区域仍会
+  正常加载。
+
 ### Verification
 
 - 在提交 `536aefa` 的 Phase B API 验收契约基础上，连续两次运行
   `scripts/test-freshman-platform.ps1`，两轮结果一致：后端 132 项中
-  130 通过、2 项真实外部环境用例明确跳过、0 失败；前端 31/31；旧 MVP
+  130 通过、2 项真实外部环境用例明确跳过、0 失败；最新前端 34/34；旧 MVP
   29/29；生产构建、密钥扫描、HTTP 冒烟、SQLite 在线备份和启停均通过。
+- Edge 对真实 `/admin` 页面完成状态面板验收：HTTP 200，SQLite、未配置的
+  TokenDance/WeKnora、Phase A 搜索状态与队列计数均如实显示，控制台错误和
+  页面错误为 0；截图位于 D 盘浏览器产物目录。
 - 当前预检仍只报告 `docker-cli-missing` 与 `ollama-cli-missing`；
   npm registry 的 `pg` 查询因 DNS `ENOTFOUND` 失败，因此没有把 PostgreSQL、
   WeKnora、SearXNG 或 Ollama 误报为已部署。
