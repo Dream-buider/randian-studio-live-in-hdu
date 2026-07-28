@@ -7,6 +7,8 @@ import test from 'node:test';
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
 const START_SCRIPT = path.join(REPO_ROOT, 'scripts', 'start-knowledge-stack.ps1');
 const STOP_SCRIPT = path.join(REPO_ROOT, 'scripts', 'stop-knowledge-stack.ps1');
+const CHECK_SCRIPT = path.join(REPO_ROOT, 'scripts', 'test-knowledge-stack.ps1');
+const BACKUP_SCRIPT = path.join(REPO_ROOT, 'scripts', 'backup-knowledge-stack.ps1');
 const TEMP_ROOT = 'D:\\Star\\LIVE_IN_HDU_RUNTIME\\temp';
 const PINNED_COMMIT = '150c07368b84b4f50421b8957255213cbbadc175';
 
@@ -76,4 +78,20 @@ test('knowledge stack stop command never deletes volumes', () => {
   assert.equal(source.status, 0, `${source.stdout}\n${source.stderr}`);
   assert.match(source.stdout, /\bstop\b/);
   assert.doesNotMatch(source.stdout, /\bdown\b|--volumes|-v\b/i);
+});
+
+test('knowledge stack static operations expose a D-drive-only safe plan without Docker', () => {
+  const check = run(CHECK_SCRIPT, ['-StaticOnly']);
+  const backup = run(BACKUP_SCRIPT, ['-StaticOnly']);
+
+  assert.equal(check.status, 0, `${check.stdout}\n${check.stderr}`);
+  assert.equal(backup.status, 0, `${backup.stdout}\n${backup.stderr}`);
+  const checkPlan = JSON.parse(check.stdout);
+  const backupPlan = JSON.parse(backup.stdout);
+  assert.equal(checkPlan.dockerInvoked, false);
+  assert.deepEqual(checkPlan.startOrder, ['postgres', 'weknora-and-searxng', 'gateway']);
+  assert.equal(backupPlan.dockerInvoked, false);
+  assert.match(backupPlan.backupRoot, /^D:\\Star\\LIVE_IN_HDU_RUNTIME\\backups$/i);
+  assert.match(backupPlan.manifest, /manifest\.json$/);
+  assert.match(backupPlan.redactedConfig, /config\.redacted\.json$/);
 });

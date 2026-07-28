@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$ValidateOnly,
+    [switch]$StaticOnly,
     [string]$RepoRootOverride = ''
 )
 
@@ -176,6 +177,15 @@ if ($ValidateOnly) {
     $validation | ConvertTo-Json -Compress
     exit 0
 }
+if ($StaticOnly) {
+    [ordered]@{
+        dockerInvoked = $false
+        runtimeRoot = $RuntimeRoot
+        startOrder = @('postgres', 'weknora-and-searxng', 'gateway')
+        volumesDeleted = $false
+    } | ConvertTo-Json -Compress
+    exit 0
+}
 
 if ([IO.Path]::GetPathRoot($RuntimeRoot).ToUpperInvariant() -ne 'D:\') {
     throw "LIVE_IN_HDU_RUNTIME_ROOT must be on D:, found $RuntimeRoot"
@@ -231,7 +241,9 @@ $composeArgs = @(
 )
 & docker @composeArgs config | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'docker compose config validation failed.' }
-& docker @composeArgs up -d postgres redis docreader app frontend searxng-init searxng
+& docker @composeArgs up -d postgres redis
+if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL and Redis failed to start.' }
+& docker @composeArgs up -d docreader app frontend searxng-init searxng
 if ($LASTEXITCODE -ne 0) { throw 'WeKnora minimum stack failed to start.' }
 
 $deadline = [DateTime]::UtcNow.AddMinutes(5)
