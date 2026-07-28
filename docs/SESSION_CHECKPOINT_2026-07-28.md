@@ -1,70 +1,81 @@
-# 2026-07-28 暂停检查点
+# 2026-07-28 可恢复暂停检查点
 
 ## 恢复入口
 
+- 工作区：`C:\Users\Star\Desktop\总项目文件\杭电飞书社区`
 - 分支：`codex/local-agent-platform`
-- 暂停前最后一个完整功能提交：`ed19560 feat: add approved knowledge import retry`
-- 本检查点提交包含运维文档、计划状态，以及下一步健康接口的 RED 测试。
-- Goal 仍应保持 active；Phase A 可运行，Phase B 不得宣称真实部署完成。
+- 当前功能提交：`fa1f2a1 feat: expose honest component health state`
+- 当前状态：Phase A 已验证；Phase B 非依赖代码与静态运维检查已完成，但真实知识栈未部署。
+- 暂停状态：本地服务应处于停止状态，重启电脑后不会自动启动。
+- 运行根目录：`D:\Star\LIVE_IN_HDU_RUNTIME`
 
-## 已完成并提交
+恢复时先执行：
 
-- Phase A Vue + Fastify + SQLite 本地平台。
-- D 盘 junction、启停、测试、备份恢复和 Edge 390×844 模拟验收。
-- PostgreSQL 仓储与迁移器、WeKnora 检索、SearXNG、FAQ outbox。
-- 审批知识清单校验、哈希幂等、导入记录、公开 REST 上传、管理页状态。
-- 失败知识条目按原审批清单和原 SHA-256 重试。
-- 业务 PostgreSQL 17 与 WeKnora PostgreSQL 分离。
-- D 盘知识栈启停、测试和备份脚本。
-- `docs/PHASE_B_LOCAL_RUNBOOK.md`。
+```powershell
+Set-Location 'C:\Users\Star\Desktop\总项目文件\杭电飞书社区'
+git status --short --branch
+git log -3 --oneline
+.\scripts\start-freshman-platform.ps1
+Invoke-RestMethod http://127.0.0.1:3210/api/health | ConvertTo-Json -Depth 8
+```
 
-## 当前故意停在 RED 的一步
+用户端为 `http://localhost:3210`，审核后台为
+`http://localhost:3210/admin`。本地服务启动后，电脑必须保持开机且不能休眠。
 
-正在增强 `/api/health`，使其同时报告：
+## 已完成并验证
 
-- `gateway`
-- `businessDatabase`
-- `weknora`
-- `embedding`
-- `tokenDance` 的配置状态与最近真实调用状态/时间
-- `search`
-- `reviewQueue`
-- `integrationOutbox`
+- Phase A：Vue 手机 H5、Fastify、SQLite、动态问题卡、知识条目、未知问题即时回复与
+  FIFO 审核、人工发布版本、管理端、D 盘运行、启停、在线备份和恢复。
+- 数据基线：35 个意图、31 条原始回答、0 条自动发布答案；Q11 为空，纯数字
+  `19` 不会被当成回答。
+- 健康接口：独立报告 gateway、businessDatabase、TokenDance 最后一次真实调用、
+  WeKnora、embedding、search、reviewQueue 和 integrationOutbox；健康检查不会调用模型。
+- Phase B 非依赖代码：PostgreSQL 17 仓储与迁移器、WeKnora REST、SearXNG、
+  FAQ outbox、审批清单导入与失败重试、D 盘运维脚本。
+- 两次连续完整 Phase A 验证均通过：
+  - 后端 128 项：126 通过、2 项因真实外部环境缺失而明确跳过、0 失败；
+  - 前端 31/31；
+  - 旧 MVP 29/29；
+  - 生产构建、密钥扫描、HTTP 冒烟、SQLite 在线备份和两轮启停全部通过。
+- Phase B 静态检查通过：
+  `start-knowledge-stack -StaticOnly`、
+  `test-knowledge-stack -StaticOnly`、
+  `backup-knowledge-stack -StaticOnly`。
+- 暂停前最后一次健康快照（2026-07-28 23:44 +08:00）为 `status=ok`：
+  SQLite healthy，TokenDance disabled/no-key，WeKnora not-configured，
+  search unavailable/phase-a-disabled，待审核 0，outbox 0。
 
-已先修改：
+## D 盘与本机状态
 
-- `apps/freshman-mvp/test/tokendance-provider.test.ts`
-- `apps/freshman-mvp/test/e2e-v2.test.ts`
+- `apps/freshman-mvp/runtime`、`dist`、`node_modules` 以及
+  `output/freshman-platform`、浏览器产物均通过 junction 指向 D 盘。
+- 当前知识栈预检报告：
+  `D:\Star\LIVE_IN_HDU_RUNTIME\knowledge\phase-b-preflight-current.json`。
+- 预检只剩两个本机软件失败项：`docker-cli-missing` 与
+  `ollama-cli-missing`。
+- `C:\Users\Star\.wslconfig` 已写入 12 GB 内存、12 核、8 GB D 盘 swap 配置；
+  需在安装 Docker/Ollama 后重启 WSL/Docker 才会生效。
+- `pg` 与 `@types/pg` 已声明但尚未下载；网络恢复后必须使用 D 盘 TEMP、npm cache
+  和 node_modules 安装。一次超时的 npm 安装曾移除 C 盘 junction 入口，现已安全恢复。
 
-测试当前预期失败，因为 `TokenDanceProvider.status()` 和扩展健康结构尚未实现。
-恢复时必须继续 TDD：先重跑并确认 RED，再实现最小代码，最后跑聚焦测试和 build。
+## 下一步工作
 
-## 恢复后的顺序
+1. 重启后先按“恢复入口”启动 Phase A，确认健康接口和页面。
+2. 如继续 Phase A 验收，用隔离的 D 盘数据库完成浏览器自动验收；实体手机同一
+   Wi-Fi 测试仍需人工执行。
+3. 如进入 Phase B，先安装 Docker Desktop 与 Ollama，并在任何拉镜像/模型之前
+   验证 Docker 磁盘镜像和 Ollama 模型目录实际位于 D 盘。
+4. 网络恢复后补装 `pg`、`@types/pg`，再配置真实的 TokenDance/WeKnora 密钥与
+   两个知识库 ID。
+5. 取得明确获批的《2025年新生指南》原文件后，才可创建审批清单并导入。
+6. 完成 PostgreSQL 迁移、WeKnora 导入、20 问检索评测、新命名卷恢复演练、
+   两轮真实知识栈测试和实体手机验收。
 
-1. 实现 TokenDance 最近真实调用状态，不允许健康接口主动调用模型。
-2. 扩展健康 JSON，同时保留旧的 `database/model/knowledge` 兼容字段。
-3. 跑聚焦后端测试、前端 31 项和 build。
-4. 更新两份实施计划。
-5. 连续运行两次完整 Phase A 验证。
-6. 再做静态 Phase B 验证、密钥扫描、D 盘占用检查。
-7. 启动 Phase A，确认 `http://localhost:3210` 与 `/admin`。
+## 外部阻塞与禁止事项
 
-## 尚需外部条件
-
-- Docker Desktop 未安装，且必须把磁盘镜像迁到
-  `D:\Star\LIVE_IN_HDU_RUNTIME\docker` 后才允许拉镜像。
-- Ollama 未安装；模型必须放在
-  `D:\Star\LIVE_IN_HDU_RUNTIME\phase-b\ollama-models`。
-- npm registry 当前连接超时，`pg` 与 `@types/pg` 尚未下载到 D 盘 node_modules。
-- 缺 TokenDance/WeKnora 真实密钥与两个知识库 ID。
+- 缺 Docker Desktop、Ollama、可用 npm 网络、真实密钥和两个 WeKnora 知识库 ID。
 - 缺明确确认且获批的《2025年新生指南》原始文件。
-- 未做真实 PostgreSQL 迁移、WeKnora 导入、20 问检索评测和新卷恢复演练。
-- 未做实体手机同一 Wi-Fi 验收。
-
-## 不能触碰
-
-- 不导入整个 `最新资料`。
-- 不自动发布任何原始回答。
+- 不导入整个 `最新资料`，不自动发布原始回答。
 - Q11 继续空白，纯数字 `19` 继续拒绝为回答。
 - 不提交 `.env.local`、API Key 或数据库密码。
 - 不执行 `docker compose down -v`。

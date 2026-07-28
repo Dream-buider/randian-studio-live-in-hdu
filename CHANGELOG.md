@@ -18,6 +18,9 @@
 ### Verification
 
 - Phase A 已完成后端、前端、旧 MVP、生产构建、密钥扫描、HTTP、备份恢复与 Edge 390×844 模拟视口验收。
+- `scripts/test-freshman-platform.ps1` 已连续完整通过两次：后端 128 项中 126 通过、2 项因真实外部环境缺失明确跳过，前端 31/31，旧 MVP 29/29，且生产构建、密钥扫描、HTTP 冒烟、在线备份和两轮启停均通过。
+- 扩展 `/api/health` 已验证会独立报告网关、业务数据库、模型、检索、审核队列与 outbox 状态，且不会为健康探测主动调用模型或搜索。
+- Phase B 的启动、测试和备份脚本均通过 `-StaticOnly` 验证。
 - Phase B 的无容器单元测试、脚本静态契约和生产构建已验证；真实 Docker/WeKnora/PostgreSQL/Ollama 联调仍未执行。
 
 ### Notes
@@ -25,6 +28,7 @@
 - 当前本机缺 Docker Desktop 和 Ollama，npm registry 连接超时，真实密钥和两个 WeKnora 知识库 ID 未配置。
 - 工作区未找到可明确确认且获批的《2025年新生指南》原始文件，因此未复制、导入或虚构首批语料。
 - 本地电脑关机、休眠、断网或服务停止后，客户端访问会中断；TokenDance 只提供模型能力，不托管本地服务。
+- 当前恢复入口和未完成项记录于 `docs/SESSION_CHECKPOINT_2026-07-28.md`；暂停时本地服务停止，重启后需显式运行启动脚本。
 
 本文件记录 HDU Feishu Community OS 的执行变更。
 

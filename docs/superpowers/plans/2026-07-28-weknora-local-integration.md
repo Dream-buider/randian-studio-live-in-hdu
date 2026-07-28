@@ -1010,7 +1010,11 @@ npm --prefix apps/freshman-mvp test -- --test-name-pattern="Phase B full flow"
 
 Expected: FAIL until health, lifecycle, and degradation work is complete.
 
-- [ ] **Step 3: Implement component health**
+- [x] **Step 3: Implement component health**
+
+Status 2026-07-28: component health is implemented and covered by focused tests.
+The health route reports configuration and the latest real provider call state; it
+does not invoke TokenDance or SearXNG merely to answer a health request.
 
 `GET /api/health` returns independent states for:
 
