@@ -1048,6 +1048,13 @@ The script must use SQLite backup/VACUUM INTO semantics, include UTC timestamp i
 
 - [x] **Step 6: Run all automated checks**
 
+Status 2026-07-29: after adding the explicit Phase B API acceptance contract,
+`scripts/test-freshman-platform.ps1` passed twice consecutively from stopped
+gateway processes. Each run reported backend 130/132 passing with the two real
+external-environment cases explicitly skipped, web 31/31, legacy 29/29, plus a
+successful production build, secret scan, HTTP smoke test, online backup, and
+lifecycle verification.
+
 Run:
 
 ```powershell
@@ -1106,6 +1113,12 @@ git commit -m "feat: deliver local freshman agent foundation"
 ---
 
 ## Phase A Completion Gate
+
+Status 2026-07-29: every automatable Phase A gate has passed. The gate is not
+represented as fully complete because the production database still has zero
+human-published canonical answers and a physical same-Wi-Fi phone has not been
+tested. The isolated browser acceptance used an explicitly synthetic approved
+answer and therefore does not substitute for either human step.
 
 Do not start Phase B until all are true:
 

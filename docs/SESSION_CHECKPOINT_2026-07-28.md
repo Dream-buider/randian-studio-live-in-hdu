@@ -32,7 +32,7 @@ Invoke-RestMethod http://127.0.0.1:3210/api/health | ConvertTo-Json -Depth 8
   WeKnora、embedding、search、reviewQueue 和 integrationOutbox；健康检查不会调用模型。
 - Phase B 非依赖代码：PostgreSQL 17 仓储与迁移器、WeKnora REST、SearXNG、
   FAQ outbox、审批清单导入与失败重试、D 盘运维脚本。
-- 此轮最新一次完整平台验证通过：
+- 2026-07-29 连续两次完整平台验证均通过：
   - 后端 132 项：130 通过、2 项因真实外部环境缺失而明确跳过、0 失败；
   - 前端 31/31；
   - 旧 MVP 29/29；
@@ -60,6 +60,8 @@ Invoke-RestMethod http://127.0.0.1:3210/api/health | ConvertTo-Json -Depth 8
   `D:\Star\LIVE_IN_HDU_RUNTIME\knowledge\phase-b-preflight-current.json`。
 - 预检只剩两个本机软件失败项：`docker-cli-missing` 与
   `ollama-cli-missing`。
+- 2026-07-29 再次访问 npm registry 时，`pg` 查询因 DNS `ENOTFOUND` 失败；
+  `pg` 与 `@types/pg` 仍未实际安装。
 - `C:\Users\Star\.wslconfig` 已写入 12 GB 内存、12 核、8 GB D 盘 swap 配置；
   需在安装 Docker/Ollama 后重启 WSL/Docker 才会生效。
 - `pg` 与 `@types/pg` 已声明但尚未下载；网络恢复后必须使用 D 盘 TEMP、npm cache

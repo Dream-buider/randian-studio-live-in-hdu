@@ -989,6 +989,14 @@ git commit -m "feat: synchronize reviewed answers to WeKnora FAQ"
 
 - [ ] **Step 1: Write the full Phase B end-to-end test**
 
+Status 2026-07-29: the always-runnable contract now verifies the real API shape
+for healthy PostgreSQL mode, nonempty published content, preset and knowledge
+routes with citations, the exact web disclaimer, persistence visibility,
+concurrent unique ordinals, and server FIFO order. The gated live case uses 20
+concurrent unknown questions when `PHASE_B_LIVE_E2E=1`. This step remains
+unchecked because real component-stop degradation cases 6–10 require the
+missing Docker/Ollama/PostgreSQL/WeKnora/SearXNG environment and have not run.
+
 Test:
 
 1. exact semantic variant of a published preset returns route `preset`;

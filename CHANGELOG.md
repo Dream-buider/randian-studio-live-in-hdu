@@ -1,5 +1,28 @@
 # CHANGELOG
 
+## 2026-07-29
+
+### Verification
+
+- 在提交 `536aefa` 的 Phase B API 验收契约基础上，连续两次运行
+  `scripts/test-freshman-platform.ps1`，两轮结果一致：后端 132 项中
+  130 通过、2 项真实外部环境用例明确跳过、0 失败；前端 31/31；旧 MVP
+  29/29；生产构建、密钥扫描、HTTP 冒烟、SQLite 在线备份和启停均通过。
+- 当前预检仍只报告 `docker-cli-missing` 与 `ollama-cli-missing`；
+  npm registry 的 `pg` 查询因 DNS `ENOTFOUND` 失败，因此没有把 PostgreSQL、
+  WeKnora、SearXNG 或 Ollama 误报为已部署。
+- Phase B 启动、测试与备份的 `-StaticOnly` 契约再次通过，确认默认运行根为
+  `D:\Star\LIVE_IN_HDU_RUNTIME`、启动顺序为业务 PostgreSQL → WeKnora/SearXNG
+  → 网关、备份保留 14 份且不删除数据卷。
+
+### Notes
+
+- Phase A 自动化和隔离浏览器验收已完成，但生产库仍为 35 个意图、31 条原始回答、
+  0 条人工发布答案；Q11 继续为空。实体手机同一 Wi-Fi 操作和正式答案人工发布
+  仍不能由自动测试替代。
+- 精确目标目录 `D:\LIVE_IN_HDU_RUNTIME` 受当前普通用户 D 盘根目录 ACL 限制；
+  实际可写运行根继续为 `D:\Star\LIVE_IN_HDU_RUNTIME`，预检报告会如实记录该差异。
+
 ## 2026-07-28
 
 ### Added
@@ -18,7 +41,8 @@
 ### Verification
 
 - Phase A 已完成后端、前端、旧 MVP、生产构建、密钥扫描、HTTP、备份恢复与 Edge 390×844 模拟视口验收。
-- `scripts/test-freshman-platform.ps1` 已连续完整通过两次：后端 128 项中 126 通过、2 项因真实外部环境缺失明确跳过，前端 31/31，旧 MVP 29/29，且生产构建、密钥扫描、HTTP 冒烟、在线备份和两轮启停均通过。
+- `scripts/test-freshman-platform.ps1` 已连续完整通过两次；最新基线见
+  2026-07-29 验证记录。
 - 扩展 `/api/health` 已验证会独立报告网关、业务数据库、模型、检索、审核队列与 outbox 状态，且不会为健康探测主动调用模型或搜索。
 - Phase B 的启动、测试和备份脚本均通过 `-StaticOnly` 验证。
 - 使用独立 D 盘数据库重新完成 Edge 390×844 浏览器验收：问题卡、完整回答、目录、自由提问、固定批注、上下文返回和管理端 FIFO 均通过；重启后发布版本与 ordinal 1 审核记录保留，控制台错误和页面异常均为 0。
