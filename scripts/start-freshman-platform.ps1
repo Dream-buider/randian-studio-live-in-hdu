@@ -111,6 +111,44 @@ function Assert-ValidMetadata($Metadata) {
     }
 }
 
+function Read-ValidatedImportReport([string]$PathValue) {
+    try {
+        $report = Get-Content -Raw -LiteralPath $PathValue -Encoding UTF8 | ConvertFrom-Json
+    } catch {
+        throw "Import report is invalid; refusing to trust the bootstrap baseline: $PathValue"
+    }
+    $intents = @($report.intents)
+    $rawAnswers = @($report.rawAnswers)
+    $intentIds = @($intents | ForEach-Object { [string]$_.id })
+    $rawAnswerIds = @($rawAnswers | ForEach-Object { [string]$_.id })
+    if (
+        [int]$report.questionCount -le 0 -or
+        [int]$report.questionCount -ne $intents.Count -or
+        [int]$report.acceptedAnswerCount -ne $rawAnswers.Count -or
+        [int]$report.acceptedAnswerCount -lt 0 -or
+        [int]$report.publishedCount -ne 0 -or
+        ($intentIds | Where-Object { -not $_ }).Count -gt 0 -or
+        ($rawAnswerIds | Where-Object { -not $_ }).Count -gt 0 -or
+        ($intentIds | Sort-Object -Unique).Count -ne $intentIds.Count -or
+        ($rawAnswerIds | Sort-Object -Unique).Count -ne $rawAnswerIds.Count
+    ) {
+        throw "Import report count or identity mismatch; refusing to trust the bootstrap baseline: $PathValue"
+    }
+    return $report
+}
+
+function Assert-DynamicBaseline($State, $Report) {
+    if (
+        [int]$State.counts.intents -lt [int]$Report.questionCount -or
+        [int]$State.counts.rawAnswers -lt [int]$Report.acceptedAnswerCount -or
+        [int]$State.counts.q11RawAnswers -ne 0 -or
+        [int]$State.counts.q11Published -ne 0 -or
+        [int]$State.counts.invalidNumericRawAnswers -ne 0
+    ) {
+        throw "Database does not satisfy the import-report baseline: $($State.counts | ConvertTo-Json -Compress)"
+    }
+}
+
 New-Item -ItemType Directory -Path $TempRoot, $NpmCache -Force | Out-Null
 Assert-DDriveTarget $RuntimeLink 'Runtime junction'
 Assert-DDriveTarget $OutputRoot 'Output junction'
@@ -201,26 +239,28 @@ $ImportScript = Join-Path $AppRoot 'scripts\import-feishu-xlsx.mts'
 $stateJson = (& npm --prefix $AppRoot exec -- tsx $DatabaseStateScript --database $DatabasePath | Out-String)
 if ($LASTEXITCODE -ne 0) { throw "Could not inspect production database" }
 $state = $stateJson | ConvertFrom-Json
-if ([int]$state.counts.intents -eq 0) {
+$needsBootstrapImport = [int]$state.counts.intents -eq 0 -or
+    -not (Test-Path -LiteralPath $ImportReport)
+if ($needsBootstrapImport) {
     if (-not (Test-Path -LiteralPath $WorkbookPath)) {
         throw "First-run workbook is missing: $WorkbookPath"
     }
     $importJson = (& npm --prefix $AppRoot exec -- tsx $ImportScript --input $WorkbookPath --database $DatabasePath | Out-String)
     if ($LASTEXITCODE -ne 0) { throw "First-run workbook import failed" }
-    [IO.File]::WriteAllText($ImportReport, $importJson, [Text.UTF8Encoding]::new($false))
+    $reportStaging = "$ImportReport.$PID.tmp"
+    try {
+        [IO.File]::WriteAllText($reportStaging, $importJson, [Text.UTF8Encoding]::new($false))
+        Read-ValidatedImportReport $reportStaging | Out-Null
+        Move-Item -LiteralPath $reportStaging -Destination $ImportReport -Force
+    } finally {
+        Remove-Item -LiteralPath $reportStaging -Force -ErrorAction SilentlyContinue
+    }
     $stateJson = (& npm --prefix $AppRoot exec -- tsx $DatabaseStateScript --database $DatabasePath | Out-String)
     if ($LASTEXITCODE -ne 0) { throw "Could not verify imported database" }
     $state = $stateJson | ConvertFrom-Json
 }
-if (
-        [int]$state.counts.intents -lt 35 -or
-        [int]$state.counts.rawAnswers -lt 31 -or
-        [int]$state.counts.q11RawAnswers -ne 0 -or
-        [int]$state.counts.q11Published -ne 0 -or
-        [int]$state.counts.invalidNumericRawAnswers -ne 0
-) {
-    throw "Suspicious partial baseline database; refusing to start: $($state.counts | ConvertTo-Json -Compress)"
-}
+$baselineReport = Read-ValidatedImportReport $ImportReport
+Assert-DynamicBaseline $state $baselineReport
 
 $node = (Get-Command node -ErrorAction Stop).Source
 Remove-Item -LiteralPath $StdoutLog, $StderrLog -Force -ErrorAction SilentlyContinue

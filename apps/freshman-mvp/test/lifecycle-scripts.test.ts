@@ -1,14 +1,13 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { closeSync, mkdirSync, openSync, readFileSync, rmSync } from 'node:fs';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { migrateDatabase } from '../src/db/migrations.js';
 import { openDatabase } from '../src/db/sqlite.js';
 import { SqliteContentRepository } from '../src/repositories/sqlite-content-repository.js';
-import { importWorkbook } from '../src/services/content-importer.js';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
 const APP_ROOT = path.join(REPO_ROOT, 'apps', 'freshman-mvp');
@@ -18,7 +17,6 @@ const TEST_SCRIPT = path.join(REPO_ROOT, 'scripts', 'test-freshman-platform.ps1'
 const OUTPUT_ROOT = path.join(REPO_ROOT, 'output', 'freshman-platform');
 const BROWSER_OUTPUT = path.join(REPO_ROOT, 'output', 'playwright', 'runtime');
 const TEMP_ROOT = 'D:\\Star\\LIVE_IN_HDU_RUNTIME\\temp';
-const WORKBOOK = path.join(REPO_ROOT, 'output', 'playwright', 'current-40q-2026-07-27.xlsx');
 
 function runPowerShell(script: string, args: string[] = []) {
   mkdirSync(TEMP_ROOT, { recursive: true });
@@ -103,15 +101,15 @@ test('lifecycle ownership rejects forged metadata and never accepts or stops a f
   }
 });
 
-test('start rejects a suspicious partial bootstrap database but real start and stop still work', {
+test('start recovers a partial database without a report and validates a dynamic report baseline', {
   timeout: 120_000,
 }, async () => {
   await mkdir(TEMP_ROOT, { recursive: true });
   const directory = await mkdtemp(path.join(TEMP_ROOT, 'lifecycle-state-'));
   const partialDatabase = path.join(directory, 'partial.db');
-  const validDatabase = path.join(directory, 'valid.db');
   const partialInstance = `partial-${process.pid}`;
-  const validInstance = `valid-${process.pid}`;
+  const instanceOutput = path.join(OUTPUT_ROOT, partialInstance);
+  const reportPath = path.join(instanceOutput, 'import-report.json');
   const partial = openDatabase(partialDatabase);
   migrateDatabase(partial);
   const partialContent = new SqliteContentRepository(partial);
@@ -130,48 +128,79 @@ test('start rejects a suspicious partial bootstrap database but real start and s
   });
   partial.close();
 
-  const valid = openDatabase(validDatabase);
-  migrateDatabase(valid);
-  const validContent = new SqliteContentRepository(valid);
-  await importWorkbook(WORKBOOK, validContent);
-  valid.close();
-
   try {
-    const rejected = runPowerShell(START_SCRIPT, [
+    const recovered = runPowerShell(START_SCRIPT, [
       '-InstanceName', partialInstance,
       '-DatabasePathOverride', partialDatabase,
       '-PortOverride', '33992',
     ]);
-    assert.notEqual(rejected.status, 0, `${rejected.stdout}\n${rejected.stderr}`);
-    assert.match(`${rejected.stdout}\n${rejected.stderr}`, /partial|baseline|残缺|suspicious/i);
-
-    const started = runPowerShell(START_SCRIPT, [
-      '-InstanceName', validInstance,
-      '-DatabasePathOverride', validDatabase,
-      '-PortOverride', '33993',
-    ]);
-    assert.equal(started.status, 0, `${started.stdout}\n${started.stderr}`);
+    assert.equal(recovered.status, 0, `${recovered.stdout}\n${recovered.stderr}`);
+    const report = JSON.parse(await readFile(reportPath, 'utf8')) as {
+      questionCount: number;
+      acceptedAnswerCount: number;
+      intents: unknown[];
+      rawAnswers: unknown[];
+    };
+    assert.equal(report.questionCount, report.intents.length);
+    assert.equal(report.acceptedAnswerCount, report.rawAnswers.length);
     const alreadyRunning = runPowerShell(START_SCRIPT, [
-      '-InstanceName', validInstance,
-      '-DatabasePathOverride', validDatabase,
+      '-InstanceName', partialInstance,
+      '-DatabasePathOverride', partialDatabase,
     ]);
     assert.equal(alreadyRunning.status, 0, `${alreadyRunning.stdout}\n${alreadyRunning.stderr}`);
-    assert.match(alreadyRunning.stdout, /localhost:33993/);
+    assert.match(alreadyRunning.stdout, /localhost:33992/);
     assert.doesNotMatch(alreadyRunning.stdout, /localhost:3210/);
     const conflictingPort = runPowerShell(START_SCRIPT, [
-      '-InstanceName', validInstance,
-      '-DatabasePathOverride', validDatabase,
-      '-PortOverride', '33994',
+      '-InstanceName', partialInstance,
+      '-DatabasePathOverride', partialDatabase,
+      '-PortOverride', '33993',
     ]);
     assert.notEqual(conflictingPort.status, 0, `${conflictingPort.stdout}\n${conflictingPort.stderr}`);
-    assert.match(`${conflictingPort.stdout}\n${conflictingPort.stderr}`, /conflict|33993/i);
-    const stopped = runPowerShell(STOP_SCRIPT, ['-InstanceName', validInstance]);
+    assert.match(`${conflictingPort.stdout}\n${conflictingPort.stderr}`, /conflict|33992/i);
+    const stopped = runPowerShell(STOP_SCRIPT, ['-InstanceName', partialInstance]);
     assert.equal(stopped.status, 0, `${stopped.stdout}\n${stopped.stderr}`);
+
+    const expanded = openDatabase(partialDatabase);
+    const expandedContent = new SqliteContentRepository(expanded);
+    await expandedContent.createIntent({
+      id: 'future-added-intent',
+      externalId: 'Q-FUTURE',
+      category: '后续维护',
+      question: '后续新增的问题是否需要修改启动脚本？',
+      intentDescription: '用于证明问题数量完全由数据驱动。',
+      aliases: [],
+      keywords: [],
+      excludeKeywords: [],
+      active: true,
+      featured: false,
+      displayOrder: report.questionCount + 1,
+    });
+    expanded.close();
+    const expandedStart = runPowerShell(START_SCRIPT, [
+      '-InstanceName', partialInstance,
+      '-DatabasePathOverride', partialDatabase,
+      '-PortOverride', '33992',
+    ]);
+    assert.equal(expandedStart.status, 0, `${expandedStart.stdout}\n${expandedStart.stderr}`);
+    assert.equal(
+      runPowerShell(STOP_SCRIPT, ['-InstanceName', partialInstance]).status,
+      0,
+    );
+
+    await writeFile(reportPath, JSON.stringify({
+      ...report,
+      questionCount: report.questionCount + 1,
+    }));
+    const mismatch = runPowerShell(START_SCRIPT, [
+      '-InstanceName', partialInstance,
+      '-DatabasePathOverride', partialDatabase,
+      '-PortOverride', '33992',
+    ]);
+    assert.notEqual(mismatch.status, 0, `${mismatch.stdout}\n${mismatch.stderr}`);
+    assert.match(`${mismatch.stdout}\n${mismatch.stderr}`, /report|count|baseline|mismatch/i);
   } finally {
     runPowerShell(STOP_SCRIPT, ['-InstanceName', partialInstance]);
-    runPowerShell(STOP_SCRIPT, ['-InstanceName', validInstance]);
     await rm(path.join(OUTPUT_ROOT, partialInstance), { recursive: true, force: true });
-    await rm(path.join(OUTPUT_ROOT, validInstance), { recursive: true, force: true });
     await rm(directory, { recursive: true, force: true });
   }
 });

@@ -111,6 +111,26 @@ function Assert-NoSecrets {
     }
 }
 
+function Read-ValidatedImportReport([string]$PathValue) {
+    try {
+        $report = Get-Content -Raw -LiteralPath $PathValue -Encoding UTF8 | ConvertFrom-Json
+    } catch {
+        throw "Import report is invalid: $PathValue"
+    }
+    $intents = @($report.intents)
+    $rawAnswers = @($report.rawAnswers)
+    if (
+        [int]$report.questionCount -le 0 -or
+        [int]$report.questionCount -ne $intents.Count -or
+        [int]$report.acceptedAnswerCount -ne $rawAnswers.Count -or
+        [int]$report.acceptedAnswerCount -lt 0 -or
+        [int]$report.publishedCount -ne 0
+    ) {
+        throw "Import report count mismatch: $PathValue"
+    }
+    return $report
+}
+
 foreach ($scriptName in @(
     'start-freshman-platform.ps1',
     'stop-freshman-platform.ps1',
@@ -161,9 +181,10 @@ try {
     $stateJson = (& npm --prefix $AppRoot exec -- tsx $DatabaseStateScript --database $DatabasePath | Out-String)
     if ($LASTEXITCODE -ne 0) { throw 'Production data count check failed' }
     $state = $stateJson | ConvertFrom-Json
+    $baselineReport = Read-ValidatedImportReport (Join-Path $OutputRoot 'import-report.json')
     if (
-        [int]$state.counts.intents -lt 35 -or
-        [int]$state.counts.rawAnswers -lt 31 -or
+        [int]$state.counts.intents -lt [int]$baselineReport.questionCount -or
+        [int]$state.counts.rawAnswers -lt [int]$baselineReport.acceptedAnswerCount -or
         [int]$state.counts.q11RawAnswers -ne 0 -or
         [int]$state.counts.q11Published -ne 0 -or
         [int]$state.counts.invalidNumericRawAnswers -ne 0
