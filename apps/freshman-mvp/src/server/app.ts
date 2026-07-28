@@ -16,6 +16,7 @@ import type {
 import type { ReviewStatus } from '../domain/models.js';
 import { ContentReviewService } from '../services/content-review-service.js';
 import type { FaqSyncService } from '../services/faq-sync-service.js';
+import type { KnowledgeImportStore } from '../services/knowledge-import-service.js';
 
 export interface AnswerRouterContract {
   answer(question: string): Promise<unknown>;
@@ -29,6 +30,7 @@ export interface AppDependencies {
   health?: () => Promise<unknown>;
   publicDir?: string;
   faqSync?: Pick<FaqSyncService, 'retry'>;
+  knowledgeImports?: Pick<KnowledgeImportStore, 'list'>;
 }
 
 const LOOPBACK_ADDRESSES = new BlockList();
@@ -188,6 +190,11 @@ export function createApp(deps: AppDependencies): FastifyInstance {
 
   app.get('/api/admin/intents', async () => ({
     items: await reviewService.listIntentWorkspace(),
+  }));
+
+  app.get('/api/admin/knowledge-imports', async () => ({
+    configured: Boolean(deps.knowledgeImports),
+    items: deps.knowledgeImports ? await deps.knowledgeImports.list() : [],
   }));
 
   app.get<{

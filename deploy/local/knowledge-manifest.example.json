@@ -1,0 +1,18 @@
+{
+  "_comment": "示例不会被自动导入。请先把人工确认过的文件放入 approved-knowledge，再复制并修改本清单。",
+  "_manualBlocker": "当前工作区没有找到可明确确认并获批的《2025年新生指南》文件，因此本次不会复制或导入该指南；须由管理员提供文件并完成审批后再建立真实清单。",
+  "version": 1,
+  "items": [
+    {
+      "path": "DO_NOT_IMPORT_UNTIL_APPROVED.md",
+      "title": "示例：2025年新生指南（须人工确认文件后修改）",
+      "sourceType": "community",
+      "sourceUrl": "",
+      "publishedAt": "2025-08-01",
+      "applicableYear": 2025,
+      "approvedBy": "REPLACE_WITH_REVIEWER",
+      "approvedAt": "2026-07-28T12:00:00+08:00",
+      "ingestMode": "file"
+    }
+  ]
+}

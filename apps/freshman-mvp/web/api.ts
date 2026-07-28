@@ -72,6 +72,21 @@ export interface ReviewTask {
   feedbackTarget: string | null;
 }
 
+export interface KnowledgeImportStatus {
+  id: string;
+  itemPath: string;
+  version: number;
+  contentSha256: string;
+  title: string;
+  applicableYear: number;
+  approvedBy: string;
+  approvedAt: string;
+  weknoraKnowledgeId: string | null;
+  parseStatus: 'validated' | 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+  lastError: string | null;
+  updatedAt: string;
+}
+
 export interface PublishAnswerInput {
   summary: string;
   fullAnswer: string;
@@ -203,6 +218,23 @@ function isReviewTask(value: unknown): value is ReviewTask {
     && (value.feedbackTarget === null || typeof value.feedbackTarget === 'string');
 }
 
+function isKnowledgeImportStatus(value: unknown): value is KnowledgeImportStatus {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && typeof value.itemPath === 'string'
+    && typeof value.version === 'number'
+    && typeof value.contentSha256 === 'string'
+    && typeof value.title === 'string'
+    && typeof value.applicableYear === 'number'
+    && typeof value.approvedBy === 'string'
+    && typeof value.approvedAt === 'string'
+    && (value.weknoraKnowledgeId === null || typeof value.weknoraKnowledgeId === 'string')
+    && ['validated', 'pending', 'processing', 'completed', 'failed', 'cancelled']
+      .includes(String(value.parseStatus))
+    && (value.lastError === null || typeof value.lastError === 'string')
+    && typeof value.updatedAt === 'string';
+}
+
 export function isAnswerResult(value: unknown): value is AnswerResult {
   if (
     !isRecord(value)
@@ -288,6 +320,23 @@ export async function listRawAnswers(intentId: string): Promise<RawAnswer[]> {
 
 export async function listPendingReviews(): Promise<ReviewTask[]> {
   return readItems(await fetch('/api/reviews?status=pending'), isReviewTask);
+}
+
+export async function listKnowledgeImports(): Promise<{
+  configured: boolean;
+  items: KnowledgeImportStatus[];
+}> {
+  const response = await fetch('/api/admin/knowledge-imports');
+  const body = await readJson(response);
+  if (
+    !isRecord(body)
+    || typeof body.configured !== 'boolean'
+    || !Array.isArray(body.items)
+    || !body.items.every(isKnowledgeImportStatus)
+  ) {
+    throw new ApiResponseError(response.status);
+  }
+  return { configured: body.configured, items: body.items };
 }
 
 export async function publishAnswer(

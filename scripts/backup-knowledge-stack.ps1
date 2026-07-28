@@ -16,6 +16,7 @@ $BaseCompose = Join-Path $VendorRoot 'docker-compose.yml'
 $OverrideCompose = Join-Path $RepoRoot 'deploy\local\compose.weknora.override.yml'
 $PlatformCompose = Join-Path $RepoRoot 'deploy\local\compose.platform.yml'
 $PlatformEnvironment = Join-Path $RepoRoot 'deploy\local\.env.local'
+$ApprovedManifest = Join-Path $RepoRoot 'output\freshman-platform\knowledge-manifest.json'
 
 function Import-LocalEnvironment([string]$PathValue) {
     foreach ($line in Get-Content -LiteralPath $PathValue -Encoding UTF8) {
@@ -44,7 +45,7 @@ if ($StaticOnly) {
         backupRoot = $BackupRoot
         manifest = (Join-Path $BackupRoot '<timestamp>\manifest.json')
         redactedConfig = (Join-Path $BackupRoot '<timestamp>\config.redacted.json')
-        artifacts = @('live-in-hdu.sql.gz', 'weknora.sql.gz', 'weknora-data-files.tar.gz', 'config.redacted.json', 'manifest.json')
+        artifacts = @('live-in-hdu.sql.gz', 'weknora.sql.gz', 'weknora-data-files.tar.gz', 'approved-knowledge-manifest.json', 'config.redacted.json', 'manifest.json')
         retentionCount = 14
         deletesVolumes = $false
     } | ConvertTo-Json -Compress
@@ -55,7 +56,8 @@ if (
     -not (Test-Path -LiteralPath $VendorEnvironment) -or
     -not (Test-Path -LiteralPath $BaseCompose) -or
     -not (Test-Path -LiteralPath $PlatformEnvironment) -or
-    -not (Test-Path -LiteralPath $PlatformCompose)
+    -not (Test-Path -LiteralPath $PlatformCompose) -or
+    -not (Test-Path -LiteralPath $ApprovedManifest)
 ) { throw 'Knowledge stack configuration is incomplete.' }
 if ($ValidateOnly) { [ordered]@{ dockerInvoked = $false; backupRoot = $BackupRoot; validated = $true } | ConvertTo-Json -Compress; exit 0 }
 
@@ -93,6 +95,9 @@ try {
         busybox:1.36 `
         tar -czf /backup/weknora-data-files.tar.gz -C /source .
     if ($LASTEXITCODE -ne 0) { throw 'WeKnora data-files archive failed.' }
+    Copy-Item `
+        -LiteralPath $ApprovedManifest `
+        -Destination (Join-Path $temporary 'approved-knowledge-manifest.json')
     $redactedFiles = [ordered]@{}
     foreach ($configPath in @($VendorEnvironment, $PlatformEnvironment)) {
         $redactedFiles[[IO.Path]::GetFileName($configPath)] = (
@@ -106,5 +111,21 @@ try {
     Get-ChildItem -LiteralPath $BackupRoot -Directory -Filter 'knowledge-*' | Sort-Object LastWriteTimeUtc -Descending | Select-Object -Skip 14 | Remove-Item -Recurse -Force
 } finally {
     foreach ($service in $stopped) { & docker @compose up -d $service | Out-Null }
+}
+$healthDeadline = [DateTime]::UtcNow.AddMinutes(2)
+$weknoraRecovered = $false
+while ([DateTime]::UtcNow -lt $healthDeadline) {
+    try {
+        $health = Invoke-RestMethod -Uri 'http://127.0.0.1:8080/health' -TimeoutSec 3
+        if ($null -ne $health) {
+            $weknoraRecovered = $true
+            break
+        }
+    } catch {
+        Start-Sleep -Milliseconds 500
+    }
+}
+if (-not $weknoraRecovered) {
+    throw 'Backup files were created, but WeKnora did not recover after the consistent snapshot.'
 }
 Write-Output $destination

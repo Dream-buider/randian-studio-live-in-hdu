@@ -154,6 +154,9 @@ export async function createProductionRuntime(
     '../repositories/postgres-faq-sync-store.js'
   ).PostgresFaqSyncStore | null = null;
   let faqTimer: NodeJS.Timeout | null = null;
+  let knowledgeImports: import(
+    '../repositories/postgres-knowledge-import-store.js'
+  ).PostgresKnowledgeImportStore | null = null;
   let closed = false;
   try {
     if (config.databaseProvider === 'sqlite') {
@@ -183,6 +186,10 @@ export async function createProductionRuntime(
       }
       content = new PostgresContentRepository(pool);
       reviews = new PostgresReviewRepository(pool);
+      const { PostgresKnowledgeImportStore } = await import(
+        '../repositories/postgres-knowledge-import-store.js'
+      );
+      knowledgeImports = new PostgresKnowledgeImportStore(pool);
       closeStorage = async () => { await pool.end(); };
     }
     const model: ModelProvider = config.modelEnabled
@@ -261,6 +268,7 @@ export async function createProductionRuntime(
       router,
       publicDir: config.publicDir,
       faqSync: faqSync ?? undefined,
+      knowledgeImports: knowledgeImports ?? undefined,
       health: async () => ({
         status: 'ok',
         components: {

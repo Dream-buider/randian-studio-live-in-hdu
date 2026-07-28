@@ -81,7 +81,49 @@ CREATE TABLE IF NOT EXISTS external_content_links (
   external_seq_id BIGINT NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (intent_id, provider)
-);`;
+);
+CREATE TABLE IF NOT EXISTS knowledge_imports (
+  id UUID PRIMARY KEY,
+  manifest_path TEXT NOT NULL,
+  item_path TEXT NOT NULL,
+  version INTEGER NOT NULL CHECK (version > 0),
+  content_sha256 TEXT NOT NULL CHECK (content_sha256 ~ '^[0-9a-f]{64}$'),
+  title TEXT NOT NULL,
+  source_type TEXT NOT NULL CHECK (source_type IN ('official', 'community', 'student')),
+  source_url TEXT NOT NULL,
+  published_at DATE NOT NULL,
+  applicable_year INTEGER NOT NULL CHECK (applicable_year BETWEEN 2000 AND 2100),
+  approved_by TEXT NOT NULL CHECK (length(btrim(approved_by)) > 0),
+  approved_at TIMESTAMPTZ NOT NULL,
+  ingest_mode TEXT NOT NULL CHECK (ingest_mode IN ('file', 'manual')),
+  channel TEXT NOT NULL DEFAULT 'live-in-hdu-approved'
+    CHECK (channel = 'live-in-hdu-approved'),
+  knowledge_base_id TEXT NOT NULL,
+  weknora_knowledge_id TEXT,
+  parse_status TEXT NOT NULL CHECK (
+    parse_status IN ('validated', 'pending', 'processing', 'completed', 'failed', 'cancelled')
+  ),
+  last_error TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (manifest_path, item_path, version),
+  UNIQUE (manifest_path, item_path, approved_by, approved_at),
+  UNIQUE (knowledge_base_id, content_sha256)
+);
+CREATE INDEX IF NOT EXISTS knowledge_imports_status_idx
+  ON knowledge_imports (parse_status, updated_at DESC);
+CREATE TABLE IF NOT EXISTS knowledge_import_events (
+  id UUID PRIMARY KEY,
+  import_id UUID NOT NULL REFERENCES knowledge_imports(id) ON DELETE CASCADE,
+  status TEXT NOT NULL CHECK (
+    status IN ('validated', 'pending', 'processing', 'completed', 'failed', 'cancelled')
+  ),
+  detail TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS knowledge_import_events_import_idx
+  ON knowledge_import_events (import_id, created_at);
+`;
 
 export async function migratePostgres(pool: PostgresPool): Promise<void> {
   const client = await pool.connect();
@@ -122,6 +164,10 @@ export async function migratePostgres(pool: PostgresPool): Promise<void> {
     await client.query(
       'INSERT INTO schema_migrations (version, applied_at) VALUES ($1, NOW()) ON CONFLICT (version) DO NOTHING',
       [3],
+    );
+    await client.query(
+      'INSERT INTO schema_migrations (version, applied_at) VALUES ($1, NOW()) ON CONFLICT (version) DO NOTHING',
+      [4],
     );
     await client.query('COMMIT');
   } catch (error) {

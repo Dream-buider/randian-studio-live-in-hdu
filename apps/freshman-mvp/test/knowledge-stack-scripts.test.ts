@@ -107,6 +107,7 @@ test('knowledge stack static operations expose a D-drive-only safe plan without 
     'live-in-hdu.sql.gz',
     'weknora.sql.gz',
     'weknora-data-files.tar.gz',
+    'approved-knowledge-manifest.json',
     'config.redacted.json',
     'manifest.json',
   ]);

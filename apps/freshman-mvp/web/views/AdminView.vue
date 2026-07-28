@@ -3,9 +3,11 @@ import { onMounted, ref } from 'vue';
 import {
   ApiResponseError,
   listAdminIntents,
+  listKnowledgeImports,
   listPendingReviews,
   listRawAnswers,
   type AdminIntent,
+  type KnowledgeImportStatus,
   type RawAnswer,
   type ReviewTask,
 } from '../api.js';
@@ -17,6 +19,8 @@ const intents = ref<AdminIntent[]>([]);
 const reviews = ref<ReviewTask[]>([]);
 const selected = ref<AdminIntent | null>(null);
 const rawAnswers = ref<RawAnswer[]>([]);
+const knowledgeImports = ref<KnowledgeImportStatus[]>([]);
+const knowledgeImportsConfigured = ref(false);
 const loading = ref(true);
 const loadingRaw = ref(false);
 const localOnly = ref(false);
@@ -72,12 +76,15 @@ async function load(): Promise<void> {
   errorMessage.value = '';
   localOnly.value = false;
   try {
-    const [loadedIntents, loadedReviews] = await Promise.all([
+    const [loadedIntents, loadedReviews, loadedImports] = await Promise.all([
       listAdminIntents(),
       listPendingReviews(),
+      listKnowledgeImports(),
     ]);
     intents.value = loadedIntents;
     reviews.value = loadedReviews;
+    knowledgeImports.value = loadedImports.items;
+    knowledgeImportsConfigured.value = loadedImports.configured;
     if (loadedIntents[0]) {
       await selectIntent(loadedIntents[0]);
     }
@@ -110,6 +117,27 @@ onMounted(load);
         未加载的拒绝单元格不会被视为已接受。
       </span>
     </aside>
+
+    <section class="import-audit-notice" aria-labelledby="knowledge-import-heading">
+      <strong id="knowledge-import-heading">已审批知识导入</strong>
+      <span v-if="!knowledgeImportsConfigured">
+        仅 PostgreSQL 模式提供导入记录；当前不会自动扫描或上传工作区文件。
+      </span>
+      <span v-else-if="knowledgeImports.length === 0">
+        暂无导入记录。只有显式清单中的人工审批文件才允许进入知识库。
+      </span>
+      <ul v-else>
+        <li v-for="item in knowledgeImports" :key="item.id">
+          <strong>{{ item.title }}</strong>
+          · v{{ item.version }}
+          · {{ item.applicableYear }}
+          · {{ item.parseStatus }}
+          · {{ item.approvedBy }}
+          · {{ item.contentSha256.slice(0, 12) }}
+          <span v-if="item.lastError"> · {{ item.lastError }}</span>
+        </li>
+      </ul>
+    </section>
 
     <section v-if="loading" class="state-card">正在加载管理数据…</section>
     <section v-else-if="errorMessage" class="state-card" role="alert">
