@@ -1,12 +1,13 @@
-# 2026-07-28 可恢复暂停检查点
+# 2026-07-29 可恢复运行检查点
 
 ## 恢复入口
 
 - 工作区：`C:\Users\Star\Desktop\总项目文件\杭电飞书社区`
 - 分支：`codex/local-agent-platform`
-- 当前代码提交：`536aefa test: add Phase B live API acceptance contract`
+- 当前已验证提交：`3159414 docs: record consecutive local platform verification`
 - 当前状态：Phase A 已验证；Phase B 非依赖代码与静态运维检查已完成，但真实知识栈未部署。
-- 暂停状态：已确认本地端口 `3210` 无监听，服务已停止；重启电脑后不会自动启动。
+- 运行状态：2026-07-29 00:22（Asia/Shanghai）已实际启动，端口 `3210`
+  由本项目 Node 进程监听；重启电脑后不会自动启动，届时仍需运行启动脚本。
 - 运行根目录：`D:\Star\LIVE_IN_HDU_RUNTIME`
 
 恢复时先执行：
@@ -21,6 +22,8 @@ Invoke-RestMethod http://127.0.0.1:3210/api/health | ConvertTo-Json -Depth 8
 
 用户端为 `http://localhost:3210`，审核后台为
 `http://localhost:3210/admin`。本地服务启动后，电脑必须保持开机且不能休眠。
+当前同一 Wi-Fi 首选用户地址为 `http://192.168.111.117:3210`；
+`172.24.64.1` 与 `10.99.0.1` 也在本机验证为 HTTP 200，但更可能属于虚拟网卡。
 
 ## 已完成并验证
 
