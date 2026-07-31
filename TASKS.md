@@ -59,11 +59,11 @@
 | TODO | 收集并审核团队真实回答 | 等待团队按问题编号提交 Markdown 或截图；整合时处理共识、分歧、校区/年份差异和官方时效性 |
 | TODO | 将审核后的真实回答写入预设意图 | 仅审核通过的条目改为 `approved` 并对用户直接回复，征集中条目继续明确显示状态 |
 | TODO | 整理并接入正式知识库 | 按用户顺序在 40 问真实回答完成后开始，不与本轮征集混做 |
-| TODO | 部署新生问答 H5 | 需要云服务器/域名状态、DeepSeek 与搜索 Key、飞书凭证；当前本机未安装 Docker |
+| TODO | 部署新生问答 H5 | 本机 Docker 已安装并完成 PostgreSQL 联调；公开部署仍需要云服务器/域名状态、DeepSeek 与搜索 Key、飞书凭证 |
 | TODO | 并行适配并送审微信小程序 | 复用 `vendor/WeKnora/miniprogram/`，改为只访问新生问答网关，不阻塞 H5 上线 |
 | DONE | 交付 Phase A 本地新生问答平台 | Vue + Fastify + SQLite 已完成生产入口、D 盘存储、真实表格首次导入、无密钥诚实兜底、FIFO 审核、人工版本发布、启停、健康检查和在线备份恢复；Edge 390×844 已验收，实体手机仍待人工补测 |
 | DONE | 完成 Phase B 非依赖代码基础 | 已实现独立 PostgreSQL 17 适配、WeKnora REST、SearXNG、FAQ outbox、审批清单导入与重试、D 盘启停/测试/备份脚本；单元测试和构建可离线验证 |
-| BLOCKED | 完成 Phase B 真实本地联调 | `pg` 与 `@types/pg` 已于 2026-07-31 安装到 D 盘；当前仍缺 Docker Desktop、Ollama、真实密钥与两个知识库 ID，且尚无明确获批的《2025年新生指南》原始文件，故未启动容器、未导入语料、未做恢复演练和检索评测 |
+| DOING | 完成 Phase B 真实本地联调 | Docker Desktop、Ollama 与业务 PostgreSQL 17 已落到 D 盘；真实 PostgreSQL 契约、SQLite 迁移及幂等复跑已验证。当前待解决 Ollama 模型仓库 DNS、WeKnora/SearXNG 启动、真实密钥与知识库 ID、获批语料、恢复演练和检索评测 |
 
 ## 运营管理
 
@@ -141,5 +141,5 @@
 | 2026-07-28 | AI检索 | 用隔离 D 盘数据库完成手机视口、管理端 FIFO、重启持久化与存储审计 | DONE |
 | 2026-07-29 | AI检索 | 连续两次完成 Phase A 全平台验证并复核 Phase B 预检、D 盘静态启动与备份契约 | DONE |
 | 2026-07-29 | AI检索 | 在管理端增加非阻塞服务健康面板并完成 TDD、两轮全平台回归与 Edge 验收 | DONE |
-| 2026-07-29 | AI检索 | 真实 Phase B 容器、PostgreSQL、WeKnora、SearXNG、Ollama、获批语料与实体手机验收 | BLOCKED |
+| 2026-07-31 | AI检索 | 安装 D 盘 Docker/Ollama，启动并验证真实 PostgreSQL 17，迁移 SQLite 基线数据 | DOING |
 | 2026-07-31 | 运营管理 | 保存最新可恢复暂停检查点，将 PostgreSQL 客户端依赖迁回 D 盘并确认所有本地服务已停止 | DONE |

@@ -16,6 +16,14 @@ Phase B 由 LIVE IN HDU 网关、独立 PostgreSQL、固定版本 WeKnora、Olla
 
 未通过上述检查时，脚本会退出，不会拉取镜像或模型到 C 盘。
 
+## 2026-07-31 本机状态
+
+- Docker Desktop、Docker Engine、Compose 与 Ollama 已安装到 D 盘。
+- 业务 PostgreSQL 17 已在 `127.0.0.1:5433` 完成真实联调，暂停时容器保持数据并停止。
+- `nomic-embed-text:latest` 尚未下载；当前 DNS 无法解析
+  `registry.ollama.ai`，因此完整知识栈预检仍不会放行。
+- `deploy/local/.env.local` 已生成且被 Git 忽略；不得复制其中密码到文档或提交。
+
 ## 命令
 
 仅检查固定上游版本和端口覆盖，不调用 Docker：

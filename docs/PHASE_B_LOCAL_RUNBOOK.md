@@ -1,9 +1,11 @@
 # LIVE IN HDU Phase B 本地运维手册
 
 本手册对应“业务 PostgreSQL + WeKnora + SearXNG + TokenDance 网关”的本地方案。
-当前电脑尚未安装 Docker Desktop 和 Ollama，且尚未配置真实密钥与两个 WeKnora
-知识库 ID，因此下列真实容器命令尚未在本机执行。脚本的静态契约、无网络单元测试
-和构建已经可以独立验证。
+当前电脑已把 Docker Desktop 4.84.0、Docker Engine 29.6.2、Compose 5.3.1、
+Ollama 0.32.5 和业务 PostgreSQL 17 的数据落到 D 盘。业务 PostgreSQL 已完成真实
+容器、仓储契约、SQLite 迁移与幂等复跑验证；WeKnora/SearXNG 尚未启动，Ollama
+嵌入模型因当前 DNS 无法访问模型仓库而未下载，真实密钥与两个 WeKnora 知识库 ID
+也尚未配置。
 
 ## 1. 存储边界
 
@@ -22,27 +24,28 @@ D:\Star\LIVE_IN_HDU_RUNTIME
 | 构建产物 | `D:\Star\LIVE_IN_HDU_RUNTIME\dist` |
 | Node 依赖 | `D:\Star\LIVE_IN_HDU_RUNTIME\node_modules` |
 | 日志、PID、导入报告 | `D:\Star\LIVE_IN_HDU_RUNTIME\knowledge` |
-| 业务 PostgreSQL | `D:\Star\LIVE_IN_HDU_RUNTIME\phase-b\postgres` |
-| Ollama 模型 | `D:\Star\LIVE_IN_HDU_RUNTIME\phase-b\ollama-models` |
+| 业务 PostgreSQL | `D:\Star\LIVE_IN_HDU_RUNTIME\postgres` |
+| Ollama 模型 | `D:\Star\LIVE_IN_HDU_RUNTIME\ollama\models` |
 | Docker Desktop 磁盘镜像 | `D:\Star\LIVE_IN_HDU_RUNTIME\docker` |
 | WSL 交换文件 | `D:\Star\LIVE_IN_HDU_RUNTIME\wsl-swap` |
 | 备份 | `D:\Star\LIVE_IN_HDU_RUNTIME\backups` |
 | TEMP、TMP、npm cache、测试产物 | 对应根目录下的 `temp`、`npm-cache`、`tests` |
 
-Docker Desktop 安装完成后，必须先在 Docker Desktop 设置中把磁盘镜像位置改到
-上述 `docker` 目录并重启。启动脚本会读取 Docker 设置验证；无法确认在 D 盘时会
-在拉镜像前停止。
+Docker Desktop 已使用 `--wsl-default-data-root` 安装到上述 `docker` 目录；当前
+WSL 虚拟磁盘已核对位于 D 盘。启动脚本仍会读取 Docker 设置验证；无法确认在 D 盘
+时会在拉镜像前停止。
 
 ## 2. 首次配置
 
-1. 安装 Docker Desktop（WSL2 后端）和 Ollama。
+1. Docker Desktop（WSL2 后端）和 Ollama 已安装；重装时仍必须沿用本手册的 D 盘
+   安装目录与数据目录。
 2. 重启 WSL/Docker，使 `C:\Users\Star\.wslconfig` 中的 12 GB 内存、12 核、
    8 GB D 盘交换文件限制生效。
 3. 将 Ollama 模型目录设置为
-   `D:\Star\LIVE_IN_HDU_RUNTIME\phase-b\ollama-models`，再拉取且只拉取：
+   `D:\Star\LIVE_IN_HDU_RUNTIME\ollama\models`，再拉取且只拉取：
 
 ```powershell
-$env:OLLAMA_MODELS = 'D:\Star\LIVE_IN_HDU_RUNTIME\phase-b\ollama-models'
+$env:OLLAMA_MODELS = 'D:\Star\LIVE_IN_HDU_RUNTIME\ollama\models'
 ollama pull nomic-embed-text:latest
 ```
 
@@ -68,8 +71,8 @@ npm install
 Pop-Location
 ```
 
-当前网络无法连接 npm registry，`pg` 依赖尚未下载；在网络恢复前 PostgreSQL
-模式不会启动，SQLite 模式不受影响。
+`pg@8.22.0` 与 `@types/pg@8.20.0` 已安装在 D 盘 junction 对应的依赖目录。
+后续更新依赖时必须再次核对 npm 没有把 junction 替换为 C 盘实体目录。
 
 6. 运行只读预检：
 

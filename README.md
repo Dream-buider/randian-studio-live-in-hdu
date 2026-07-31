@@ -16,7 +16,7 @@ Codex 在本项目中的角色是执行协调器，只负责把 ChatGPT 总控�
 - AI 检索 MVP：已形成 `docs/AI_RAG_BOT_MVP.md`，要求基于知识库回答并附来源。
 - 新生问答助手：已固定 `Tencent/WeKnora` 提交 `150c073` 作为开源底座，并完成 H5 优先、微信小程序并行的部署与改造计划；尚未配置云服务器、模型密钥或正式上线。
 - 本地新生问答平台：已完成 Phase A 本机交付，采用 Vue + Fastify + SQLite，支持动态预设、知识条目、未知问题诚实兜底、FIFO 审核、人工发布版本、健康检查、启停和在线备份恢复。当前生产库首次导入基线为 35 个意图、31 条原始回答、0 条自动发布答案，Q11 保持空白；运行数据和构建产物均落到 D 盘。电脑必须保持开机；尚未公网部署。
-- Phase B 代码基础：已实现独立 PostgreSQL 17、WeKnora REST 检索、SearXNG 搜索、FAQ outbox、审批清单导入、失败重试和 D 盘运维脚本；`pg` 与 `@types/pg` 已安装到 D 盘依赖目录。真实容器联调仍受 Docker/Ollama、密钥、知识库 ID 与获批《2025年新生指南》原文件阻塞，不能称为已部署。
+- Phase B 本地基础：Docker Desktop 4.84.0、Docker Engine 29.6.2、Compose 5.3.1 与 Ollama 0.32.5 已安装到 D 盘；业务 PostgreSQL 17 已在真实容器中完成健康、迁移、并发 FIFO、重启持久化和 SQLite 数据迁移验证。WeKnora/SearXNG 尚未启动，Ollama 嵌入模型因当前 DNS 无法访问模型仓库而未下载；真实密钥、两个知识库 ID 与获批《2025年新生指南》原文件仍缺失，因此不能称为 Phase B 完整部署。
 - 团队回答征集：已改为单张飞书电子表格 [`2026 新生 40 问｜团队协作总表`](https://scnbcye3xdfz.feishu.cn/wiki/Y3oTwYdC1iYABBkzrMfceEWCn4b?from=from_copylink)。Q01-Q40 全部平铺，团队成员可直接查看 `待填写 / 填写中 / 待审核 / 已完成 / 需补充` 状态并认领填写；旧多维表格和表单仅作备份，不再作为群内入口。
 
 ## 项目文件结构
@@ -88,9 +88,9 @@ Codex 在本项目中的角色是执行协调器，只负责把 ChatGPT 总控�
 
 ## Phase B 环境预检
 
-Phase B 会引入 Docker Desktop、WSL2、PostgreSQL、WeKnora、SearXNG 和
-Ollama 嵌入模型，但预检脚本只读取环境状态，不会安装软件、启动容器、拉取镜像或
-下载模型。
+Phase B 使用 Docker Desktop、WSL2、PostgreSQL、WeKnora、SearXNG 和
+Ollama 嵌入模型。当前 Docker、Ollama 与业务 PostgreSQL 已完成 D 盘安装/联调，
+但预检脚本本身仍只读取环境状态，不会安装软件、启动容器、拉取镜像或下载模型。
 
 先停止占用 3210 端口的 Phase A 服务，再运行：
 
@@ -109,7 +109,7 @@ Ollama 嵌入模型，但预检脚本只读取环境状态，不会安装软件�
 `requestedRoot`、`actualRoot` 和 `fallbackReason`，避免把降级路径伪装成原始
 配置。数据库、WeKnora、SearXNG、Ollama 模型和预检报告等大体积数据均应放在该
 实际目录下。Docker Desktop 安装后，还需在其设置中把磁盘镜像位置迁移到此 D 盘
-目录；不要让 Docker 使用 C 盘默认数据目录。
+目录；本机现有 Docker WSL 虚拟磁盘已经复核在该 D 盘目录，重装或迁移后仍需复核。
 
 环境变量名称及空白密钥模板见
 [`deploy/local/.env.example`](deploy/local/.env.example)。真实密码、API Key 和

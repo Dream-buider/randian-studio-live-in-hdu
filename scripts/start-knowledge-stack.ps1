@@ -255,7 +255,7 @@ foreach ($requiredName in @('LIVE_IN_HDU_DB_PASSWORD')) {
 $postgresData = if ($env:POSTGRES_DATA_DIR) {
     [IO.Path]::GetFullPath($env:POSTGRES_DATA_DIR)
 } else {
-    Join-Path $RuntimeRoot 'phase-b\postgres'
+    Join-Path $RuntimeRoot 'postgres'
 }
 if ([IO.Path]::GetPathRoot($postgresData).ToUpperInvariant() -ne 'D:\') {
     throw "POSTGRES_DATA_DIR must be on D:, found $postgresData"

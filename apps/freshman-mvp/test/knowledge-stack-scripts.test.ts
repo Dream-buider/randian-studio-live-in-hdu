@@ -121,6 +121,6 @@ test('business PostgreSQL is isolated, pinned to 17, and stores its database on 
   assert.match(compose, /live-in-hdu-db:/);
   assert.match(compose, /image:\s*postgres:17-alpine/);
   assert.match(compose, /\$\{LIVE_IN_HDU_DB_PASSWORD:/);
-  assert.match(compose, /D:\/Star\/LIVE_IN_HDU_RUNTIME\/phase-b\/postgres/);
+  assert.match(compose, /D:\/Star\/LIVE_IN_HDU_RUNTIME\/postgres/);
   assert.doesNotMatch(compose, /^\s{2}postgres:/m);
 });

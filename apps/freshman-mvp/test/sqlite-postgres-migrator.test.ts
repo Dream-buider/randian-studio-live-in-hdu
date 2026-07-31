@@ -83,6 +83,9 @@ test('SQLite to PostgreSQL migration uses foreign-key order and makes a second r
     assert.deepEqual(reconciliation.sourceCounts, first.sourceCounts);
     assert.ok(writes.findIndex(({ text }) => text.startsWith('INSERT INTO question_intents')) < writes.findIndex(({ text }) => text.startsWith('INSERT INTO raw_answers')));
     assert.ok(writes.every(({ text }) => text.includes('ON CONFLICT')));
+    assert.ok(writes
+      .filter(({ text }) => text.includes('DO UPDATE SET'))
+      .every(({ text }) => text.includes('IS DISTINCT FROM')));
     assert.equal(pool.client.released, true);
   } finally { source.close(); }
 });

@@ -4,11 +4,12 @@
 
 - 工作区：`C:\Users\Star\Desktop\总项目文件\杭电飞书社区`
 - 分支：`codex/local-agent-platform`
-- 最近完成的文档提交：`ed30673 docs: record admin health acceptance`
-- 当前状态：Phase A 已验证；Phase B 非依赖代码与静态运维检查已完成，但真实知识栈未部署。
-- 暂停状态：2026-07-31（Asia/Shanghai）已按用户要求停止继续部署；端口
-  `3210`、`5433`、`8080`、`8888`、`11434` 均未监听。重启电脑后不会自动启动，
-  需手动运行启动脚本。
+- 检查点提交：以本文所在提交为准，恢复时运行 `git log -1 --oneline`。
+- 当前状态：Phase A 已验证；Phase B 已完成 D 盘 Docker/Ollama 安装和真实业务
+  PostgreSQL 联调，但 WeKnora/SearXNG 与嵌入模型尚未完成。
+- 暂停状态：2026-07-31（Asia/Shanghai）已按用户要求停止继续部署；业务容器、
+  Docker Desktop、Ollama 服务与应用网关均已停止。端口 `3210`、`5433`、`8080`、
+  `8081`、`8082`、`8888`、`11434` 已复核为 0 个监听。重启后需要手动恢复相应服务。
 - 运行根目录：`D:\Star\LIVE_IN_HDU_RUNTIME`
 
 恢复时先执行：
@@ -17,14 +18,14 @@
 Set-Location 'C:\Users\Star\Desktop\总项目文件\杭电飞书社区'
 git status --short --branch
 git log -3 --oneline
-.\scripts\start-freshman-platform.ps1
-Invoke-RestMethod http://127.0.0.1:3210/api/health | ConvertTo-Json -Depth 8
+Get-Content .\docs\SESSION_CHECKPOINT_2026-07-28.md
 ```
 
-用户端为 `http://localhost:3210`，审核后台为
-`http://localhost:3210/admin`。本地服务启动后，电脑必须保持开机且不能休眠。
-当前同一 Wi-Fi 首选用户地址为 `http://192.168.111.117:3210`；
-`172.24.64.1` 与 `10.99.0.1` 也在本机验证为 HTTP 200，但更可能属于虚拟网卡。
+如只恢复 Phase A，再运行 `.\scripts\start-freshman-platform.ps1`。如继续 Phase B，
+先启动 Docker Desktop 与 Ollama，随后运行
+`.\scripts\preflight-phase-b.ps1 -JsonOutput .\output\freshman-platform\phase-b-preflight.json`。
+在模型仍缺失时不要强行运行完整知识栈。用户端为 `http://localhost:3210`，审核后台
+为 `http://localhost:3210/admin`；服务启动后电脑必须保持开机且不能休眠。
 
 ## 已完成并验证
 
@@ -49,7 +50,19 @@ Invoke-RestMethod http://127.0.0.1:3210/api/health | ConvertTo-Json -Depth 8
   `start-knowledge-stack -StaticOnly`、
   `test-knowledge-stack -StaticOnly`、
   `backup-knowledge-stack -StaticOnly`。
-- 最近一次运行健康快照为 `status=ok`：
+- Docker Desktop 4.84.0、Docker Engine 29.6.2、Compose 5.3.1 与 Ollama 0.32.5
+  已安装到 `D:\Star\LIVE_IN_HDU_RUNTIME`，Docker WSL 虚拟磁盘和 CLI 插件均已
+  复核在 D 盘；`hello-world` 容器运行成功。
+- 业务 PostgreSQL 17.10 容器曾在 `127.0.0.1:5433` 健康运行，数据绑定到
+  `D:\Star\LIVE_IN_HDU_RUNTIME\postgres`。真实契约覆盖答案版本、事务回滚、
+  20 条并发 FIFO、ISO 时间戳和重启持久化。
+- SQLite 迁移前备份位于
+  `D:\Star\LIVE_IN_HDU_RUNTIME\backups\sqlite-before-postgres\live-in-hdu-2026-07-31T04-14-10-222Z.db`。
+  真实迁移结果为 35 个意图、99 个别名、31 条原始回答、0 条发布答案、0 条审核；
+  Q11 仍为空，第二次复跑写入 0 条且源/目标计数一致。
+- 2026-07-31 最新回归：后端 133 项中 132 通过、1 项真实完整知识栈因未显式开启而
+  跳过、0 失败；前端 34/34；真实 PostgreSQL 契约已包含在本轮；生产构建成功。
+- 2026-07-29 的 Phase A 运行健康快照为 `status=ok`：
   SQLite healthy，TokenDance disabled/no-key，WeKnora not-configured，
   search unavailable/phase-a-disabled，待审核 0，outbox 0。
 - 隔离数据库浏览器验收已通过：390×844 手机界面、提问抽屉、第三阶段精确批注、
@@ -65,8 +78,9 @@ Invoke-RestMethod http://127.0.0.1:3210/api/health | ConvertTo-Json -Depth 8
   `output/freshman-platform`、浏览器产物均通过 junction 指向 D 盘。
 - 当前知识栈预检报告：
   `D:\Star\LIVE_IN_HDU_RUNTIME\knowledge\phase-b-preflight-current.json`。
-- 预检只剩两个本机软件失败项：`docker-cli-missing` 与
-  `ollama-cli-missing`。
+- 最新预检只剩 `embedding-model-missing`；若 Ollama 仍在监听，报告还会把
+  `11434` 标为端口占用。当前校园网络 DNS 无法解析 `registry.ollama.ai`，
+  `nomic-embed-text:latest` 因此尚未下载。不要擅自修改系统 DNS 或 VPN。
 - 2026-07-31 npm registry 网络恢复，已安装 `pg@8.22.0` 与
   `@types/pg@8.20.0`，`npm ls pg @types/pg --depth=0` 通过；对应
   `package-lock.json` 变更已保留。
@@ -84,13 +98,13 @@ Invoke-RestMethod http://127.0.0.1:3210/api/health | ConvertTo-Json -Depth 8
 
 ## 下一步工作
 
-1. 重启后先按“恢复入口”启动 Phase A，确认健康接口和页面；当前生产数据仍是
-   35 个意图、31 条原始回答、0 条已发布答案，因此用户首页空列表是预期结果。
-2. 自动浏览器验收已经完成；实体手机同一 Wi-Fi 测试仍需人工执行。
-3. 如进入 Phase B，先安装 Docker Desktop 与 Ollama，并在任何拉镜像/模型之前
-   验证 Docker 磁盘镜像和 Ollama 模型目录实际位于 D 盘。
-4. 先运行 PostgreSQL 相关聚焦测试并审阅 npm audit 报告，再配置真实的
-   TokenDance/WeKnora 密钥与两个知识库 ID。
+1. 启动 Docker Desktop 与 Ollama，先重试
+   `ollama pull nomic-embed-text:latest`；若 DNS 仍失败，只记录失败，不修改系统
+   DNS/VPN，不从非官方来源下载模型。
+2. 模型可用后重跑 Phase B 预检，再由
+   `.\scripts\start-knowledge-stack.ps1` 启动 WeKnora/SearXNG 和网关。
+3. 配置真实 TokenDance/WeKnora 密钥与两个知识库 ID；不要在日志中打印连接串或密钥。
+4. 自动浏览器验收已经完成；实体手机同一 Wi-Fi 测试仍需人工执行。
 5. 取得明确获批的《2025年新生指南》原文件后，才可创建审批清单并导入。
 6. 完成 PostgreSQL 迁移、WeKnora 导入、20 问检索评测、新命名卷恢复演练、
    两轮真实知识栈测试和实体手机验收；真实测试时按环境变量提供一条预设问题、
@@ -98,7 +112,7 @@ Invoke-RestMethod http://127.0.0.1:3210/api/health | ConvertTo-Json -Depth 8
 
 ## 外部阻塞与禁止事项
 
-- 缺 Docker Desktop、Ollama、真实密钥和两个 WeKnora 知识库 ID。
+- 缺 Ollama 嵌入模型、真实密钥和两个 WeKnora 知识库 ID；模型下载当前受 DNS 阻塞。
 - 缺明确确认且获批的《2025年新生指南》原始文件。
 - 不导入整个 `最新资料`，不自动发布原始回答。
 - Q11 继续空白，纯数字 `19` 继续拒绝为回答。

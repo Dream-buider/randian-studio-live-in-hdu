@@ -2,6 +2,15 @@
 
 ## 2026-07-31
 
+### Added
+
+- 将 Docker Desktop 4.84.0、Docker Engine 29.6.2、Compose 5.3.1 与
+  Ollama 0.32.5 安装到 `D:\Star\LIVE_IN_HDU_RUNTIME`；Docker WSL 虚拟磁盘、
+  CLI 插件与 Ollama 模型目录均复核为 D 盘落点。
+- 启动真实 PostgreSQL 17.10 容器并新增真实仓储契约，覆盖版本、事务回滚、
+  20 条并发未知问题的服务端 FIFO、ISO 时间戳和重启持久化。
+- 生成被 Git 忽略的本地数据库环境文件，并在迁移前把 SQLite 数据库备份到 D 盘。
+
 ### Changed
 
 - npm registry 网络恢复后安装 `pg@8.22.0` 与 `@types/pg@8.20.0`，补齐
@@ -10,21 +19,32 @@
   `D:\Star\LIVE_IN_HDU_RUNTIME\node_modules\freshman-mvp\node_modules` 并重建
   junction；迁移前的 D 盘依赖保留为可回退备份。
 - 刷新可恢复检查点、README 与任务状态，移除已经解除的 npm 网络阻塞。
+- 将 PostgreSQL、WeKnora、SearXNG 与 Ollama 的运行目录统一为
+  `D:\Star\LIVE_IN_HDU_RUNTIME` 下的直观子目录。
+- PostgreSQL 审核仓储统一输出 ISO 时间戳；SQLite→PostgreSQL 迁移仅在列值实际
+  变化时更新，第二次复跑不再把无变化行误计为转移。
+- Phase B 预检接受 Compose 2 及以上集成版本，兼容本机 Compose 5.3.1。
 
 ### Verification
 
 - `npm ls pg @types/pg --depth=0` 显示两个依赖均已安装。
 - `apps/freshman-mvp/node_modules` 已验证为指向 D 盘运行根的 Junction，且
   `pg/package.json` 可从该入口读取。
-- 暂停时端口 `3210`、`5433`、`8080`、`8888`、`11434` 均未监听；未继续安装
-  Docker Desktop、Ollama 或启动 Phase B 容器。
+- `postgres:17-alpine` 在 `127.0.0.1:5433` 健康运行，数据实际绑定到 D 盘；
+  SQLite 基线迁移为 35 个意图、99 个别名、31 条原始回答，第二次复跑新增/更新 0 条。
+- 最新后端回归为 132 通过、1 个完整知识栈用例明确跳过、0 失败；前端 34/34，
+  生产构建成功。
+- 暂停时已保留数据并停止业务容器、Docker Desktop、Ollama 与应用网关；端口
+  `3210`、`5433`、`8080`、`8081`、`8082`、`8888`、`11434` 的监听数均为 0。
 
 ### Notes
 
 - 本次安装报告 14 个 npm audit 告警（1 moderate、13 high），尚未升级依赖；
   恢复后应先审阅影响范围，不直接执行 `npm audit fix --force`。
-- 真实 Phase B 仍缺 Docker Desktop、Ollama、密钥、WeKnora 知识库 ID 和获批
-  《2025年新生指南》原文件。
+- 当前 DNS 无法解析 `registry.ollama.ai`，因此 `nomic-embed-text:latest` 尚未
+  下载；不修改系统 DNS/VPN，也不从非官方来源获取模型。
+- Phase B 仍缺真实密钥、WeKnora 知识库 ID、获批《2025年新生指南》原文件，
+  WeKnora/SearXNG 尚未启动。
 
 ## 2026-07-29
 

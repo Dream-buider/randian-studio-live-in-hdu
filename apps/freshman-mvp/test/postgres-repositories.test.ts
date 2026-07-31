@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import test from 'node:test';
+import { createPostgresPool } from '../src/db/postgres.js';
 import { migratePostgres } from '../src/db/postgres-migrations.js';
 import { PostgresContentRepository } from '../src/repositories/postgres-content-repository.js';
 import { PostgresReviewRepository } from '../src/repositories/postgres-review-repository.js';
@@ -206,10 +208,130 @@ test('Postgres FAQ store claims bounded work, records links, and retries safely'
   assert.match(completeSql, /status='completed'/);
 });
 
-test('real Postgres contract is skipped without PHASE_B_POSTGRES_TEST_URL', async (context) => {
+test('real Postgres contract preserves versions, rollback, concurrent FIFO, and restart state', {
+  timeout: 120_000,
+}, async (context) => {
   if (!process.env.PHASE_B_POSTGRES_TEST_URL) {
     context.skip('PHASE_B_POSTGRES_TEST_URL is not set; Docker and external Postgres are intentionally not started by this test.');
     return;
   }
   assert.match(process.env.PHASE_B_POSTGRES_TEST_URL, /^postgres(?:ql)?:\/\//);
+  const schema = `live_in_hdu_test_${randomUUID().replaceAll('-', '')}`;
+  const adminPool = await createPostgresPool(process.env.PHASE_B_POSTGRES_TEST_URL);
+  const testUrl = new URL(process.env.PHASE_B_POSTGRES_TEST_URL);
+  testUrl.searchParams.set('options', `-c search_path=${schema}`);
+  let pool = await createPostgresPool(testUrl.toString());
+  try {
+    await adminPool.query(`CREATE SCHEMA "${schema}"`);
+    await migratePostgres(pool);
+    const content = new PostgresContentRepository(pool);
+    const reviews = new PostgresReviewRepository(pool);
+    await content.createIntent(intent);
+    await content.publishCanonicalAnswer({
+      intentId: intent.id,
+      summary: '校园卡领取与激活流程摘要。',
+      fullAnswer: '到校后按学院当年通知领取并激活校园一卡通。',
+      sources: [{
+        type: 'community',
+        title: '新生指南',
+        url: '',
+        updatedAt: '2026-07-31',
+      }],
+      reviewerId: 'integration-test',
+    });
+    await content.publishCanonicalAnswer({
+      intentId: intent.id,
+      summary: '校园卡领取与激活流程更新摘要。',
+      fullAnswer: '以学院最新通知为准，到校后完成领取和激活。',
+      sources: [{
+        type: 'official',
+        title: '学院通知',
+        url: 'https://example.edu/campus-card',
+        updatedAt: '2026-07-31',
+      }],
+      reviewerId: 'integration-test',
+    });
+    const published = await content.listPublishedQuestions();
+    assert.equal(published.length, 1);
+    assert.equal(published[0].summary, '校园卡领取与激活流程更新摘要。');
+    const versions = await pool.query(
+      'SELECT version, summary FROM canonical_answers WHERE intent_id=$1 ORDER BY version',
+      [intent.id],
+    );
+    assert.deepEqual(versions.rows.map((row) => Number(row.version)), [1, 2]);
+
+    const rollbackIntent = { ...intent, id: 'rollback-intent', externalId: 'Q02' };
+    await content.createIntent(rollbackIntent);
+    await assert.rejects(content.publishCanonicalAnswer({
+      intentId: rollbackIntent.id,
+      summary: '这条回答会在来源写入阶段回滚。',
+      fullAnswer: '测试事务必须撤销已经插入的标准答案。',
+      sources: [{
+        type: 'official',
+        title: '无效日期来源',
+        url: 'https://example.edu/rollback',
+        updatedAt: 'not-a-date',
+      }],
+      reviewerId: 'integration-test',
+    }));
+    const rolledBack = await pool.query(
+      'SELECT COUNT(*)::int AS count FROM canonical_answers WHERE intent_id=$1',
+      [rollbackIntent.id],
+    );
+    assert.equal(Number(rolledBack.rows[0]?.count), 0);
+
+    const enqueued = await Promise.all(Array.from({ length: 20 }, (_, index) => reviews.enqueue({
+      question: `并发未收录问题 ${index + 1}`,
+      answer: `临时回答 ${index + 1}`,
+      sources: [],
+      providerStatus: 'available',
+      rawSearchLeads: [],
+    })));
+    const ordinals = enqueued.map((item) => item.ordinal);
+    assert.equal(new Set(ordinals).size, 20);
+    assert.deepEqual(
+      [...ordinals].sort((left, right) => left - right),
+      Array.from({ length: 20 }, (_, index) => index + 1),
+    );
+    const expectedFifoRows = await pool.query(
+      'SELECT ordinal FROM review_tasks WHERE status=$1 ORDER BY created_at ASC, ordinal ASC',
+      ['pending'],
+    );
+    const expectedFifoOrdinals = expectedFifoRows.rows.map((row) => Number(row.ordinal));
+    const pending = await reviews.list('pending');
+    assert.deepEqual(
+      pending.map((item) => item.ordinal),
+      expectedFifoOrdinals,
+    );
+    assert.ok(pending.every((item) => /^\d{4}-\d{2}-\d{2}T.*Z$/.test(item.createdAt)));
+    await pool.query(
+      `INSERT INTO conversations (id, created_at, updated_at)
+       VALUES ('conversation-1', NOW(), NOW())`,
+    );
+    await pool.query(
+      `INSERT INTO feedback (id, conversation_id, value, created_at)
+       VALUES ('feedback-1', 'conversation-1', 'helpful', NOW())`,
+    );
+    await pool.end();
+
+    pool = await createPostgresPool(testUrl.toString());
+    const reopenedContent = new PostgresContentRepository(pool);
+    const reopenedReviews = new PostgresReviewRepository(pool);
+    assert.equal((await reopenedContent.listPublishedQuestions()).length, 1);
+    assert.deepEqual(
+      (await reopenedReviews.list('pending')).map((item) => item.ordinal),
+      expectedFifoOrdinals,
+    );
+    const restartRows = await pool.query(
+      `SELECT
+        (SELECT COUNT(*)::int FROM conversations) AS conversations,
+        (SELECT COUNT(*)::int FROM feedback) AS feedback`,
+    );
+    assert.equal(Number(restartRows.rows[0]?.conversations), 1);
+    assert.equal(Number(restartRows.rows[0]?.feedback), 1);
+  } finally {
+    await pool.end().catch(() => undefined);
+    await adminPool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+    await adminPool.end();
+  }
 });

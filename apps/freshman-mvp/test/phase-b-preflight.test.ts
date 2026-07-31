@@ -26,6 +26,7 @@ interface Fixture {
   requestedRoot: string;
   actualRoot: string;
   fallbackReason: string;
+  composeVersionText?: string;
 }
 
 function passingFixture(): Fixture {
@@ -126,6 +127,16 @@ test('Phase B preflight accepts port 11434 when the expected Ollama model is alr
   assert.deepEqual(report.failures, []);
 });
 
+test('Phase B preflight accepts integrated Docker Compose major versions newer than v2', async () => {
+  const fixture = passingFixture();
+  fixture.composeV2 = false;
+  fixture.composeVersionText = 'v5.3.1';
+  const { result, report } = await runFixture(fixture);
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.equal(report.ready, true);
+  assert.ok(!report.failures.some((failure) => failure.code === 'compose-v2-unavailable'));
+});
+
 test('Phase B prerequisite boundary keeps secrets blank and large runtime paths on D', async () => {
   const [script, environment, gitignore] = await Promise.all([
     readFile(SCRIPT, 'utf8'),
@@ -151,6 +162,14 @@ test('Phase B prerequisite boundary keeps secrets blank and large runtime paths 
       environment,
       new RegExp(`^${pathName}=D:/Star/LIVE_IN_HDU_RUNTIME(?:/.*)?$`, 'm'),
     );
+  }
+  for (const [pathName, expectedPath] of Object.entries({
+    POSTGRES_DATA_DIR: 'D:/Star/LIVE_IN_HDU_RUNTIME/postgres',
+    WEKNORA_DATA_DIR: 'D:/Star/LIVE_IN_HDU_RUNTIME/weknora',
+    SEARXNG_DATA_DIR: 'D:/Star/LIVE_IN_HDU_RUNTIME/searxng',
+    OLLAMA_MODELS: 'D:/Star/LIVE_IN_HDU_RUNTIME/ollama/models',
+  })) {
+    assert.match(environment, new RegExp(`^${pathName}=${expectedPath}$`, 'm'));
   }
   assert.match(gitignore, /^deploy\/local\/\.env\.local$/m);
   assert.match(gitignore, /^vendor\/WeKnora\/\.env$/m);

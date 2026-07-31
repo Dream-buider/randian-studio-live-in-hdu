@@ -33,6 +33,14 @@ function Invoke-NativeText([scriptblock]$Command) {
     }
 }
 
+function Test-IntegratedComposeVersion([string]$VersionText) {
+    $match = [regex]::Match($VersionText.Trim(), '^v?(?<major>\d+)(?:\.|$)')
+    if (-not $match.Success) {
+        return $false
+    }
+    return [int]$match.Groups['major'].Value -ge 2
+}
+
 function Test-WslVersion2 {
     if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) {
         return $false
@@ -92,7 +100,8 @@ function Get-LiveProbe {
         $engine = Invoke-NativeText { docker version --format '{{.Server.Version}}' }
         $dockerEngine = $engine.ExitCode -eq 0 -and -not [string]::IsNullOrWhiteSpace($engine.Text)
         $compose = Invoke-NativeText { docker compose version --short }
-        $composeV2 = $compose.ExitCode -eq 0 -and $compose.Text -match '^v?2(?:\.|$)'
+        $composeV2 = $compose.ExitCode -eq 0 -and
+            (Test-IntegratedComposeVersion $compose.Text)
     }
 
     $node24 = $false
@@ -135,7 +144,11 @@ function Get-Probe {
         throw 'FixtureJson is available only when LIVE_IN_HDU_PREFLIGHT_TEST_MODE=1.'
     }
     try {
-        return Get-Content -Raw -LiteralPath $FixtureJson -Encoding UTF8 | ConvertFrom-Json
+        $fixture = Get-Content -Raw -LiteralPath $FixtureJson -Encoding UTF8 | ConvertFrom-Json
+        if ($null -ne $fixture.composeVersionText) {
+            $fixture.composeV2 = Test-IntegratedComposeVersion ([string]$fixture.composeVersionText)
+        }
+        return $fixture
     } catch {
         throw "Could not read preflight fixture: $FixtureJson"
     }

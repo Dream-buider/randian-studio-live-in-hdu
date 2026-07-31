@@ -60,7 +60,11 @@ function insertStatement(table: TableName, row: Row): { text: string; values: un
   const mutable = columns.filter((column) => !keys.includes(column));
   const conflict = mutable.length === 0
     ? `ON CONFLICT (${keys.join(', ')}) DO NOTHING`
-    : `ON CONFLICT (${keys.join(', ')}) DO UPDATE SET ${mutable.map((column) => `${column} = EXCLUDED.${column}`).join(', ')}`;
+    : `ON CONFLICT (${keys.join(', ')}) DO UPDATE SET ${
+      mutable.map((column) => `${column} = EXCLUDED.${column}`).join(', ')
+    } WHERE ${
+      mutable.map((column) => `${table}.${column} IS DISTINCT FROM EXCLUDED.${column}`).join(' OR ')
+    }`;
   return { text: `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders}) ${conflict}`, values };
 }
 
