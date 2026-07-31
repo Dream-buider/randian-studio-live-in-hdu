@@ -2,6 +2,7 @@
 param(
     [switch]$ValidateOnly,
     [switch]$StaticOnly,
+    [switch]$PrepareOnly,
     [string]$RepoRootOverride = ''
 )
 
@@ -218,6 +219,17 @@ $env:TEMP = Join-Path $RuntimeRoot 'temp'
 $env:TMP = $env:TEMP
 $env:npm_config_cache = Join-Path $RuntimeRoot 'npm-cache'
 $env:OLLAMA_MODELS = Join-Path $RuntimeRoot 'ollama\models'
+
+if ($PrepareOnly) {
+    Write-MinimalVendorEnvironment
+    [ordered]@{
+        dockerInvoked = $false
+        embeddingModelRequired = $false
+        vendorEnvironment = $VendorEnvironment
+        runtimeRoot = $RuntimeRoot
+    } | ConvertTo-Json -Compress
+    exit 0
+}
 
 if (-not (Test-Path -LiteralPath $PreflightScript)) {
     throw "Phase B preflight script is missing: $PreflightScript"

@@ -60,8 +60,11 @@ Get-Content .\docs\SESSION_CHECKPOINT_2026-07-28.md
   `D:\Star\LIVE_IN_HDU_RUNTIME\backups\sqlite-before-postgres\live-in-hdu-2026-07-31T04-14-10-222Z.db`。
   真实迁移结果为 35 个意图、99 个别名、31 条原始回答、0 条发布答案、0 条审核；
   Q11 仍为空，第二次复跑写入 0 条且源/目标计数一致。
-- 2026-07-31 最新回归：后端 133 项中 132 通过、1 项真实完整知识栈因未显式开启而
+- 2026-07-31 最新回归：后端 134 项中 133 通过、1 项真实完整知识栈因未显式开启而
   跳过、0 失败；前端 34/34；真实 PostgreSQL 契约已包含在本轮；生产构建成功。
+- `start-knowledge-stack.ps1 -PrepareOnly` 已生成被 Git 忽略且不输出密钥的最小
+  WeKnora 环境；SearXNG 已在 `127.0.0.1:8888` 单独运行。网关以真实 PostgreSQL
+  模式重启前后均为 35 个意图、0 个审核、0 个已发布答案，Q11 仍为空。
 - 2026-07-29 的 Phase A 运行健康快照为 `status=ok`：
   SQLite healthy，TokenDance disabled/no-key，WeKnora not-configured，
   search unavailable/phase-a-disabled，待审核 0，outbox 0。
@@ -78,9 +81,10 @@ Get-Content .\docs\SESSION_CHECKPOINT_2026-07-28.md
   `output/freshman-platform`、浏览器产物均通过 junction 指向 D 盘。
 - 当前知识栈预检报告：
   `D:\Star\LIVE_IN_HDU_RUNTIME\knowledge\phase-b-preflight-current.json`。
-- 最新预检只剩 `embedding-model-missing`；若 Ollama 仍在监听，报告还会把
-  `11434` 标为端口占用。当前校园网络 DNS 无法解析 `registry.ollama.ai`，
-  `nomic-embed-text:latest` 因此尚未下载。不要擅自修改系统 DNS 或 VPN。
+- 完整预检仍受 `embedding-model-missing` 阻塞；当前校园网络 DNS 无法解析
+  `registry.ollama.ai`，宿主机访问 `registry-1.docker.io` 也出现 DNS/HTTPS
+  失败，`nomic-embed-text:latest` 与 WeKnora 主栈镜像因此尚未下载完整。
+  不要擅自修改系统 DNS、VPN 或代理。
 - 2026-07-31 npm registry 网络恢复，已安装 `pg@8.22.0` 与
   `@types/pg@8.20.0`，`npm ls pg @types/pg --depth=0` 通过；对应
   `package-lock.json` 变更已保留。

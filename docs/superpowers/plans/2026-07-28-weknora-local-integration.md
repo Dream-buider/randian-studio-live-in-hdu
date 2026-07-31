@@ -124,7 +124,12 @@ Run:
 
 Expected on the currently inspected machine: WSL2 and Node pass; Docker checks fail until Docker Desktop is installed and running.
 
-- [ ] **Step 3: Install Docker Desktop using the official Windows installer**
+- [x] **Step 3: Install Docker Desktop using the official Windows installer**
+
+Status 2026-07-31: Docker Desktop 4.84.0, Engine 29.6.2 and Compose 5.3.1
+were installed under the D-drive runtime root. The WSL virtual disks were
+verified under `D:\Star\LIVE_IN_HDU_RUNTIME\docker\wsl`, and `hello-world`
+completed successfully.
 
 Install Docker Desktop with WSL2 backend, enable integration for the installed Ubuntu distribution, restart Windows if requested, then verify:
 
@@ -264,7 +269,11 @@ volumes:
 
 Do not attach this service to WeKnora's network and do not reuse WeKnora credentials.
 
-- [ ] **Step 4: Start the business database**
+- [x] **Step 4: Start the business database**
+
+Status 2026-07-31: `postgres:17-alpine` became healthy on loopback port 5433
+with a bind mount at `D:\Star\LIVE_IN_HDU_RUNTIME\postgres`. The retained
+Compose project name is `live-in-hdu`.
 
 ```powershell
 docker compose --env-file deploy/local/.env.local -f deploy/local/compose.platform.yml up -d
@@ -294,7 +303,12 @@ and assign `nextval('review_ordinal_seq')` within the insert transaction. Store 
 
 The implementations must satisfy the existing repository contracts without changing the answer router or API handlers. Parameterize all queries. No application query may use WeKnora's database.
 
-- [ ] **Step 7: Run contract and concurrency tests**
+- [x] **Step 7: Run contract and concurrency tests**
+
+Status 2026-07-31: the real PostgreSQL contract passed against PostgreSQL
+17.10, including immutable versions, rollback, 20 concurrent unique review
+ordinals, server-authoritative FIFO order, ISO timestamps and reopened-pool
+persistence.
 
 ```powershell
 $escapedPassword = [uri]::EscapeDataString($env:LIVE_IN_HDU_DB_PASSWORD)
@@ -372,7 +386,12 @@ npm --prefix apps/freshman-mvp exec -- tsx scripts/migrate-sqlite-to-postgres.mt
 
 The report must show source count, target count, insert count, skip count, and SHA-256 logical checksum for every table. It must not expose credentials.
 
-- [ ] **Step 5: Perform backup, dry-run, real migration, and second-run verification**
+- [x] **Step 5: Perform backup, dry-run, real migration, and second-run verification**
+
+Status 2026-07-31: the pre-migration SQLite backup is under the D-drive backup
+root. The real migration reconciled 35 intents, 99 aliases and 31 raw answers;
+Q11 retained zero answers. After changing no-op upserts to use
+`IS DISTINCT FROM`, the second real run transferred zero rows.
 
 ```powershell
 npm --prefix apps/freshman-mvp exec -- tsx scripts/backup-sqlite.mts --database runtime/live-in-hdu.db --output "..\..\output\freshman-platform\backups"
@@ -394,7 +413,12 @@ DATABASE_URL=
 
 `index.ts` selects SQLite or PostgreSQL only at composition time. Production Phase B uses `DATABASE_DRIVER=postgres`; tests continue covering both implementations.
 
-- [ ] **Step 7: Run the app against PostgreSQL and verify restart persistence**
+- [x] **Step 7: Run the app against PostgreSQL and verify restart persistence**
+
+Status 2026-07-31: the production gateway was started twice against the real
+PostgreSQL container. Before and after restart it reported PostgreSQL mode,
+35 intents, zero reviews, zero published answers and an empty Q11; SearXNG
+remained selected as the independent search provider.
 
 ```powershell
 $env:DATABASE_DRIVER='postgres'
@@ -443,7 +467,12 @@ vendor/WeKnora/LICENSE exists
 
 It must run `docker compose config` before `up` and reject `latest` for `WEKNORA_VERSION`.
 
-- [ ] **Step 2: Generate a minimal real WeKnora environment file**
+- [x] **Step 2: Generate a minimal real WeKnora environment file**
+
+Status 2026-07-31: `start-knowledge-stack.ps1 -PrepareOnly` now creates the
+ignored allowlisted environment without invoking Docker or requiring the
+embedding model. A red-green regression test verifies 32-byte random database,
+Redis, JWT and SearXNG secrets, blank Langfuse keys and idempotent reuse.
 
 Create `vendor/WeKnora/.env` from an explicit allowlist instead of copying the sample file. The setup script writes fresh 32-byte random values for the database password, Redis password, JWT secret, and SearXNG secret, and writes these non-secret settings:
 
@@ -855,7 +884,12 @@ SEARCH_MAX_RESULTS=6
 
 Select SearXNG only when `SEARCH_PROVIDER=searxng`.
 
-- [ ] **Step 7: Run unit and live tests**
+- [x] **Step 7: Run unit and live tests**
+
+Status 2026-07-31: the SearXNG container is running only on
+`127.0.0.1:8888`; its JSON endpoint and the production `SearxngProvider`
+both respond. Current campus DNS leaves HDU queries as an honest empty result
+and records unresponsive engines instead of fabricating search leads.
 
 ```powershell
 npm --prefix apps/freshman-mvp test -- --test-name-pattern="SearXNG provider"

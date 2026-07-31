@@ -32,7 +32,7 @@
   `pg/package.json` 可从该入口读取。
 - `postgres:17-alpine` 在 `127.0.0.1:5433` 健康运行，数据实际绑定到 D 盘；
   SQLite 基线迁移为 35 个意图、99 个别名、31 条原始回答，第二次复跑新增/更新 0 条。
-- 最新后端回归为 132 通过、1 个完整知识栈用例明确跳过、0 失败；前端 34/34，
+- 2026-07-31 前一检查点后端回归为 132 通过、1 个完整知识栈用例明确跳过、0 失败；前端 34/34，
   生产构建成功。
 - 暂停时已保留数据并停止业务容器、Docker Desktop、Ollama 与应用网关；端口
   `3210`、`5433`、`8080`、`8081`、`8082`、`8888`、`11434` 的监听数均为 0。
@@ -43,8 +43,28 @@
   恢复后应先审阅影响范围，不直接执行 `npm audit fix --force`。
 - 当前 DNS 无法解析 `registry.ollama.ai`，因此 `nomic-embed-text:latest` 尚未
   下载；不修改系统 DNS/VPN，也不从非官方来源获取模型。
-- Phase B 仍缺真实密钥、WeKnora 知识库 ID、获批《2025年新生指南》原文件，
-  WeKnora/SearXNG 尚未启动。
+- Phase B 仍缺真实密钥、WeKnora 知识库 ID、获批《2025年新生指南》原文件；
+  WeKnora 主栈尚未启动，SearXNG 已在后续步骤单独启动。
+
+### Continued
+
+- 为 `start-knowledge-stack.ps1` 增加 `-PrepareOnly`：在嵌入模型受阻时仍可
+  生成最小、随机、被忽略且幂等的 WeKnora 本地环境，不调用 Docker 或输出密钥。
+- SearXNG 已真实运行在 `127.0.0.1:8888`；Compose 展开确认 WeKnora app/frontend
+  也只允许 loopback 端口，PostgreSQL、Redis 与 DocReader 不发布主机端口。
+- 生产网关连续两次使用真实 PostgreSQL 启动，重启前后均为 35 个意图、0 个审核、
+  0 个已发布答案，Q11 原始回答为 0；独立搜索提供者为 SearXNG。
+
+### Continued verification
+
+- `-PrepareOnly` 回归测试完成 RED（缺少参数）→ GREEN，并验证四个随机密钥均为
+  32 字节、Langfuse Key 为空、第二次运行不覆盖现有环境。
+- SearXNG JSON API 与生产适配器均返回结构化状态；校园 DNS 失败时返回空线索并
+  保留 unresponsive engine 信息，没有伪造来源。
+- WeKnora 主栈镜像拉取到 `registry-1.docker.io` 时 TLS 握手超时；宿主机同一域名
+  的 DNS/HTTPS 同样失败，因此记录为外部网络阻塞，未修改系统 DNS、VPN 或代理。
+- 最新完整回归为后端 134 项中 133 通过、1 个完整知识栈用例明确跳过、0 失败；
+  前端 34/34，生产构建成功。
 
 ## 2026-07-29
 

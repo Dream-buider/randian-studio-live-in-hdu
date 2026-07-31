@@ -32,6 +32,12 @@ Phase B 由 LIVE IN HDU 网关、独立 PostgreSQL、固定版本 WeKnora、Olla
 .\scripts\start-knowledge-stack.ps1 -ValidateOnly
 ```
 
+仅生成安全的本地 WeKnora 环境，不调用 Docker、不要求嵌入模型：
+
+```powershell
+.\scripts\start-knowledge-stack.ps1 -PrepareOnly
+```
+
 完整启动（Docker Desktop 与 Ollama 准备完成后）：
 
 ```powershell

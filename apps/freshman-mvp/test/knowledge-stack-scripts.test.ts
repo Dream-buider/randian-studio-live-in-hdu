@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -71,6 +71,36 @@ test('knowledge stack validation accepts only the pinned vendor baseline and loo
   } finally {
     await rm(good, { recursive: true, force: true });
     await rm(bad, { recursive: true, force: true });
+  }
+});
+
+test('knowledge stack prepare-only creates an idempotent minimal vendor environment without Docker', async () => {
+  const root = await fixture();
+  const envPath = path.join(root, 'vendor', 'WeKnora', '.env');
+  try {
+    const first = run(START_SCRIPT, ['-PrepareOnly', '-RepoRootOverride', root]);
+    assert.equal(first.status, 0, `${first.stdout}\n${first.stderr}`);
+    const report = JSON.parse(first.stdout);
+    assert.equal(report.dockerInvoked, false);
+    assert.equal(report.embeddingModelRequired, false);
+    assert.equal(report.vendorEnvironment, envPath);
+
+    const environment = await readFile(envPath, 'utf8');
+    assert.match(environment, /^WEKNORA_VERSION=0\.7\.0$/m);
+    assert.match(environment, /^DISABLE_REGISTRATION=false$/m);
+    assert.match(environment, /^OLLAMA_BASE_URL=http:\/\/host\.docker\.internal:11434$/m);
+    assert.match(environment, /^DB_PASSWORD=[a-f0-9]{64}$/m);
+    assert.match(environment, /^REDIS_PASSWORD=[a-f0-9]{64}$/m);
+    assert.match(environment, /^JWT_SECRET=[a-f0-9]{64}$/m);
+    assert.match(environment, /^SEARXNG_SECRET=[a-f0-9]{64}$/m);
+    assert.match(environment, /^LANGFUSE_PUBLIC_KEY=$/m);
+    assert.match(environment, /^LANGFUSE_SECRET_KEY=$/m);
+
+    const second = run(START_SCRIPT, ['-PrepareOnly', '-RepoRootOverride', root]);
+    assert.equal(second.status, 0, `${second.stdout}\n${second.stderr}`);
+    assert.equal(await readFile(envPath, 'utf8'), environment);
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });
 

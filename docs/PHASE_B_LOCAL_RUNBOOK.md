@@ -3,9 +3,9 @@
 本手册对应“业务 PostgreSQL + WeKnora + SearXNG + TokenDance 网关”的本地方案。
 当前电脑已把 Docker Desktop 4.84.0、Docker Engine 29.6.2、Compose 5.3.1、
 Ollama 0.32.5 和业务 PostgreSQL 17 的数据落到 D 盘。业务 PostgreSQL 已完成真实
-容器、仓储契约、SQLite 迁移与幂等复跑验证；WeKnora/SearXNG 尚未启动，Ollama
-嵌入模型因当前 DNS 无法访问模型仓库而未下载，真实密钥与两个 WeKnora 知识库 ID
-也尚未配置。
+容器、仓储契约、SQLite 迁移与幂等复跑验证；SearXNG 已在 loopback 端口真实运行
+并接入 PostgreSQL 模式网关。WeKnora 主栈尚未启动，Ollama 嵌入模型因当前 DNS
+无法访问模型仓库而未下载，真实密钥与两个 WeKnora 知识库 ID 也尚未配置。
 
 ## 1. 存储边界
 
@@ -80,6 +80,15 @@ Pop-Location
 .\scripts\preflight-phase-b.ps1 `
   -JsonOutput .\output\freshman-platform\phase-b-preflight.json
 ```
+
+如果嵌入模型因外部网络暂时无法下载，可先生成被 Git 忽略的最小 WeKnora 环境：
+
+```powershell
+.\scripts\start-knowledge-stack.ps1 -PrepareOnly
+```
+
+该模式不调用 Docker、不检查嵌入模型，也不会覆盖已存在的 `vendor/WeKnora/.env`。
+它只生成随机本地密码并返回不含密钥的路径报告，便于继续完成 Compose 配置检查。
 
 ## 3. 启动、停止与检查
 
