@@ -16,7 +16,7 @@ Codex 在本项目中的角色是执行协调器，只负责把 ChatGPT 总控�
 - AI 检索 MVP：已形成 `docs/AI_RAG_BOT_MVP.md`，要求基于知识库回答并附来源。
 - 新生问答助手：已固定 `Tencent/WeKnora` 提交 `150c073` 作为开源底座，并完成 H5 优先、微信小程序并行的部署与改造计划；尚未配置云服务器、模型密钥或正式上线。
 - 本地新生问答平台：已完成 Phase A 本机交付，采用 Vue + Fastify + SQLite，支持动态预设、知识条目、未知问题诚实兜底、FIFO 审核、人工发布版本、健康检查、启停和在线备份恢复。当前生产库首次导入基线为 35 个意图、31 条原始回答、0 条自动发布答案，Q11 保持空白；运行数据和构建产物均落到 D 盘。电脑必须保持开机；尚未公网部署。
-- Phase B 代码基础：已实现独立 PostgreSQL 17、WeKnora REST 检索、SearXNG 搜索、FAQ outbox、审批清单导入、失败重试和 D 盘运维脚本；真实容器联调仍受 Docker/Ollama、npm 网络、密钥、知识库 ID 与获批《2025年新生指南》原文件阻塞，不能称为已部署。
+- Phase B 代码基础：已实现独立 PostgreSQL 17、WeKnora REST 检索、SearXNG 搜索、FAQ outbox、审批清单导入、失败重试和 D 盘运维脚本；`pg` 与 `@types/pg` 已安装到 D 盘依赖目录。真实容器联调仍受 Docker/Ollama、密钥、知识库 ID 与获批《2025年新生指南》原文件阻塞，不能称为已部署。
 - 团队回答征集：已改为单张飞书电子表格 [`2026 新生 40 问｜团队协作总表`](https://scnbcye3xdfz.feishu.cn/wiki/Y3oTwYdC1iYABBkzrMfceEWCn4b?from=from_copylink)。Q01-Q40 全部平铺，团队成员可直接查看 `待填写 / 填写中 / 待审核 / 已完成 / 需补充` 状态并认领填写；旧多维表格和表单仅作备份，不再作为群内入口。
 
 ## 项目文件结构

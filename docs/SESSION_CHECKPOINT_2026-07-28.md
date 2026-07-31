@@ -1,13 +1,14 @@
-# 2026-07-29 可恢复运行检查点
+# 2026-07-31 可恢复暂停检查点
 
 ## 恢复入口
 
 - 工作区：`C:\Users\Star\Desktop\总项目文件\杭电飞书社区`
 - 分支：`codex/local-agent-platform`
-- 当前功能提交：`1b7a5ad feat: show honest service health in admin console`
+- 最近完成的文档提交：`ed30673 docs: record admin health acceptance`
 - 当前状态：Phase A 已验证；Phase B 非依赖代码与静态运维检查已完成，但真实知识栈未部署。
-- 运行状态：2026-07-29 00:22（Asia/Shanghai）已实际启动，端口 `3210`
-  由本项目 Node 进程监听；重启电脑后不会自动启动，届时仍需运行启动脚本。
+- 暂停状态：2026-07-31（Asia/Shanghai）已按用户要求停止继续部署；端口
+  `3210`、`5433`、`8080`、`8888`、`11434` 均未监听。重启电脑后不会自动启动，
+  需手动运行启动脚本。
 - 运行根目录：`D:\Star\LIVE_IN_HDU_RUNTIME`
 
 恢复时先执行：
@@ -66,12 +67,20 @@ Invoke-RestMethod http://127.0.0.1:3210/api/health | ConvertTo-Json -Depth 8
   `D:\Star\LIVE_IN_HDU_RUNTIME\knowledge\phase-b-preflight-current.json`。
 - 预检只剩两个本机软件失败项：`docker-cli-missing` 与
   `ollama-cli-missing`。
-- 2026-07-29 再次访问 npm registry 时，`pg` 查询因 DNS `ENOTFOUND` 失败；
-  `pg` 与 `@types/pg` 仍未实际安装。
+- 2026-07-31 npm registry 网络恢复，已安装 `pg@8.22.0` 与
+  `@types/pg@8.20.0`，`npm ls pg @types/pg --depth=0` 通过；对应
+  `package-lock.json` 变更已保留。
 - `C:\Users\Star\.wslconfig` 已写入 12 GB 内存、12 核、8 GB D 盘 swap 配置；
   需在安装 Docker/Ollama 后重启 WSL/Docker 才会生效。
-- `pg` 与 `@types/pg` 已声明但尚未下载；网络恢复后必须使用 D 盘 TEMP、npm cache
-  和 node_modules 安装。一次超时的 npm 安装曾移除 C 盘 junction 入口，现已安全恢复。
+- 本次 `npm install` 会把 `apps/freshman-mvp/node_modules` junction 替换成
+  C 盘实体目录。已将新依赖迁回
+  `D:\Star\LIVE_IN_HDU_RUNTIME\node_modules\freshman-mvp\node_modules` 并重建
+  junction，C 盘临时占用已释放；迁移前的 D 盘依赖保留为
+  `node_modules.pre-pg-20260731`，便于必要时回退。
+- 后续不要直接对该 junction 再执行普通 `npm install`。如需更新依赖，应先设置
+  D 盘 `TEMP`、`TMP` 和 npm cache，并在安装后复核 junction 与实际磁盘落点。
+- 本次安装报告 14 个 npm audit 告警（1 moderate、13 high），尚未做依赖升级；
+  恢复后应先区分生产依赖与开发依赖，禁止直接运行 `npm audit fix --force`。
 
 ## 下一步工作
 
@@ -80,8 +89,8 @@ Invoke-RestMethod http://127.0.0.1:3210/api/health | ConvertTo-Json -Depth 8
 2. 自动浏览器验收已经完成；实体手机同一 Wi-Fi 测试仍需人工执行。
 3. 如进入 Phase B，先安装 Docker Desktop 与 Ollama，并在任何拉镜像/模型之前
    验证 Docker 磁盘镜像和 Ollama 模型目录实际位于 D 盘。
-4. 网络恢复后补装 `pg`、`@types/pg`，再配置真实的 TokenDance/WeKnora 密钥与
-   两个知识库 ID。
+4. 先运行 PostgreSQL 相关聚焦测试并审阅 npm audit 报告，再配置真实的
+   TokenDance/WeKnora 密钥与两个知识库 ID。
 5. 取得明确获批的《2025年新生指南》原文件后，才可创建审批清单并导入。
 6. 完成 PostgreSQL 迁移、WeKnora 导入、20 问检索评测、新命名卷恢复演练、
    两轮真实知识栈测试和实体手机验收；真实测试时按环境变量提供一条预设问题、
@@ -89,7 +98,7 @@ Invoke-RestMethod http://127.0.0.1:3210/api/health | ConvertTo-Json -Depth 8
 
 ## 外部阻塞与禁止事项
 
-- 缺 Docker Desktop、Ollama、可用 npm 网络、真实密钥和两个 WeKnora 知识库 ID。
+- 缺 Docker Desktop、Ollama、真实密钥和两个 WeKnora 知识库 ID。
 - 缺明确确认且获批的《2025年新生指南》原始文件。
 - 不导入整个 `最新资料`，不自动发布原始回答。
 - Q11 继续空白，纯数字 `19` 继续拒绝为回答。

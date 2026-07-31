@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## 2026-07-31
+
+### Changed
+
+- npm registry 网络恢复后安装 `pg@8.22.0` 与 `@types/pg@8.20.0`，补齐
+  PostgreSQL 客户端的锁文件条目。
+- `npm install` 将应用依赖 junction 替换为 C 盘实体目录后，已把新依赖迁回
+  `D:\Star\LIVE_IN_HDU_RUNTIME\node_modules\freshman-mvp\node_modules` 并重建
+  junction；迁移前的 D 盘依赖保留为可回退备份。
+- 刷新可恢复检查点、README 与任务状态，移除已经解除的 npm 网络阻塞。
+
+### Verification
+
+- `npm ls pg @types/pg --depth=0` 显示两个依赖均已安装。
+- `apps/freshman-mvp/node_modules` 已验证为指向 D 盘运行根的 Junction，且
+  `pg/package.json` 可从该入口读取。
+- 暂停时端口 `3210`、`5433`、`8080`、`8888`、`11434` 均未监听；未继续安装
+  Docker Desktop、Ollama 或启动 Phase B 容器。
+
+### Notes
+
+- 本次安装报告 14 个 npm audit 告警（1 moderate、13 high），尚未升级依赖；
+  恢复后应先审阅影响范围，不直接执行 `npm audit fix --force`。
+- 真实 Phase B 仍缺 Docker Desktop、Ollama、密钥、WeKnora 知识库 ID 和获批
+  《2025年新生指南》原文件。
+
 ## 2026-07-29
 
 ### Added
