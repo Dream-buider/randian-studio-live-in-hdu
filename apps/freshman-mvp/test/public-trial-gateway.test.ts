@@ -1,0 +1,195 @@
+import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+import type { PublicTrialConfig } from '../src/public-trial/config.js';
+import { createPublicTrialApp } from '../src/public-trial/app.js';
+
+const NOW = Date.parse('2026-08-01T00:00:00.000Z');
+
+async function fixture() {
+  const directory = await mkdtemp(path.join(tmpdir(), 'live-in-hdu-public-trial-'));
+  const publicDir = path.join(directory, 'public');
+  await mkdir(path.join(publicDir, 'assets'), { recursive: true });
+  await writeFile(path.join(publicDir, 'index.html'), '<main>PUBLIC TRIAL APP</main>');
+  await writeFile(path.join(publicDir, 'favicon.svg'), '<svg></svg>');
+  await writeFile(path.join(publicDir, 'assets', 'app.js'), 'window.PUBLIC_TRIAL=true;');
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const fetch: typeof globalThis.fetch = async (input, init) => {
+    calls.push({ url: String(input), init });
+    if (String(input).endsWith('/api/questions')) {
+      return Response.json({ items: [{ id: 'q01' }] });
+    }
+    return Response.json({
+      route: 'preset',
+      trustStatus: 'approved',
+      answer: '校园卡回答',
+      sources: [],
+      intentId: 'q01',
+    });
+  };
+  const config: PublicTrialConfig = {
+    host: '127.0.0.1',
+    port: 3211,
+    upstreamOrigin: 'http://127.0.0.1:3210',
+    publicDir,
+    runtimeDir: 'D:\\Star\\LIVE_IN_HDU_RUNTIME\\public-trial',
+    accessCode: 'team-2026',
+    sessionSecret: 's'.repeat(32),
+    sessionTtlSeconds: 43_200,
+    questionLimit: 30,
+    questionWindowMs: 600_000,
+    maxQuestionCodePoints: 500,
+  };
+  const app = createPublicTrialApp({
+    config,
+    fetch,
+    now: () => NOW,
+    randomUUID: () => 'session-1',
+  });
+  return {
+    app,
+    calls,
+    cleanup: async () => {
+      await app.close();
+      await rm(directory, { recursive: true, force: true });
+    },
+  };
+}
+
+async function login(app: ReturnType<typeof createPublicTrialApp>): Promise<string> {
+  const response = await app.inject({
+    method: 'POST',
+    url: '/trial/login',
+    payload: { code: 'team-2026' },
+  });
+  assert.equal(response.statusCode, 200);
+  const setCookie = response.headers['set-cookie'];
+  assert.equal(typeof setCookie, 'string');
+  return String(setCookie).split(';', 1)[0];
+}
+
+test('public trial redirects users to a self-contained login page and rejects a wrong code', async () => {
+  const { app, cleanup } = await fixture();
+  try {
+    const root = await app.inject({ method: 'GET', url: '/' });
+    assert.equal(root.statusCode, 302);
+    assert.equal(root.headers.location, '/trial/login');
+
+    const page = await app.inject({ method: 'GET', url: '/trial/login' });
+    assert.equal(page.statusCode, 200);
+    assert.match(page.body, /LIVE IN HDU 团队内测/);
+    assert.doesNotMatch(page.body, /https?:\/\/(?!127\.0\.0\.1)/);
+
+    const wrong = await app.inject({
+      method: 'POST',
+      url: '/trial/login',
+      payload: { code: 'wrong-code' },
+    });
+    assert.equal(wrong.statusCode, 401);
+    assert.deepEqual(wrong.json(), {
+      error: { code: 'INVALID_ACCESS_CODE', message: '测试码不正确' },
+    });
+  } finally {
+    await cleanup();
+  }
+});
+
+test('public trial issues a secure session and serves only the user frontend', async () => {
+  const { app, cleanup } = await fixture();
+  try {
+    const cookie = await login(app);
+    const loginResponse = await app.inject({
+      method: 'POST',
+      url: '/trial/login',
+      payload: { code: 'team-2026' },
+    });
+    assert.match(String(loginResponse.headers['set-cookie']), /HttpOnly.*Secure.*SameSite=Lax/);
+
+    for (const url of ['/', '/chat']) {
+      const response = await app.inject({ method: 'GET', url, headers: { cookie } });
+      assert.equal(response.statusCode, 200);
+      assert.match(response.body, /PUBLIC TRIAL APP/);
+    }
+    const asset = await app.inject({
+      method: 'GET',
+      url: '/assets/app.js',
+      headers: { cookie },
+    });
+    assert.equal(asset.statusCode, 200);
+    assert.equal(asset.body, 'window.PUBLIC_TRIAL=true;');
+
+    const logout = await app.inject({
+      method: 'POST',
+      url: '/trial/logout',
+      headers: { cookie },
+    });
+    assert.equal(logout.statusCode, 200);
+    assert.match(String(logout.headers['set-cookie']), /Max-Age=0/);
+  } finally {
+    await cleanup();
+  }
+});
+
+test('public trial proxies only public APIs with a restricted header set', async () => {
+  const { app, calls, cleanup } = await fixture();
+  try {
+    const cookie = await login(app);
+    const questions = await app.inject({
+      method: 'GET',
+      url: '/api/questions',
+      headers: {
+        cookie,
+        authorization: 'Bearer must-not-forward',
+        'x-forwarded-for': '127.0.0.1',
+        accept: 'application/json',
+      },
+    });
+    assert.equal(questions.statusCode, 200);
+    assert.deepEqual(questions.json(), { items: [{ id: 'q01' }] });
+
+    const answer = await app.inject({
+      method: 'POST',
+      url: '/api/ask',
+      headers: { cookie, 'content-type': 'application/json' },
+      payload: { question: '学校怎么办校园卡' },
+    });
+    assert.equal(answer.statusCode, 200);
+    assert.equal(answer.json().answer, '校园卡回答');
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0].url, 'http://127.0.0.1:3210/api/questions');
+    const forwarded = new Headers(calls[0].init?.headers);
+    assert.equal(forwarded.get('accept'), 'application/json');
+    assert.equal(forwarded.has('authorization'), false);
+    assert.equal(forwarded.has('cookie'), false);
+    assert.equal(forwarded.has('x-forwarded-for'), false);
+  } finally {
+    await cleanup();
+  }
+});
+
+test('public trial returns 404 for every management, health and unknown route without upstream calls', async () => {
+  const { app, calls, cleanup } = await fixture();
+  try {
+    const cookie = await login(app);
+    for (const url of [
+      '/admin',
+      '/api/admin/intents',
+      '/api/reviews',
+      '/api/reviews/one',
+      '/api/health',
+      '/unknown',
+      '/assets/../index.html',
+    ]) {
+      const response = await app.inject({ method: 'GET', url, headers: { cookie } });
+      assert.equal(response.statusCode, 404, url);
+      assert.deepEqual(response.json(), {
+        error: { code: 'NOT_FOUND', message: 'Route not found' },
+      });
+    }
+    assert.equal(calls.length, 0);
+  } finally {
+    await cleanup();
+  }
+});

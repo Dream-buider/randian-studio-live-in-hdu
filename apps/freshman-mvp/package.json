@@ -9,6 +9,7 @@
     "build": "vue-tsc --noEmit -p tsconfig.json && tsc -p tsconfig.server.json && vite build",
     "build:trial": "vue-tsc --noEmit -p tsconfig.json && vite build --mode public-trial && tsx scripts/assert-public-trial-build.mts",
     "start": "node --preserve-symlinks --preserve-symlinks-main dist/server/index.js",
+    "start:trial": "node --preserve-symlinks --preserve-symlinks-main dist/public-trial/index.js",
     "test": "tsx --test test/*.test.ts",
     "test:web": "vitest run test/web",
     "test:all": "npm test && npm run test:web"
