@@ -65,6 +65,21 @@
   的 DNS/HTTPS 同样失败，因此记录为外部网络阻塞，未修改系统 DNS、VPN 或代理。
 - 最新完整回归为后端 134 项中 133 通过、1 个完整知识栈用例明确跳过、0 失败；
   前端 34/34，生产构建成功。
+- 新增共享运行工具解析：预检、启动、停止和备份脚本在新 PowerShell 会话中可从
+  `D:\Star\LIVE_IN_HDU_RUNTIME` 找到 Docker/Ollama，也支持显式受控 CLI 路径；
+  对应测试均按 RED→GREEN 完成。
+- 真实停止验收确认网关、SearXNG 和业务 PostgreSQL 按顺序停止，目标端口归零，
+  容器与 D 盘数据保留；未执行 `down -v`。
+- Docker/WSL 实测为 12 核、12,542,226,432 字节内存和 8,589,934,592 字节 swap；
+  Docker WSL 磁盘仍位于 D 盘。预检不再把正常运行的 Ollama `11434` 误报为端口冲突。
+- 最新预检可从 D 盘解析两项 CLI，Docker、Compose、Node、虚拟化、内存和磁盘均通过，
+  仅保留 `embedding-model-missing`；官方模型拉取仍因
+  `registry.ollama.ai` DNS 失败。
+- 本轮完整后端回归为 139 项中 138 通过、1 个完整真实知识栈用例明确跳过、0 失败，
+  其中真实 PostgreSQL 契约通过；前端 34/34，生产构建成功。
+- 新增稳定恢复入口 `docs/SESSION_CHECKPOINT_CURRENT.md`，记录当前分支、D 盘运行根、
+  已验证基线、外部阻塞、继续顺序与禁止事项；暂停时再次确认全部项目服务已停止且
+  目标端口无监听。
 
 ## 2026-07-29
 

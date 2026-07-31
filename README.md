@@ -16,7 +16,7 @@ Codex 在本项目中的角色是执行协调器，只负责把 ChatGPT 总控�
 - AI 检索 MVP：已形成 `docs/AI_RAG_BOT_MVP.md`，要求基于知识库回答并附来源。
 - 新生问答助手：已固定 `Tencent/WeKnora` 提交 `150c073` 作为开源底座，并完成 H5 优先、微信小程序并行的部署与改造计划；尚未配置云服务器、模型密钥或正式上线。
 - 本地新生问答平台：已完成 Phase A 本机交付，采用 Vue + Fastify + SQLite，支持动态预设、知识条目、未知问题诚实兜底、FIFO 审核、人工发布版本、健康检查、启停和在线备份恢复。当前生产库首次导入基线为 35 个意图、31 条原始回答、0 条自动发布答案，Q11 保持空白；运行数据和构建产物均落到 D 盘。电脑必须保持开机；尚未公网部署。
-- Phase B 本地基础：Docker Desktop 4.84.0、Docker Engine 29.6.2、Compose 5.3.1 与 Ollama 0.32.5 已安装到 D 盘；业务 PostgreSQL 17 已在真实容器中完成健康、迁移、并发 FIFO、重启持久化和 SQLite 数据迁移验证。SearXNG 已在 `127.0.0.1:8888` 真实运行并接入 PostgreSQL 模式网关；WeKnora 主栈尚未启动，Ollama 嵌入模型因当前 DNS 无法访问模型仓库而未下载。真实密钥、两个知识库 ID 与获批《2025年新生指南》原文件仍缺失，因此不能称为 Phase B 完整部署。
+- Phase B 本地基础：Docker Desktop 4.84.0、Docker Engine 29.6.2、Compose 5.3.1 与 Ollama 0.32.5 已安装到 D 盘；业务 PostgreSQL 17 已在真实容器中完成健康、迁移、并发 FIFO、重启持久化和 SQLite 数据迁移验证。SearXNG 已在 `127.0.0.1:8888` 真实运行并接入 PostgreSQL 模式网关；Docker/WSL 实测限制为 12 核、约 12 GB RAM 和 8 GB swap。生命周期脚本可在新 PowerShell 会话中从 D 盘解析 Docker/Ollama CLI，不依赖临时 `PATH`。WeKnora 主栈尚未启动，Ollama 嵌入模型因当前 DNS 无法访问模型仓库而未下载。真实密钥、两个知识库 ID 与获批《2025年新生指南》原文件仍缺失，因此不能称为 Phase B 完整部署。
 - 团队回答征集：已改为单张飞书电子表格 [`2026 新生 40 问｜团队协作总表`](https://scnbcye3xdfz.feishu.cn/wiki/Y3oTwYdC1iYABBkzrMfceEWCn4b?from=from_copylink)。Q01-Q40 全部平铺，团队成员可直接查看 `待填写 / 填写中 / 待审核 / 已完成 / 需补充` 状态并认领填写；旧多维表格和表单仅作备份，不再作为群内入口。
 
 ## 项目文件结构
@@ -79,6 +79,7 @@ Codex 在本项目中的角色是执行协调器，只负责把 ChatGPT 总控�
 - [docs/superpowers/plans/2026-07-21-freshman-qa.md](docs/superpowers/plans/2026-07-21-freshman-qa.md)：三段问答和审核回流的实施计划。
 - [apps/freshman-mvp/README.md](apps/freshman-mvp/README.md)：本地雏形的启动、停止、数据替换与 DeepSeek 配置方法。
 - [docs/PHASE_B_LOCAL_RUNBOOK.md](docs/PHASE_B_LOCAL_RUNBOOK.md)：Phase B 的 D 盘边界、配置、启停、测试、审批导入、备份、密钥轮换与云迁移手册。
+- [docs/SESSION_CHECKPOINT_CURRENT.md](docs/SESSION_CHECKPOINT_CURRENT.md)：暂停或重启后继续工作的唯一当前恢复入口。
 - [docs/2026新生40问_团队征集版.md](docs/2026新生40问_团队征集版.md)：团队真实回答的 40 问完整征集表。
 - [docs/2026新生40问_群公告简版.md](docs/2026新生40问_群公告简版.md)：可直接复制到群里的征集公告。
 - [docs/LIVE_IN_HDU_信息架构V1.md](docs/LIVE_IN_HDU_信息架构V1.md)：学生问题路径版信息架构。
@@ -103,6 +104,10 @@ Ollama 嵌入模型。当前 Docker、Ollama 与业务 PostgreSQL 已完成 D �
 脚本仅在所有前置条件满足时退出 `0`。失败报告仍会写入指定 JSON，并用不同错误码
 区分 `docker-cli-missing`（没有 Docker CLI）与
 `docker-engine-stopped`（CLI 已存在，但 Docker Desktop 引擎未运行）。
+如果当前会话的 `PATH` 没有 Docker/Ollama，脚本会优先检查
+`D:\Star\LIVE_IN_HDU_RUNTIME` 下已经验证的安装位置；报告中的
+`dockerCliPath`、`dockerCliSource`、`ollamaCliPath` 和 `ollamaCliSource`
+会保留实际解析结果。运行中的 Ollama 正常占用 `11434` 不再被误报为端口冲突。
 
 本机请求的数据根目录是 `D:\`，但普通用户对 D 盘根目录没有写入权限，因此实际
 运行根目录固定为 `D:\Star\LIVE_IN_HDU_RUNTIME`。报告会同时保留

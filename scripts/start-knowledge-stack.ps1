@@ -3,6 +3,7 @@ param(
     [switch]$ValidateOnly,
     [switch]$StaticOnly,
     [switch]$PrepareOnly,
+    [switch]$ResolveToolsOnly,
     [string]$RepoRootOverride = ''
 )
 
@@ -25,6 +26,7 @@ $PlatformEnvironment = Join-Path $RepoRoot 'deploy\local\.env.local'
 $VendorEnvironment = Join-Path $VendorRoot '.env'
 $PreflightScript = Join-Path $RepoRoot 'scripts\preflight-phase-b.ps1'
 $GatewayStartScript = Join-Path $RepoRoot 'scripts\start-freshman-platform.ps1'
+$RuntimeTooling = Join-Path $PSScriptRoot 'runtime-tooling.ps1'
 $PinnedVersion = '0.7.0'
 $PinnedCommit = '150c07368b84b4f50421b8957255213cbbadc175'
 $RuntimeRoot = if ($env:LIVE_IN_HDU_RUNTIME_ROOT) {
@@ -231,6 +233,33 @@ if ($PrepareOnly) {
     exit 0
 }
 
+if (-not (Test-Path -LiteralPath $RuntimeTooling -PathType Leaf)) {
+    throw "Runtime tooling helper is missing: $RuntimeTooling"
+}
+. $RuntimeTooling
+$dockerTool = Resolve-LiveInHduTool `
+    -Name 'docker' `
+    -RuntimeRoot $RuntimeRoot `
+    -RuntimeRelativePath 'docker\DockerDesktop\resources\bin\docker.exe'
+$ollamaTool = Resolve-LiveInHduTool `
+    -Name 'ollama' `
+    -RuntimeRoot $RuntimeRoot `
+    -RuntimeRelativePath 'ollama\app\ollama.exe'
+$dockerCli = [string]$dockerTool.Path
+$ollamaCli = [string]$ollamaTool.Path
+
+if ($ResolveToolsOnly) {
+    [ordered]@{
+        dockerInvoked = $false
+        dockerCli = $dockerTool.Path
+        dockerSource = $dockerTool.Source
+        ollamaCli = $ollamaTool.Path
+        ollamaSource = $ollamaTool.Source
+        runtimeRoot = $RuntimeRoot
+    } | ConvertTo-Json -Compress
+    exit 0
+}
+
 if (-not (Test-Path -LiteralPath $PreflightScript)) {
     throw "Phase B preflight script is missing: $PreflightScript"
 }
@@ -241,7 +270,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 Assert-DockerDiskImageOnD
 try {
-    $composeVersionText = (& docker compose version --short 2>$null | Out-String).Trim().TrimStart('v')
+    $composeVersionText = (& $dockerCli compose version --short 2>$null | Out-String).Trim().TrimStart('v')
     $composeVersion = [Version]$composeVersionText
 } catch {
     throw 'Could not determine Docker Compose version.'
@@ -249,7 +278,7 @@ try {
 if ($composeVersion -lt [Version]'2.24.4') {
     throw "Docker Compose 2.24.4 or newer is required for !override; found $composeVersionText."
 }
-& ollama show 'nomic-embed-text:latest' | Out-Null
+& $ollamaCli show 'nomic-embed-text:latest' | Out-Null
 if ($LASTEXITCODE -ne 0) {
     throw "Ollama embedding model is not verified under $env:OLLAMA_MODELS"
 }
@@ -289,18 +318,18 @@ $composeArgs = @(
     '-f', $OverrideCompose,
     '--profile', 'searxng'
 )
-& docker @businessComposeArgs config | Out-Null
+& $dockerCli @businessComposeArgs config | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Business PostgreSQL compose validation failed.' }
-& docker @composeArgs config | Out-Null
+& $dockerCli @composeArgs config | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'docker compose config validation failed.' }
-& docker @businessComposeArgs up -d live-in-hdu-db
+& $dockerCli @businessComposeArgs up -d live-in-hdu-db
 if ($LASTEXITCODE -ne 0) { throw 'LIVE IN HDU PostgreSQL failed to start.' }
 $databaseName = if ($env:LIVE_IN_HDU_DB_NAME) { $env:LIVE_IN_HDU_DB_NAME } else { 'live_in_hdu' }
 $databaseUser = if ($env:LIVE_IN_HDU_DB_USER) { $env:LIVE_IN_HDU_DB_USER } else { 'live_in_hdu' }
 $postgresDeadline = [DateTime]::UtcNow.AddMinutes(2)
 $postgresReady = $false
 while ([DateTime]::UtcNow -lt $postgresDeadline) {
-    & docker @businessComposeArgs exec -T live-in-hdu-db pg_isready -U $databaseUser -d $databaseName *> $null
+    & $dockerCli @businessComposeArgs exec -T live-in-hdu-db pg_isready -U $databaseUser -d $databaseName *> $null
     if ($LASTEXITCODE -eq 0) {
         $postgresReady = $true
         break
@@ -308,9 +337,9 @@ while ([DateTime]::UtcNow -lt $postgresDeadline) {
     Start-Sleep -Milliseconds 500
 }
 if (-not $postgresReady) { throw 'LIVE IN HDU PostgreSQL did not become ready within two minutes.' }
-& docker @composeArgs up -d postgres redis
+& $dockerCli @composeArgs up -d postgres redis
 if ($LASTEXITCODE -ne 0) { throw 'WeKnora PostgreSQL and Redis failed to start.' }
-& docker @composeArgs up -d docreader app frontend searxng-init searxng
+& $dockerCli @composeArgs up -d docreader app frontend searxng-init searxng
 if ($LASTEXITCODE -ne 0) { throw 'WeKnora minimum stack failed to start.' }
 
 $deadline = [DateTime]::UtcNow.AddMinutes(5)

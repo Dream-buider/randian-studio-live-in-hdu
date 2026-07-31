@@ -63,7 +63,7 @@
 | TODO | 并行适配并送审微信小程序 | 复用 `vendor/WeKnora/miniprogram/`，改为只访问新生问答网关，不阻塞 H5 上线 |
 | DONE | 交付 Phase A 本地新生问答平台 | Vue + Fastify + SQLite 已完成生产入口、D 盘存储、真实表格首次导入、无密钥诚实兜底、FIFO 审核、人工版本发布、启停、健康检查和在线备份恢复；Edge 390×844 已验收，实体手机仍待人工补测 |
 | DONE | 完成 Phase B 非依赖代码基础 | 已实现独立 PostgreSQL 17 适配、WeKnora REST、SearXNG、FAQ outbox、审批清单导入与重试、D 盘启停/测试/备份脚本；单元测试和构建可离线验证 |
-| DOING | 完成 Phase B 真实本地联调 | Docker Desktop、Ollama 与业务 PostgreSQL 17 已落到 D 盘；真实 PostgreSQL 契约、SQLite 迁移、网关重启持久化及本地 SearXNG 调用已验证。当前待解决 Ollama/容器仓库网络、WeKnora 主栈、真实密钥与知识库 ID、获批语料、恢复演练和检索评测 |
+| DOING | 完成 Phase B 真实本地联调 | Docker Desktop、Ollama 与业务 PostgreSQL 17 已落到 D 盘；真实 PostgreSQL 契约、SQLite 迁移、网关重启持久化、本地 SearXNG、12 核/12 GB/8 GB swap 资源限制以及新会话 D 盘 CLI 解析均已验证。当前唯一预检失败为嵌入模型缺失；仍待解决官方仓库 DNS、WeKnora 主栈、真实密钥与知识库 ID、获批语料、恢复演练和检索评测 |
 
 ## 运营管理
 
@@ -144,3 +144,4 @@
 | 2026-07-31 | AI检索 | 安装 D 盘 Docker/Ollama，启动并验证真实 PostgreSQL 17，迁移 SQLite 基线数据 | DOING |
 | 2026-07-31 | AI检索 | 生成安全 WeKnora 环境，启动 loopback SearXNG，并验证 PostgreSQL 网关重启快照 | DONE |
 | 2026-07-31 | 运营管理 | 保存最新可恢复暂停检查点，将 PostgreSQL 客户端依赖迁回 D 盘并确认所有本地服务已停止 | DONE |
+| 2026-07-31 | AI检索 | 修复重启后 Docker/Ollama 不在 PATH 导致知识栈脚本失效的问题，并验证安全停止、卷保留、WSL 资源上限与单一预检失败 | DONE |

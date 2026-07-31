@@ -23,6 +23,8 @@ Phase B 由 LIVE IN HDU 网关、独立 PostgreSQL、固定版本 WeKnora、Olla
 - `nomic-embed-text:latest` 尚未下载；当前 DNS 无法解析
   `registry.ollama.ai`，因此完整知识栈预检仍不会放行。
 - `deploy/local/.env.local` 已生成且被 Git 忽略；不得复制其中密码到文档或提交。
+- Docker/WSL 实测限制为 12 核、约 12 GB RAM、8 GB swap；生命周期脚本会从
+  D 盘运行根解析 Docker/Ollama CLI，不要求每次手工修改 `PATH`。
 
 ## 命令
 

@@ -35,12 +35,26 @@ Docker Desktop 已使用 `--wsl-default-data-root` 安装到上述 `docker` 目�
 WSL 虚拟磁盘已核对位于 D 盘。启动脚本仍会读取 Docker 设置验证；无法确认在 D 盘
 时会在拉镜像前停止。
 
+2026-07-31 实测 Docker/WSL 为 12 个处理器、12,542,226,432 字节内存和
+8,589,934,592 字节 swap，说明 `.wslconfig` 已生效。新 PowerShell 会话即使没有
+临时 Docker/Ollama `PATH`，预检、启动、停止和备份脚本也会从本运行根解析已验证的
+CLI。可用以下只读命令核对：
+
+```powershell
+.\scripts\start-knowledge-stack.ps1 -ResolveToolsOnly
+.\scripts\backup-knowledge-stack.ps1 -ResolveToolsOnly
+```
+
+仅在安装位置不同且已人工核对时，可为当前进程设置
+`LIVE_IN_HDU_DOCKER_CLI` 或 `LIVE_IN_HDU_OLLAMA_CLI` 的绝对路径；脚本会拒绝
+不存在的文件。不要把这两个临时覆盖写成系统级环境变量。
+
 ## 2. 首次配置
 
 1. Docker Desktop（WSL2 后端）和 Ollama 已安装；重装时仍必须沿用本手册的 D 盘
    安装目录与数据目录。
-2. 重启 WSL/Docker，使 `C:\Users\Star\.wslconfig` 中的 12 GB 内存、12 核、
-   8 GB D 盘交换文件限制生效。
+2. `C:\Users\Star\.wslconfig` 中的 12 GB 内存、12 核、8 GB D 盘交换文件限制
+   已在 Docker/WSL 重启后实测生效；配置变化后仍需重新验证。
 3. 将 Ollama 模型目录设置为
    `D:\Star\LIVE_IN_HDU_RUNTIME\ollama\models`，再拉取且只拉取：
 

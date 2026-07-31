@@ -5,8 +5,8 @@
 - 工作区：`C:\Users\Star\Desktop\总项目文件\杭电飞书社区`
 - 分支：`codex/local-agent-platform`
 - 检查点提交：以本文所在提交为准，恢复时运行 `git log -1 --oneline`。
-- 当前状态：Phase A 已验证；Phase B 已完成 D 盘 Docker/Ollama 安装和真实业务
-  PostgreSQL 联调，但 WeKnora/SearXNG 与嵌入模型尚未完成。
+- 当前状态：Phase A 已验证；Phase B 已完成 D 盘 Docker/Ollama 安装、真实业务
+  PostgreSQL 联调以及 SearXNG 部分联调，但 WeKnora 主栈与嵌入模型尚未完成。
 - 暂停状态：2026-07-31（Asia/Shanghai）已按用户要求停止继续部署；业务容器、
   Docker Desktop、Ollama 服务与应用网关均已停止。端口 `3210`、`5433`、`8080`、
   `8081`、`8082`、`8888`、`11434` 已复核为 0 个监听。重启后需要手动恢复相应服务。
@@ -18,7 +18,7 @@
 Set-Location 'C:\Users\Star\Desktop\总项目文件\杭电飞书社区'
 git status --short --branch
 git log -3 --oneline
-Get-Content .\docs\SESSION_CHECKPOINT_2026-07-28.md
+Get-Content .\docs\SESSION_CHECKPOINT_CURRENT.md
 ```
 
 如只恢复 Phase A，再运行 `.\scripts\start-freshman-platform.ps1`。如继续 Phase B，
@@ -60,7 +60,7 @@ Get-Content .\docs\SESSION_CHECKPOINT_2026-07-28.md
   `D:\Star\LIVE_IN_HDU_RUNTIME\backups\sqlite-before-postgres\live-in-hdu-2026-07-31T04-14-10-222Z.db`。
   真实迁移结果为 35 个意图、99 个别名、31 条原始回答、0 条发布答案、0 条审核；
   Q11 仍为空，第二次复跑写入 0 条且源/目标计数一致。
-- 2026-07-31 最新回归：后端 134 项中 133 通过、1 项真实完整知识栈因未显式开启而
+- 2026-07-31 最新回归：后端 139 项中 138 通过、1 项真实完整知识栈因未显式开启而
   跳过、0 失败；前端 34/34；真实 PostgreSQL 契约已包含在本轮；生产构建成功。
 - `start-knowledge-stack.ps1 -PrepareOnly` 已生成被 Git 忽略且不输出密钥的最小
   WeKnora 环境；SearXNG 已在 `127.0.0.1:8888` 单独运行。网关以真实 PostgreSQL
@@ -88,8 +88,12 @@ Get-Content .\docs\SESSION_CHECKPOINT_2026-07-28.md
 - 2026-07-31 npm registry 网络恢复，已安装 `pg@8.22.0` 与
   `@types/pg@8.20.0`，`npm ls pg @types/pg --depth=0` 通过；对应
   `package-lock.json` 变更已保留。
-- `C:\Users\Star\.wslconfig` 已写入 12 GB 内存、12 核、8 GB D 盘 swap 配置；
-  需在安装 Docker/Ollama 后重启 WSL/Docker 才会生效。
+- `C:\Users\Star\.wslconfig` 的 12 GB 内存、12 核、8 GB D 盘 swap 配置已在
+  Docker/WSL 重启后实测生效；Docker 报告 12 核和 12,542,226,432 字节内存，
+  WSL 报告 8,589,934,592 字节 swap。
+- 预检、启动、停止和备份脚本可在新 PowerShell 会话中从 D 盘运行根解析
+  Docker/Ollama CLI。最新预检只剩 `embedding-model-missing`，不再把正常运行的
+  Ollama `11434` 误报为端口冲突。
 - 本次 `npm install` 会把 `apps/freshman-mvp/node_modules` junction 替换成
   C 盘实体目录。已将新依赖迁回
   `D:\Star\LIVE_IN_HDU_RUNTIME\node_modules\freshman-mvp\node_modules` 并重建

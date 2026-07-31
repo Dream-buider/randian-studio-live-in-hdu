@@ -18,10 +18,25 @@ $OverrideCompose = Join-Path $RepoRoot 'deploy\local\compose.weknora.override.ym
 $PlatformCompose = Join-Path $RepoRoot 'deploy\local\compose.platform.yml'
 $PlatformEnvironment = Join-Path $RepoRoot 'deploy\local\.env.local'
 $GatewayStop = Join-Path $RepoRoot 'scripts\stop-freshman-platform.ps1'
+$RuntimeRoot = if ($env:LIVE_IN_HDU_RUNTIME_ROOT) {
+    [IO.Path]::GetFullPath($env:LIVE_IN_HDU_RUNTIME_ROOT)
+} else {
+    'D:\Star\LIVE_IN_HDU_RUNTIME'
+}
+$RuntimeTooling = Join-Path $PSScriptRoot 'runtime-tooling.ps1'
+if (-not (Test-Path -LiteralPath $RuntimeTooling -PathType Leaf)) {
+    throw "Runtime tooling helper is missing: $RuntimeTooling"
+}
+. $RuntimeTooling
+$dockerTool = Resolve-LiveInHduTool `
+    -Name 'docker' `
+    -RuntimeRoot $RuntimeRoot `
+    -RuntimeRelativePath 'docker\DockerDesktop\resources\bin\docker.exe'
+$dockerCli = [string]$dockerTool.Path
 $services = @('frontend', 'app', 'docreader', 'searxng', 'redis', 'postgres')
 $display = @(
-    "docker compose --project-directory `"$VendorRoot`" --env-file `"$VendorEnvironment`" -f `"$BaseCompose`" -f `"$OverrideCompose`" --profile searxng stop $($services -join ' ')"
-    "docker compose --project-name live-in-hdu --env-file `"$PlatformEnvironment`" -f `"$PlatformCompose`" stop live-in-hdu-db"
+    "`"$dockerCli`" compose --project-directory `"$VendorRoot`" --env-file `"$VendorEnvironment`" -f `"$BaseCompose`" -f `"$OverrideCompose`" --profile searxng stop $($services -join ' ')"
+    "`"$dockerCli`" compose --project-name live-in-hdu --env-file `"$PlatformEnvironment`" -f `"$PlatformCompose`" stop live-in-hdu-db"
 ) -join [Environment]::NewLine
 
 if ($PrintCommandOnly) {
@@ -35,7 +50,7 @@ if (Test-Path -LiteralPath $GatewayStop) {
 if (-not (Test-Path -LiteralPath $VendorEnvironment)) {
     Write-Output 'WeKnora 本地环境文件不存在；无需停止容器。'
 } else {
-    & docker compose `
+    & $dockerCli compose `
         --project-directory $VendorRoot `
         --env-file $VendorEnvironment `
         -f $BaseCompose `
@@ -47,7 +62,7 @@ if (-not (Test-Path -LiteralPath $VendorEnvironment)) {
     }
 }
 if (Test-Path -LiteralPath $PlatformEnvironment) {
-    & docker compose `
+    & $dockerCli compose `
         --project-name live-in-hdu `
         --env-file $PlatformEnvironment `
         -f $PlatformCompose `

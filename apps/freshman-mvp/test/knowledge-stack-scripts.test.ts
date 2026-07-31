@@ -12,6 +12,7 @@ const BACKUP_SCRIPT = path.join(REPO_ROOT, 'scripts', 'backup-knowledge-stack.ps
 const PLATFORM_COMPOSE = path.join(REPO_ROOT, 'deploy', 'local', 'compose.platform.yml');
 const TEMP_ROOT = 'D:\\Star\\LIVE_IN_HDU_RUNTIME\\temp';
 const PINNED_COMMIT = '150c07368b84b4f50421b8957255213cbbadc175';
+const PWSH = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe';
 
 async function fixture(version = '0.7.0'): Promise<string> {
   const root = await mkdtemp(path.join(TEMP_ROOT, 'weknora-lifecycle-'));
@@ -44,12 +45,12 @@ async function fixture(version = '0.7.0'): Promise<string> {
   return root;
 }
 
-function run(script: string, args: string[]) {
-  return spawnSync('pwsh', ['-NoProfile', '-File', script, ...args], {
+function run(script: string, args: string[], environment: NodeJS.ProcessEnv = {}) {
+  return spawnSync(PWSH, ['-NoProfile', '-File', script, ...args], {
     cwd: REPO_ROOT,
     encoding: 'utf8',
     windowsHide: true,
-    env: { ...process.env, TEMP: TEMP_ROOT, TMP: TEMP_ROOT },
+    env: { ...process.env, TEMP: TEMP_ROOT, TMP: TEMP_ROOT, ...environment },
   });
 }
 
@@ -104,11 +105,92 @@ test('knowledge stack prepare-only creates an idempotent minimal vendor environm
   }
 });
 
+test('knowledge stack resolves Docker and Ollama from the D-drive runtime when PATH has neither tool', async () => {
+  const root = await fixture();
+  const runtimeRoot = path.join(root, 'runtime');
+  const dockerPath = path.join(
+    runtimeRoot,
+    'docker',
+    'DockerDesktop',
+    'resources',
+    'bin',
+    'docker.exe',
+  );
+  const ollamaPath = path.join(runtimeRoot, 'ollama', 'app', 'ollama.exe');
+  await mkdir(path.dirname(dockerPath), { recursive: true });
+  await mkdir(path.dirname(ollamaPath), { recursive: true });
+  await writeFile(dockerPath, 'fixture');
+  await writeFile(ollamaPath, 'fixture');
+
+  try {
+    const resolved = run(
+      START_SCRIPT,
+      ['-ResolveToolsOnly', '-RepoRootOverride', root],
+      {
+        LIVE_IN_HDU_RUNTIME_ROOT: runtimeRoot,
+        PATH: `${path.dirname(PWSH)};C:\\Windows\\System32`,
+      },
+    );
+    assert.equal(resolved.status, 0, `${resolved.stdout}\n${resolved.stderr}`);
+    const report = JSON.parse(resolved.stdout);
+    assert.equal(report.dockerInvoked, false);
+    assert.equal(path.normalize(report.dockerCli), path.normalize(dockerPath));
+    assert.equal(path.normalize(report.ollamaCli), path.normalize(ollamaPath));
+    assert.equal(report.dockerSource, 'runtime-fallback');
+    assert.equal(report.ollamaSource, 'runtime-fallback');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('knowledge stack stop command never deletes volumes', () => {
   const source = run(STOP_SCRIPT, ['-PrintCommandOnly']);
   assert.equal(source.status, 0, `${source.stdout}\n${source.stderr}`);
   assert.match(source.stdout, /\bstop\b/);
   assert.doesNotMatch(source.stdout, /\bdown\b|--volumes|-v\b/i);
+});
+
+test('knowledge stack stop executes a resolved Docker CLI and retains every volume', async () => {
+  const root = await fixture();
+  const dockerLog = path.join(root, 'docker-calls.log');
+  const fakeDocker = path.join(root, 'fake-docker.cmd');
+  await writeFile(
+    fakeDocker,
+    [
+      '@echo off',
+      'echo %*>>"%LIVE_IN_HDU_DOCKER_LOG%"',
+      'exit /b 0',
+      '',
+    ].join('\r\n'),
+  );
+  await writeFile(path.join(root, 'vendor', 'WeKnora', '.env'), 'WEKNORA_VERSION=0.7.0\n');
+  await writeFile(
+    path.join(root, 'deploy', 'local', 'compose.platform.yml'),
+    'services:\n  live-in-hdu-db:\n    image: postgres:17-alpine\n',
+  );
+  await writeFile(
+    path.join(root, 'deploy', 'local', '.env.local'),
+    'LIVE_IN_HDU_DB_PASSWORD=fixture\n',
+  );
+
+  try {
+    const stopped = run(
+      STOP_SCRIPT,
+      ['-RepoRootOverride', root],
+      {
+        LIVE_IN_HDU_DOCKER_CLI: fakeDocker,
+        LIVE_IN_HDU_DOCKER_LOG: dockerLog,
+        PATH: `${path.dirname(PWSH)};C:\\Windows\\System32`,
+      },
+    );
+    assert.equal(stopped.status, 0, `${stopped.stdout}\n${stopped.stderr}`);
+    const calls = await readFile(dockerLog, 'utf8');
+    assert.match(calls, /compose .* stop .*frontend.*app.*docreader.*searxng.*redis.*postgres/i);
+    assert.match(calls, /compose .* stop live-in-hdu-db/i);
+    assert.doesNotMatch(calls, /\bdown\b|--volumes|-v\b/i);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test('knowledge stack static operations expose a D-drive-only safe plan without Docker', () => {
@@ -142,6 +224,31 @@ test('knowledge stack static operations expose a D-drive-only safe plan without 
     'manifest.json',
   ]);
   assert.equal(backupPlan.retentionCount, 14);
+});
+
+test('knowledge stack backup resolves the configured Docker CLI before touching backup data', async () => {
+  const root = await fixture();
+  const fakeDocker = path.join(root, 'fake-docker.cmd');
+  await writeFile(fakeDocker, '@echo off\r\nexit /b 0\r\n');
+  try {
+    const resolved = run(
+      BACKUP_SCRIPT,
+      ['-ResolveToolsOnly', '-RepoRootOverride', root],
+      {
+        LIVE_IN_HDU_RUNTIME_ROOT: root,
+        LIVE_IN_HDU_DOCKER_CLI: fakeDocker,
+        PATH: `${path.dirname(PWSH)};C:\\Windows\\System32`,
+      },
+    );
+    assert.equal(resolved.status, 0, `${resolved.stdout}\n${resolved.stderr}`);
+    const report = JSON.parse(resolved.stdout);
+    assert.equal(report.dockerInvoked, false);
+    assert.equal(path.normalize(report.dockerCli), path.normalize(fakeDocker));
+    assert.equal(report.dockerSource, 'explicit-override');
+    assert.equal(path.normalize(report.backupRoot), path.normalize(path.join(root, 'backups')));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test('business PostgreSQL is isolated, pinned to 17, and stores its database on D', async () => {

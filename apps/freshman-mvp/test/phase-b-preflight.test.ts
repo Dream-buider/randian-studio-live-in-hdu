@@ -10,6 +10,7 @@ const ENV_EXAMPLE = path.join(REPO_ROOT, 'deploy', 'local', '.env.example');
 const GITIGNORE = path.join(REPO_ROOT, '.gitignore');
 const TEMP_ROOT = 'D:\\Star\\LIVE_IN_HDU_RUNTIME\\temp';
 const REQUIRED_PORTS = [3210, 5433, 8080, 8888, 11434];
+const PWSH = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe';
 
 interface Fixture {
   wslVersion2: boolean;
@@ -21,6 +22,7 @@ interface Fixture {
   freeDiskGb: number;
   memoryGb: number;
   ollamaCli: boolean;
+  ollamaServiceAvailable: boolean;
   embeddingModelAvailable: boolean;
   portsAvailable: number[];
   requestedRoot: string;
@@ -40,6 +42,7 @@ function passingFixture(): Fixture {
     freeDiskGb: 80,
     memoryGb: 32,
     ollamaCli: true,
+    ollamaServiceAvailable: true,
     embeddingModelAvailable: true,
     portsAvailable: REQUIRED_PORTS,
     requestedRoot: 'D:\\',
@@ -79,7 +82,7 @@ async function runFixture(fixture: Fixture) {
     requestedRoot: string;
     actualRoot: string;
     fallbackReason: string;
-    failures: Array<{ code: string }>;
+    failures: Array<{ code: string; remediation: string }>;
     embeddingModel: string;
     portsAvailable: number[];
   };
@@ -127,6 +130,21 @@ test('Phase B preflight accepts port 11434 when the expected Ollama model is alr
   assert.deepEqual(report.failures, []);
 });
 
+test('Phase B preflight treats a running Ollama port as expected while its model is still missing', async () => {
+  const fixture = passingFixture();
+  fixture.embeddingModelAvailable = false;
+  fixture.portsAvailable = fixture.portsAvailable.filter((port) => port !== 11434);
+  const { result, report } = await runFixture(fixture);
+  assert.notEqual(result.status, 0);
+  const modelFailure = report.failures.find(
+    (failure) => failure.code === 'embedding-model-missing',
+  );
+  assert.ok(modelFailure);
+  assert.ok(!report.failures.some((failure) => failure.code === 'ports-in-use'));
+  assert.match(modelFailure.remediation, /nomic-embed-text:latest/);
+  assert.doesNotMatch(modelFailure.remediation, /\$EmbeddingModel/);
+});
+
 test('Phase B preflight accepts integrated Docker Compose major versions newer than v2', async () => {
   const fixture = passingFixture();
   fixture.composeV2 = false;
@@ -135,6 +153,58 @@ test('Phase B preflight accepts integrated Docker Compose major versions newer t
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   assert.equal(report.ready, true);
   assert.ok(!report.failures.some((failure) => failure.code === 'compose-v2-unavailable'));
+});
+
+test('Phase B preflight finds D-drive runtime CLIs even when neither tool is on PATH', async () => {
+  const directory = await mkdtemp(path.join(TEMP_ROOT, 'phase-b-runtime-tools-'));
+  const dockerPath = path.join(
+    directory,
+    'docker',
+    'DockerDesktop',
+    'resources',
+    'bin',
+    'docker.exe',
+  );
+  const ollamaPath = path.join(directory, 'ollama', 'app', 'ollama.exe');
+  const reportPath = path.join(directory, 'report.json');
+  await mkdir(path.dirname(dockerPath), { recursive: true });
+  await mkdir(path.dirname(ollamaPath), { recursive: true });
+  await writeFile(dockerPath, 'not a real executable');
+  await writeFile(ollamaPath, 'not a real executable');
+
+  try {
+    const result = spawnSync(PWSH, [
+      '-NoProfile',
+      '-File',
+      SCRIPT,
+      '-JsonOutput',
+      reportPath,
+    ], {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+      windowsHide: true,
+      env: {
+        ...process.env,
+        LIVE_IN_HDU_RUNTIME_ROOT: directory,
+        PATH: `${path.dirname(PWSH)};C:\\Windows\\System32`,
+        TEMP: TEMP_ROOT,
+        TMP: TEMP_ROOT,
+      },
+      timeout: 30_000,
+    });
+    assert.notEqual(result.status, null, `${result.stdout}\n${result.stderr}`);
+    const report = JSON.parse(await readFile(reportPath, 'utf8')) as {
+      dockerCli: boolean;
+      ollamaCli: boolean;
+      failures: Array<{ code: string }>;
+    };
+    assert.equal(report.dockerCli, true);
+    assert.equal(report.ollamaCli, true);
+    assert.ok(!report.failures.some((failure) => failure.code === 'docker-cli-missing'));
+    assert.ok(!report.failures.some((failure) => failure.code === 'ollama-cli-missing'));
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test('Phase B prerequisite boundary keeps secrets blank and large runtime paths on D', async () => {

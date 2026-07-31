@@ -2,6 +2,7 @@
 param(
     [switch]$StaticOnly,
     [switch]$ValidateOnly,
+    [switch]$ResolveToolsOnly,
     [string]$RepoRootOverride = ''
 )
 
@@ -17,6 +18,18 @@ $OverrideCompose = Join-Path $RepoRoot 'deploy\local\compose.weknora.override.ym
 $PlatformCompose = Join-Path $RepoRoot 'deploy\local\compose.platform.yml'
 $PlatformEnvironment = Join-Path $RepoRoot 'deploy\local\.env.local'
 $ApprovedManifest = Join-Path $RepoRoot 'output\freshman-platform\knowledge-manifest.json'
+$RuntimeTooling = Join-Path $PSScriptRoot 'runtime-tooling.ps1'
+
+function Get-DockerTool {
+    if (-not (Test-Path -LiteralPath $RuntimeTooling -PathType Leaf)) {
+        throw "Runtime tooling helper is missing: $RuntimeTooling"
+    }
+    . $RuntimeTooling
+    return (Resolve-LiveInHduTool `
+        -Name 'docker' `
+        -RuntimeRoot $RuntimeRoot `
+        -RuntimeRelativePath 'docker\DockerDesktop\resources\bin\docker.exe')
+}
 
 function Import-LocalEnvironment([string]$PathValue) {
     foreach ($line in Get-Content -LiteralPath $PathValue -Encoding UTF8) {
@@ -51,6 +64,16 @@ if ($StaticOnly) {
     } | ConvertTo-Json -Compress
     exit 0
 }
+if ($ResolveToolsOnly) {
+    $dockerTool = Get-DockerTool
+    [ordered]@{
+        dockerInvoked = $false
+        dockerCli = $dockerTool.Path
+        dockerSource = $dockerTool.Source
+        backupRoot = $BackupRoot
+    } | ConvertTo-Json -Compress
+    exit 0
+}
 if ([IO.Path]::GetPathRoot($BackupRoot).ToUpperInvariant() -ne 'D:\') { throw 'Knowledge backups must remain on D:.' }
 if (
     -not (Test-Path -LiteralPath $VendorEnvironment) -or
@@ -61,6 +84,8 @@ if (
 ) { throw 'Knowledge stack configuration is incomplete.' }
 if ($ValidateOnly) { [ordered]@{ dockerInvoked = $false; backupRoot = $BackupRoot; validated = $true } | ConvertTo-Json -Compress; exit 0 }
 
+$dockerTool = Get-DockerTool
+$dockerCli = [string]$dockerTool.Path
 Import-LocalEnvironment $PlatformEnvironment
 New-Item -ItemType Directory -Force -Path $BackupRoot | Out-Null
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
@@ -72,24 +97,24 @@ $businessCompose = @('compose','--project-name','live-in-hdu','--env-file',$Plat
 $stopped = @()
 try {
     foreach ($service in @('app','docreader')) {
-        $state = (& docker @compose ps -q $service | Out-String).Trim()
-        if ($state) { & docker @compose stop $service; if ($LASTEXITCODE -ne 0) { throw "Could not stop $service for backup" }; $stopped += $service }
+        $state = (& $dockerCli @compose ps -q $service | Out-String).Trim()
+        if ($state) { & $dockerCli @compose stop $service; if ($LASTEXITCODE -ne 0) { throw "Could not stop $service for backup" }; $stopped += $service }
     }
     $weknoraSql = Join-Path $temporary 'weknora.sql'
-    & docker @compose exec -T postgres pg_dump -U weknora weknora | Set-Content -LiteralPath $weknoraSql -Encoding UTF8
+    & $dockerCli @compose exec -T postgres pg_dump -U weknora weknora | Set-Content -LiteralPath $weknoraSql -Encoding UTF8
     if ($LASTEXITCODE -ne 0) { throw 'WeKnora pg_dump failed.' }
     Compress-Sql $weknoraSql (Join-Path $temporary 'weknora.sql.gz')
     $databaseUser = if ($env:LIVE_IN_HDU_DB_USER) { $env:LIVE_IN_HDU_DB_USER } else { 'live_in_hdu' }
     $databaseName = if ($env:LIVE_IN_HDU_DB_NAME) { $env:LIVE_IN_HDU_DB_NAME } else { 'live_in_hdu' }
     $businessSql = Join-Path $temporary 'live-in-hdu.sql'
-    & docker @businessCompose exec -T live-in-hdu-db pg_dump -U $databaseUser $databaseName | Set-Content -LiteralPath $businessSql -Encoding UTF8
+    & $dockerCli @businessCompose exec -T live-in-hdu-db pg_dump -U $databaseUser $databaseName | Set-Content -LiteralPath $businessSql -Encoding UTF8
     if ($LASTEXITCODE -ne 0) { throw 'LIVE IN HDU pg_dump failed.' }
     Compress-Sql $businessSql (Join-Path $temporary 'live-in-hdu.sql.gz')
-    $appContainer = (& docker @compose ps -q app | Out-String).Trim()
+    $appContainer = (& $dockerCli @compose ps -q app | Out-String).Trim()
     if (-not $appContainer) { throw 'WeKnora app container is unavailable; cannot locate data-files volume.' }
-    $dataVolume = (& docker inspect --format '{{range .Mounts}}{{if eq .Destination "/data/files"}}{{.Name}}{{end}}{{end}}' $appContainer | Out-String).Trim()
+    $dataVolume = (& $dockerCli inspect --format '{{range .Mounts}}{{if eq .Destination "/data/files"}}{{.Name}}{{end}}{{end}}' $appContainer | Out-String).Trim()
     if (-not $dataVolume) { throw 'Could not resolve WeKnora data-files named volume.' }
-    & docker run --rm `
+    & $dockerCli run --rm `
         -v "${dataVolume}:/source:ro" `
         -v "${temporary}:/backup" `
         busybox:1.36 `
@@ -110,7 +135,7 @@ try {
     Move-Item -LiteralPath $temporary -Destination $destination
     Get-ChildItem -LiteralPath $BackupRoot -Directory -Filter 'knowledge-*' | Sort-Object LastWriteTimeUtc -Descending | Select-Object -Skip 14 | Remove-Item -Recurse -Force
 } finally {
-    foreach ($service in $stopped) { & docker @compose up -d $service | Out-Null }
+    foreach ($service in $stopped) { & $dockerCli @compose up -d $service | Out-Null }
 }
 $healthDeadline = [DateTime]::UtcNow.AddMinutes(2)
 $weknoraRecovered = $false

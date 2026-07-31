@@ -143,6 +143,10 @@ Expected: both client and server versions print, Compose reports v2, and `hello-
 
 - [ ] **Step 4: Install Ollama and pull only the embedding model**
 
+Status 2026-07-31: Ollama 0.32.5 is installed under the D-drive runtime root
+and its API is healthy on loopback. The official model pull still fails at DNS
+resolution for `registry.ollama.ai`; no alternate mirror or chat model was used.
+
 Install the official Windows Ollama package and run:
 
 ```powershell
@@ -188,6 +192,11 @@ output/freshman-platform/backups/
 ```
 
 - [ ] **Step 7: Rerun preflight**
+
+Status 2026-07-31: the live preflight resolves Docker and Ollama from their
+D-drive locations even when they are absent from `PATH`. Docker, Compose,
+WSL2, Node 24, virtualization, disk, memory and the expected Ollama service port
+pass. The only remaining failure is `embedding-model-missing`.
 
 Run:
 
@@ -508,6 +517,10 @@ services:
 The `!override` tag requires Docker Compose 2.24.4 or newer and prevents the base host-wide port bindings from being retained.
 
 - [ ] **Step 3: Start the minimum stack and SearXNG profile**
+
+Status 2026-07-31: the cached SearXNG profile starts on loopback and the
+PostgreSQL-mode gateway consumes it. The remaining WeKnora services cannot
+start until the missing official images and embedding model can be downloaded.
 
 ```powershell
 docker compose --project-directory vendor/WeKnora --env-file vendor/WeKnora/.env -f vendor/WeKnora/docker-compose.yml -f deploy/local/compose.weknora.override.yml --profile searxng up -d postgres redis docreader app frontend searxng-init searxng

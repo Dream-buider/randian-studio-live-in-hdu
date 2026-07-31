@@ -7,12 +7,22 @@ param(
 $ErrorActionPreference = 'Stop'
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $RequestedRoot = 'D:\'
-$ActualRoot = 'D:\Star\LIVE_IN_HDU_RUNTIME'
+$ActualRoot = if ($env:LIVE_IN_HDU_RUNTIME_ROOT) {
+    [IO.Path]::GetFullPath($env:LIVE_IN_HDU_RUNTIME_ROOT)
+} else {
+    'D:\Star\LIVE_IN_HDU_RUNTIME'
+}
 $FallbackReason = 'Requested D:\ root is not writable for the normal user under the current ACL; using the existing D:\Star\LIVE_IN_HDU_RUNTIME root.'
+$RuntimeTooling = Join-Path $PSScriptRoot 'runtime-tooling.ps1'
 $RequiredPorts = @(3210, 5433, 8080, 8888, 11434)
 $EmbeddingModel = 'nomic-embed-text:latest'
 $MinimumFreeDiskGb = 50
 $MinimumMemoryGb = 16
+
+if (-not (Test-Path -LiteralPath $RuntimeTooling -PathType Leaf)) {
+    throw "Runtime tooling helper is missing: $RuntimeTooling"
+}
+. $RuntimeTooling
 
 function Invoke-NativeText([scriptblock]$Command) {
     $previousPreference = $ErrorActionPreference
@@ -93,13 +103,22 @@ function Get-AvailablePorts {
 }
 
 function Get-LiveProbe {
-    $dockerCli = [bool](Get-Command docker -ErrorAction SilentlyContinue)
+    $dockerTool = try {
+        Resolve-LiveInHduTool `
+            -Name 'docker' `
+            -RuntimeRoot $ActualRoot `
+            -RuntimeRelativePath 'docker\DockerDesktop\resources\bin\docker.exe'
+    } catch {
+        $null
+    }
+    $dockerCli = $null -ne $dockerTool
     $dockerEngine = $false
     $composeV2 = $false
     if ($dockerCli) {
-        $engine = Invoke-NativeText { docker version --format '{{.Server.Version}}' }
+        $dockerCliPath = [string]$dockerTool.Path
+        $engine = Invoke-NativeText { & $dockerCliPath version --format '{{.Server.Version}}' }
         $dockerEngine = $engine.ExitCode -eq 0 -and -not [string]::IsNullOrWhiteSpace($engine.Text)
-        $compose = Invoke-NativeText { docker compose version --short }
+        $compose = Invoke-NativeText { & $dockerCliPath compose version --short }
         $composeV2 = $compose.ExitCode -eq 0 -and
             (Test-IntegratedComposeVersion $compose.Text)
     }
@@ -110,10 +129,30 @@ function Get-LiveProbe {
         $node24 = $nodeVersion.ExitCode -eq 0 -and $nodeVersion.Text -match '^v24(?:\.|$)'
     }
 
-    $ollamaCli = [bool](Get-Command ollama -ErrorAction SilentlyContinue)
+    $ollamaTool = try {
+        Resolve-LiveInHduTool `
+            -Name 'ollama' `
+            -RuntimeRoot $ActualRoot `
+            -RuntimeRelativePath 'ollama\app\ollama.exe'
+    } catch {
+        $null
+    }
+    $ollamaCli = $null -ne $ollamaTool
+    $ollamaServiceAvailable = $false
+    try {
+        $ollamaVersion = Invoke-RestMethod `
+            -Uri 'http://127.0.0.1:11434/api/version' `
+            -TimeoutSec 2
+        $ollamaServiceAvailable = -not [string]::IsNullOrWhiteSpace(
+            [string]$ollamaVersion.version
+        )
+    } catch {
+        $ollamaServiceAvailable = $false
+    }
     $embeddingModelAvailable = $false
     if ($ollamaCli) {
-        $models = Invoke-NativeText { ollama list }
+        $ollamaCliPath = [string]$ollamaTool.Path
+        $models = Invoke-NativeText { & $ollamaCliPath list }
         $embeddingModelAvailable = $models.ExitCode -eq 0 -and
             $models.Text -match '(?im)^nomic-embed-text:latest(?:\s|$)'
     }
@@ -121,6 +160,8 @@ function Get-LiveProbe {
     return [pscustomobject]@{
         wslVersion2 = Test-WslVersion2
         dockerCli = $dockerCli
+        dockerCliPath = if ($dockerCli) { [string]$dockerTool.Path } else { '' }
+        dockerCliSource = if ($dockerCli) { [string]$dockerTool.Source } else { '' }
         dockerEngine = $dockerEngine
         composeV2 = $composeV2
         node24 = $node24
@@ -128,6 +169,9 @@ function Get-LiveProbe {
         freeDiskGb = Get-FreeDiskGb
         memoryGb = Get-TotalMemoryGb
         ollamaCli = $ollamaCli
+        ollamaServiceAvailable = $ollamaServiceAvailable
+        ollamaCliPath = if ($ollamaCli) { [string]$ollamaTool.Path } else { '' }
+        ollamaCliSource = if ($ollamaCli) { [string]$ollamaTool.Source } else { '' }
         embeddingModelAvailable = $embeddingModelAvailable
         portsAvailable = @(Get-AvailablePorts)
         requestedRoot = $RequestedRoot
@@ -199,12 +243,12 @@ if ([double]$probe.memoryGb -lt $MinimumMemoryGb) {
 if (-not [bool]$probe.ollamaCli) {
     Add-Failure $failures 'ollama-cli-missing' 'The Ollama CLI is not installed or is not on PATH.' 'Install the official Windows Ollama package later; this preflight does not install it.'
 } elseif (-not [bool]$probe.embeddingModelAvailable) {
-    Add-Failure $failures 'embedding-model-missing' "Ollama does not list $EmbeddingModel." "After approval, pull only `$EmbeddingModel`; do not pull a chat model."
+    Add-Failure $failures 'embedding-model-missing' "Ollama does not list $EmbeddingModel." "Pull only $EmbeddingModel with Ollama; do not pull a chat model."
 }
 $availablePorts = @($probe.portsAvailable | ForEach-Object { [int]$_ })
 $unavailablePorts = @($RequiredPorts | Where-Object { $_ -notin $availablePorts })
 $unexpectedPortConflicts = @($unavailablePorts | Where-Object {
-    $_ -ne 11434 -or -not [bool]$probe.embeddingModelAvailable
+    $_ -ne 11434 -or -not [bool]$probe.ollamaServiceAvailable
 })
 if ($unexpectedPortConflicts.Count -gt 0) {
     Add-Failure $failures 'ports-in-use' "Required ports are unavailable: $($unexpectedPortConflicts -join ', ')." 'Stop or reconfigure the owning services before Phase B startup.'
@@ -219,6 +263,8 @@ $report = [ordered]@{
     fallbackReason = [string]$probe.fallbackReason
     wslVersion2 = [bool]$probe.wslVersion2
     dockerCli = [bool]$probe.dockerCli
+    dockerCliPath = [string]$probe.dockerCliPath
+    dockerCliSource = [string]$probe.dockerCliSource
     dockerEngine = [bool]$probe.dockerEngine
     composeV2 = [bool]$probe.composeV2
     node24 = [bool]$probe.node24
@@ -228,13 +274,16 @@ $report = [ordered]@{
     memoryGb = [double]$probe.memoryGb
     minimumMemoryGb = $MinimumMemoryGb
     ollamaCli = [bool]$probe.ollamaCli
+    ollamaServiceAvailable = [bool]$probe.ollamaServiceAvailable
+    ollamaCliPath = [string]$probe.ollamaCliPath
+    ollamaCliSource = [string]$probe.ollamaCliSource
     embeddingModel = $EmbeddingModel
     embeddingModelAvailable = [bool]$probe.embeddingModelAvailable
     requiredPorts = $RequiredPorts
     portsAvailable = $availablePorts
     portsUnavailable = $unavailablePorts
     expectedServicePortsInUse = @($unavailablePorts | Where-Object {
-        $_ -eq 11434 -and [bool]$probe.embeddingModelAvailable
+        $_ -eq 11434 -and [bool]$probe.ollamaServiceAvailable
     })
     failures = @($failures)
 }
