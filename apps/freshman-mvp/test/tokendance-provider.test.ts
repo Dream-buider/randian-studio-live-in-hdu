@@ -53,6 +53,7 @@ test('TokenDance sends the exact endpoint, model, trimmed authorization, and saf
   assert.equal((calls[0].init.headers as Record<string, string>).Authorization, 'Bearer test-key');
   const body = JSON.parse(String(calls[0].init.body)) as Record<string, unknown>;
   assert.equal(body.model, 'deepseek-v4-flash');
+  assert.equal(body.max_tokens, 192);
   assert.doesNotMatch(JSON.stringify(result), /test-key/);
   assert.doesNotMatch(JSON.stringify(body), /test-key/);
   assert.equal(provider.status().lastCallStatus, 'ok');
@@ -149,6 +150,7 @@ test('TokenDance synthesizes a non-empty answer from available or unavailable se
       });
       assert.match(result.text, /回答/);
       assert.equal((requestBody as { model: string }).model, 'deepseek-v4-flash');
+      assert.equal((requestBody as { max_tokens: number }).max_tokens, 800);
       assert.match(JSON.stringify(requestBody), available ? /食堂通知/ : /搜索服务当前不可用/);
     });
   }

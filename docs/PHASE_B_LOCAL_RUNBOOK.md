@@ -2,10 +2,10 @@
 
 本手册对应“业务 PostgreSQL + WeKnora + SearXNG + TokenDance 网关”的本地方案。
 当前电脑已把 Docker Desktop 4.84.0、Docker Engine 29.6.2、Compose 5.3.1、
-Ollama 0.32.5 和业务 PostgreSQL 17 的数据落到 D 盘。业务 PostgreSQL 已完成真实
-容器、仓储契约、SQLite 迁移与幂等复跑验证；SearXNG 已在 loopback 端口真实运行
-并接入 PostgreSQL 模式网关。WeKnora 主栈尚未启动，Ollama 嵌入模型因当前 DNS
-无法访问模型仓库而未下载，真实密钥与两个 WeKnora 知识库 ID 也尚未配置。
+Ollama 0.32.5、业务 PostgreSQL 17 与 WeKnora 0.7.0 的运行数据落到 D 盘。
+PostgreSQL、WeKnora、DocReader、Ollama 嵌入、SearXNG 与 TokenDance 已完成真实
+联调；两个知识库和最小权限 API Key 已配置。内容仍需人工审核，当前 0 条标准答案
+被发布，也未导入未经批准的资料。
 
 ## 1. 存储边界
 
@@ -61,8 +61,9 @@ CLI。可用以下只读命令核对：
    安装目录与数据目录。
 2. `C:\Users\Star\.wslconfig` 中的 12 GB 内存、12 核、8 GB D 盘交换文件限制
    已在 Docker/WSL 重启后实测生效；配置变化后仍需重新验证。
-3. 将 Ollama 模型目录设置为
-   `D:\Star\LIVE_IN_HDU_RUNTIME\ollama\models`，再拉取且只拉取：
+3. Ollama 模型目录已经设置为
+   `D:\Star\LIVE_IN_HDU_RUNTIME\ollama\models`，并安装
+   `nomic-embed-text:latest`。重装时只拉取：
 
 ```powershell
 $env:OLLAMA_MODELS = 'D:\Star\LIVE_IN_HDU_RUNTIME\ollama\models'
@@ -78,7 +79,9 @@ Copy-Item .\apps\freshman-mvp\.env.example .\apps\freshman-mvp\.env.local
 
 `deploy/local/.env.local` 至少填写 `LIVE_IN_HDU_DB_PASSWORD`。应用配置至少填写
 `TOKENDANCE_API_KEY`、`WEKNORA_API_KEY`、`WEKNORA_DOCUMENT_KB_ID` 和
-`WEKNORA_FAQ_KB_ID`。密钥只进入服务端环境文件。
+`WEKNORA_FAQ_KB_ID`。本机已经完成这些配置；密钥只进入服务端环境文件。
+TokenDance 当前通过 `127.0.0.1:11305` 本机代理访问，代理端口变化后只更新被忽略的
+应用环境文件。
 
 5. 刷新 Node 依赖：
 

@@ -2,6 +2,28 @@
 
 ## 2026-07-31
 
+### Phase B local integration completed
+
+- 构建并启动固定版本 WeKnora 0.7.0 的 app、frontend 与 DocReader，使用 D 盘
+  Docker/Ollama 运行时；加入 TokenDance 主机 SSRF 白名单，未扩大其他外部访问范围。
+- 配置 `DeepSeek V4 Flash（TokenDance）` 对话模型和本机
+  `nomic-embed-text:latest` 嵌入模型，建立 `LIVE IN HDU 新生资料库` 与
+  `LIVE IN HDU 新生问答库`。
+- 创建仅允许检索上述两个知识库的最小权限 WeKnora API Key，并把所有真实密钥和
+  知识库标识写入被 Git 忽略的服务端环境文件。
+- Node 24 网关通过本机 HTTP 代理完成 TokenDance 真实生成；三段路由返回精确甄别
+  批注并保留 FIFO 审核边界。
+- 网关最终以 PostgreSQL 模式运行；当前 35 个意图中 23 个已有回答，共 31 条原始
+  回答，12 个问题为空，0 条标准答案被自动发布，Q11 仍为空。
+
+### Final verification
+
+- 后端 147 项中 145 通过、2 项显式实时环境用例跳过、0 失败；前端 34/34，旧 MVP
+  29/29，生产构建与密钥扫描均通过。
+- 用户端、审核后台、WeKnora API、WeKnora 管理端与 SearXNG 五个入口均返回 200；
+  业务数据库健康状态确认为 `postgres`，WeKnora 检索状态为 `available`。
+- D 盘剩余约 266.54 GB。未导入 `最新资料`，未发布未经人工审核的原始回答。
+
 ### Added
 
 - 将 Docker Desktop 4.84.0、Docker Engine 29.6.2、Compose 5.3.1 与

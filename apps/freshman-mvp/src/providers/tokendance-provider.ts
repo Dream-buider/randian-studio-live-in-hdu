@@ -128,7 +128,10 @@ export class TokenDanceProvider implements ModelProvider {
     this.lastCallAt = new Date().toISOString();
   }
 
-  private async complete(messages: Array<{ role: 'system' | 'user'; content: string }>): Promise<string> {
+  private async complete(
+    messages: Array<{ role: 'system' | 'user'; content: string }>,
+    maxTokens: number,
+  ): Promise<string> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
@@ -142,6 +145,7 @@ export class TokenDanceProvider implements ModelProvider {
           model: this.modelId,
           messages,
           temperature: 0.1,
+          max_tokens: maxTokens,
         }),
         signal: controller.signal,
       });
@@ -195,7 +199,7 @@ export class TokenDanceProvider implements ModelProvider {
             })),
           }),
         },
-      ]);
+      ], 192);
       return classificationFromContent(
         content,
         new Set(active.map((intent) => intent.id)),
@@ -231,7 +235,7 @@ export class TokenDanceProvider implements ModelProvider {
         role: 'user',
         content: JSON.stringify({ question: input.question, search: searchState }),
       },
-    ])).trim();
+    ], 800)).trim();
     if (text.length === 0) {
       throw new ServiceUnavailableError('TokenDance returned an empty answer');
     }

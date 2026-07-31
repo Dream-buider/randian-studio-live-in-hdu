@@ -1,0 +1,94 @@
+FROM live-in-hdu/weknora-docreader-builder:0.7.0 AS builder
+
+FROM python:3.10.18-bookworm
+
+ARG APT_MIRROR=""
+ARG APT_OPTIONS="-o Acquire::Retries=10 -o Acquire::http::Pipeline-Depth=0 -o Acquire::Queue-Mode=access"
+ARG TARGETARCH
+
+RUN if [ -n "$APT_MIRROR" ]; then \
+        sed -i "s@http://deb.debian.org@${APT_MIRROR}@g" /etc/apt/sources.list.d/debian.sources && \
+        sed -i "s@http://security.debian.org@${APT_MIRROR}@g" /etc/apt/sources.list.d/debian.sources; \
+    fi
+
+WORKDIR /app
+
+RUN apt-get $APT_OPTIONS update && \
+    apt-get $APT_OPTIONS install -y --no-install-recommends \
+        libjpeg62-turbo wget gnupg openjdk-17-jre-headless \
+        antiword tar dpkg curl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN apt-get $APT_OPTIONS update && \
+    apt-get $APT_OPTIONS install -y --no-install-recommends \
+        libgl1 libglib2.0-0 libxinerama1 libfontconfig1 \
+        libdbus-glib-1-2 libcairo2 libcups2 libglu1-mesa libsm6 && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN apt-get $APT_OPTIONS update && \
+    apt-get $APT_OPTIONS install -y --no-install-recommends libreoffice && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN if [ -z "$TARGETARCH" ]; then \
+        case $(uname -m) in \
+            "x86_64") TARGETARCH="amd64" ;; \
+            "aarch64") TARGETARCH="arm64" ;; \
+            "armv7l") TARGETARCH="arm" ;; \
+            *) echo "Unsupported architecture: $(uname -m)" && exit 1 ;; \
+        esac; \
+    fi && \
+    case $TARGETARCH in \
+        "amd64") ARCH="amd64" ;; \
+        "arm64") ARCH="arm64" ;; \
+        "arm") ARCH="arm" ;; \
+        *) echo "Unsupported architecture: $TARGETARCH" && exit 1 ;; \
+    esac && \
+    probe_installed=false; \
+    for attempt in 1 2 3 4 5; do \
+        if curl -fL --retry 3 --retry-all-errors --connect-timeout 20 \
+            "https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/v0.4.24/grpc_health_probe-linux-${ARCH}" \
+            -o /bin/grpc_health_probe; then \
+            probe_installed=true; \
+            break; \
+        fi; \
+        sleep 5; \
+    done && \
+    test "$probe_installed" = true && \
+    chmod +x /bin/grpc_health_probe
+
+ENV VIRTUAL_ENV=/app/.venv
+COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
+ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+ENV PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=120000
+RUN browser_installed=false; \
+    for attempt in 1 2 3 4 5; do \
+        if python -m playwright install webkit; then \
+            browser_installed=true; \
+            break; \
+        fi; \
+        sleep 5; \
+    done && \
+    test "$browser_installed" = true
+RUN dependencies_installed=false; \
+    for attempt in 1 2 3 4 5; do \
+        if python -m playwright install-deps webkit; then \
+            dependencies_installed=true; \
+            break; \
+        fi; \
+        sleep 5; \
+    done && \
+    test "$dependencies_installed" = true
+
+COPY docreader/pyproject.toml docreader/uv.lock ./
+COPY --from=builder /app/docreader docreader
+
+RUN mkdir -p /tmp/docreader
+
+EXPOSE 50051
+
+CMD ["uv", "run", "-m", "docreader.main"]

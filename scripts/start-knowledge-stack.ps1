@@ -26,6 +26,7 @@ $PlatformEnvironment = Join-Path $RepoRoot 'deploy\local\.env.local'
 $VendorEnvironment = Join-Path $VendorRoot '.env'
 $PreflightScript = Join-Path $RepoRoot 'scripts\preflight-phase-b.ps1'
 $GatewayStartScript = Join-Path $RepoRoot 'scripts\start-freshman-platform.ps1'
+$PrepareWeKnoraSourceScript = Join-Path $RepoRoot 'scripts\prepare-weknora-source.ps1'
 $RuntimeTooling = Join-Path $PSScriptRoot 'runtime-tooling.ps1'
 $PinnedVersion = '0.7.0'
 $PinnedCommit = '150c07368b84b4f50421b8957255213cbbadc175'
@@ -132,65 +133,6 @@ function Write-MinimalVendorEnvironment {
     )
 }
 
-function Get-PropertyValuesRecursive($Value, [string[]]$Names) {
-    if ($null -eq $Value) { return }
-    if ($Value -is [Collections.IDictionary]) {
-        foreach ($key in $Value.Keys) {
-            if ($Names -contains [string]$key) {
-                [string]$Value[$key]
-            }
-            Get-PropertyValuesRecursive $Value[$key] $Names
-        }
-        return
-    }
-    if ($Value -is [Collections.IEnumerable] -and $Value -isnot [string]) {
-        foreach ($item in $Value) {
-            Get-PropertyValuesRecursive $item $Names
-        }
-        return
-    }
-    foreach ($property in $Value.PSObject.Properties) {
-        if ($Names -contains $property.Name) {
-            [string]$property.Value
-        }
-        Get-PropertyValuesRecursive $property.Value $Names
-    }
-}
-
-function Assert-DockerDiskImageOnD {
-    $settingsFiles = @(
-        (Join-Path $env:APPDATA 'Docker\settings-store.json'),
-        (Join-Path $env:APPDATA 'Docker\settings.json'),
-        (Join-Path $env:USERPROFILE '.docker\desktop-settings.json')
-    ) | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf }
-    $candidates = foreach ($settingsFile in $settingsFiles) {
-        try {
-            $settings = Get-Content -Raw -LiteralPath $settingsFile -Encoding UTF8 |
-                ConvertFrom-Json
-            Get-PropertyValuesRecursive $settings @(
-                'dataFolder',
-                'diskImageLocation',
-                'wslDiskLocation',
-                'dataRoot'
-            )
-        } catch {
-            throw "Could not read Docker Desktop settings: $settingsFile"
-        }
-    }
-    $expected = [IO.Path]::GetFullPath((Join-Path $RuntimeRoot 'docker')).TrimEnd('\')
-    $confirmed = @($candidates) | Where-Object {
-        $_ -and
-        [IO.Path]::IsPathRooted($_) -and
-        [IO.Path]::GetFullPath($_).TrimEnd('\').StartsWith(
-            $expected,
-            [StringComparison]::OrdinalIgnoreCase
-        )
-    } | Select-Object -First 1
-    if (-not $confirmed -or -not (Test-Path -LiteralPath $confirmed)) {
-        throw "Docker disk image location is not verified under $expected. Configure Docker Desktop, restart it, and rerun."
-    }
-}
-
 $validation = Assert-PinnedVendor
 if ($ValidateOnly) {
     $validation | ConvertTo-Json -Compress
@@ -268,7 +210,13 @@ $preflightReport = Join-Path $RuntimeRoot 'knowledge\phase-b-preflight.json'
 if ($LASTEXITCODE -ne 0) {
     throw "Phase B preflight failed; inspect $preflightReport"
 }
-Assert-DockerDiskImageOnD
+Assert-LiveInHduDockerDiskImageOnD `
+    -RuntimeRoot $RuntimeRoot `
+    -SettingsFiles @(
+        (Join-Path $env:APPDATA 'Docker\settings-store.json'),
+        (Join-Path $env:APPDATA 'Docker\settings.json'),
+        (Join-Path $env:USERPROFILE '.docker\desktop-settings.json')
+    )
 try {
     $composeVersionText = (& $dockerCli compose version --short 2>$null | Out-String).Trim().TrimStart('v')
     $composeVersion = [Version]$composeVersionText
@@ -304,6 +252,11 @@ if ([IO.Path]::GetPathRoot($postgresData).ToUpperInvariant() -ne 'D:\') {
 New-Item -ItemType Directory -Force -Path $postgresData | Out-Null
 
 Write-MinimalVendorEnvironment
+if (-not (Test-Path -LiteralPath $PrepareWeKnoraSourceScript -PathType Leaf)) {
+    throw "WeKnora source preparation script is missing: $PrepareWeKnoraSourceScript"
+}
+& $PrepareWeKnoraSourceScript -VendorRoot $VendorRoot | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'WeKnora source preparation failed.' }
 $businessComposeArgs = @(
     'compose',
     '--project-name', 'live-in-hdu',

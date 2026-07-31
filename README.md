@@ -15,8 +15,8 @@ Codex 在本项目中的角色是执行协调器，只负责把 ChatGPT 总控�
 - 2026-07-15 补充批次：已检查 `最新资料` 的 24 份文件，去重后向 7 个页面发布 23 份附件；新增电路分析、数字逻辑电路、人工智能导论、公选课、奖助评优和学科竞赛页面，最终回读缺失数为 0。
 - AI 检索 MVP：已形成 `docs/AI_RAG_BOT_MVP.md`，要求基于知识库回答并附来源。
 - 新生问答助手：已固定 `Tencent/WeKnora` 提交 `150c073` 作为开源底座，并完成 H5 优先、微信小程序并行的部署与改造计划；尚未配置云服务器、模型密钥或正式上线。
-- 本地新生问答平台：已完成 Phase A 本机交付，采用 Vue + Fastify + SQLite，支持动态预设、知识条目、未知问题诚实兜底、FIFO 审核、人工发布版本、健康检查、启停和在线备份恢复。当前生产库首次导入基线为 35 个意图、31 条原始回答、0 条自动发布答案，Q11 保持空白；运行数据和构建产物均落到 D 盘。电脑必须保持开机；尚未公网部署。
-- Phase B 本地基础：Docker Desktop 4.84.0、Docker Engine 29.6.2、Compose 5.3.1 与 Ollama 0.32.5 已安装到 D 盘；业务 PostgreSQL 17 已在真实容器中完成健康、迁移、并发 FIFO、重启持久化和 SQLite 数据迁移验证。SearXNG 已在 `127.0.0.1:8888` 真实运行并接入 PostgreSQL 模式网关；Docker/WSL 实测限制为 12 核、约 12 GB RAM 和 8 GB swap。生命周期脚本可在新 PowerShell 会话中从 D 盘解析 Docker/Ollama CLI，不依赖临时 `PATH`。WeKnora 主栈尚未启动，Ollama 嵌入模型因当前 DNS 无法访问模型仓库而未下载。真实密钥、两个知识库 ID 与获批《2025年新生指南》原文件仍缺失，因此不能称为 Phase B 完整部署。
+- 本地新生问答平台：Vue 手机 H5、Fastify 网关、业务 PostgreSQL、WeKnora、Ollama 嵌入、SearXNG 与 TokenDance DeepSeek V4 Flash 已完成本地接通。支持动态预设、知识检索、联网兜底精确批注、FIFO 审核和人工发布；运行数据、模型与构建产物均落到 D 盘。当前 35 个意图中 23 个已有原始回答、12 个待补充，共 31 条原始回答，0 条自动发布答案，Q11 保持空白。
+- Phase B 本地部署：Docker Desktop 4.84.0、Docker Engine 29.6.2、Compose 5.3.1、Ollama 0.32.5、PostgreSQL 17、WeKnora 0.7.0 与 SearXNG 已真实运行并完成健康检查；两个最小权限知识库和服务端密钥已配置。技术链路完成不等于内容上线：获批指南、问答审核发布、检索评测、完整知识栈恢复演练和实体手机验收仍待完成。电脑必须保持开机且不能休眠；尚未公网部署。
 - 团队回答征集：已改为单张飞书电子表格 [`2026 新生 40 问｜团队协作总表`](https://scnbcye3xdfz.feishu.cn/wiki/Y3oTwYdC1iYABBkzrMfceEWCn4b?from=from_copylink)。Q01-Q40 全部平铺，团队成员可直接查看 `待填写 / 填写中 / 待审核 / 已完成 / 需补充` 状态并认领填写；旧多维表格和表单仅作备份，不再作为群内入口。
 
 ## 项目文件结构

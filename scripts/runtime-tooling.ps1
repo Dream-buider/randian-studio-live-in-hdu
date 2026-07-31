@@ -73,3 +73,76 @@ function Resolve-LiveInHduTool {
 
     throw "$Name CLI was not found on PATH or at the expected runtime path: $runtimeCandidate"
 }
+
+function Get-LiveInHduPropertyValuesRecursive {
+    [CmdletBinding()]
+    param(
+        $Value,
+
+        [Parameter(Mandatory)]
+        [string[]]$Names
+    )
+
+    if ($null -eq $Value) { return }
+    if ($Value -is [Collections.IDictionary]) {
+        foreach ($key in $Value.Keys) {
+            if ($Names -contains [string]$key) {
+                [string]$Value[$key]
+            }
+            Get-LiveInHduPropertyValuesRecursive -Value $Value[$key] -Names $Names
+        }
+        return
+    }
+    if ($Value -is [Collections.IEnumerable] -and $Value -isnot [string]) {
+        foreach ($item in $Value) {
+            Get-LiveInHduPropertyValuesRecursive -Value $item -Names $Names
+        }
+        return
+    }
+    foreach ($property in $Value.PSObject.Properties) {
+        if ($Names -contains $property.Name) {
+            [string]$property.Value
+        }
+        Get-LiveInHduPropertyValuesRecursive -Value $property.Value -Names $Names
+    }
+}
+
+function Assert-LiveInHduDockerDiskImageOnD {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$RuntimeRoot,
+
+        [Parameter(Mandatory)]
+        [string[]]$SettingsFiles
+    )
+
+    $candidates = foreach ($settingsFile in $SettingsFiles) {
+        if (-not (Test-Path -LiteralPath $settingsFile -PathType Leaf)) { continue }
+        try {
+            $settings = Get-Content -Raw -LiteralPath $settingsFile -Encoding UTF8 |
+                ConvertFrom-Json
+            Get-LiveInHduPropertyValuesRecursive -Value $settings -Names @(
+                'dataFolder',
+                'diskImageLocation',
+                'wslDiskLocation',
+                'dataRoot',
+                'CustomWslDistroDir'
+            )
+        } catch {
+            throw "Could not read Docker Desktop settings: $settingsFile"
+        }
+    }
+    $expected = [IO.Path]::GetFullPath((Join-Path $RuntimeRoot 'docker')).TrimEnd('\')
+    $confirmed = @($candidates) | Where-Object {
+        $_ -and
+        [IO.Path]::IsPathRooted($_) -and
+        [IO.Path]::GetFullPath($_).TrimEnd('\').StartsWith(
+            $expected,
+            [StringComparison]::OrdinalIgnoreCase
+        )
+    } | Select-Object -First 1
+    if (-not $confirmed -or -not (Test-Path -LiteralPath $confirmed)) {
+        throw "Docker disk image location is not verified under $expected. Configure Docker Desktop, restart it, and rerun."
+    }
+}

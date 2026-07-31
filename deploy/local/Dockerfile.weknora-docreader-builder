@@ -1,0 +1,56 @@
+FROM python:3.10.18-bookworm
+
+ARG APT_MIRROR=""
+ARG APT_OPTIONS="-o Acquire::Retries=10 -o Acquire::http::Pipeline-Depth=0 -o Acquire::Queue-Mode=access"
+ARG TARGETARCH
+
+RUN if [ -n "$APT_MIRROR" ]; then \
+        sed -i "s@http://deb.debian.org@${APT_MIRROR}@g" /etc/apt/sources.list.d/debian.sources && \
+        sed -i "s@http://security.debian.org@${APT_MIRROR}@g" /etc/apt/sources.list.d/debian.sources; \
+    fi
+
+WORKDIR /app
+
+RUN apt-get $APT_OPTIONS update && \
+    apt-get $APT_OPTIONS install -y --no-install-recommends \
+        gcc python3-dev libjpeg-dev zlib1g-dev libffi-dev \
+        libgl1 libglib2.0-0 wget antiword curl unzip && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY packages/ /app/packages/
+RUN if [ -z "$TARGETARCH" ]; then \
+        case $(uname -m) in \
+            "x86_64") TARGETARCH="amd64" ;; \
+            "aarch64") TARGETARCH="arm64" ;; \
+            "armv7l") TARGETARCH="arm" ;; \
+            *) echo "Unsupported architecture: $(uname -m)" && exit 1 ;; \
+        esac; \
+    fi && \
+    case $TARGETARCH in \
+        "amd64") PROTOC_ARCH="x86_64" ;; \
+        "arm64") PROTOC_ARCH="aarch_64" ;; \
+        "arm") PROTOC_ARCH="arm" ;; \
+        *) echo "Unsupported architecture for protoc: $TARGETARCH" && exit 1 ;; \
+    esac && \
+    PROTOC_PACKAGE="protoc-3.19.4-linux-${PROTOC_ARCH}.zip" && \
+    if [ -f "/app/packages/${PROTOC_PACKAGE}" ]; then \
+        cp "/app/packages/${PROTOC_PACKAGE}" /app/protoc.zip; \
+    else \
+        curl -fL --retry 10 --retry-all-errors --connect-timeout 20 \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v3.19.4/${PROTOC_PACKAGE}" \
+            -o /app/protoc.zip; \
+    fi && \
+    unzip -o /app/protoc.zip -d /usr/local && \
+    chmod +x /usr/local/bin/protoc && \
+    rm -f /app/protoc.zip
+
+COPY docreader/pyproject.toml docreader/uv.lock ./
+RUN pip install --retries 10 --timeout 120 uv --break-system-packages && \
+    python -m uv sync --locked --no-dev
+
+COPY docreader docreader
+
+ENV PATH="/app/.venv/bin:${PATH}"
+RUN chmod +x docreader/scripts/generate_proto.sh && \
+    bash docreader/scripts/generate_proto.sh

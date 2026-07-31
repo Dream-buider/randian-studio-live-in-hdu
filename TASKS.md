@@ -59,11 +59,11 @@
 | TODO | 收集并审核团队真实回答 | 等待团队按问题编号提交 Markdown 或截图；整合时处理共识、分歧、校区/年份差异和官方时效性 |
 | TODO | 将审核后的真实回答写入预设意图 | 仅审核通过的条目改为 `approved` 并对用户直接回复，征集中条目继续明确显示状态 |
 | TODO | 整理并接入正式知识库 | 按用户顺序在 40 问真实回答完成后开始，不与本轮征集混做 |
-| TODO | 部署新生问答 H5 | 本机 Docker 已安装并完成 PostgreSQL 联调；公开部署仍需要云服务器/域名状态、DeepSeek 与搜索 Key、飞书凭证 |
+| DONE | 部署新生问答 H5 | 本机 PostgreSQL、WeKnora、Ollama、SearXNG、TokenDance 与 H5 已接通并验证；公开部署仍需要云服务器、域名备案、HTTPS 与访问控制 |
 | TODO | 并行适配并送审微信小程序 | 复用 `vendor/WeKnora/miniprogram/`，改为只访问新生问答网关，不阻塞 H5 上线 |
 | DONE | 交付 Phase A 本地新生问答平台 | Vue + Fastify + SQLite 已完成生产入口、D 盘存储、真实表格首次导入、无密钥诚实兜底、FIFO 审核、人工版本发布、启停、健康检查和在线备份恢复；Edge 390×844 已验收，实体手机仍待人工补测 |
 | DONE | 完成 Phase B 非依赖代码基础 | 已实现独立 PostgreSQL 17 适配、WeKnora REST、SearXNG、FAQ outbox、审批清单导入与重试、D 盘启停/测试/备份脚本；单元测试和构建可离线验证 |
-| DOING | 完成 Phase B 真实本地联调 | Docker Desktop、Ollama 与业务 PostgreSQL 17 已落到 D 盘；真实 PostgreSQL 契约、SQLite 迁移、网关重启持久化、本地 SearXNG、12 核/12 GB/8 GB swap 资源限制以及新会话 D 盘 CLI 解析均已验证。当前唯一预检失败为嵌入模型缺失；仍待解决官方仓库 DNS、WeKnora 主栈、真实密钥与知识库 ID、获批语料、恢复演练和检索评测 |
+| DONE | 完成 Phase B 真实本地联调 | PostgreSQL、WeKnora 0.7.0、Ollama 嵌入、SearXNG、TokenDance 与网关已在 D 盘架构下接通；两个最小权限知识库已建立。内容审核发布、获批语料导入、检索评测和完整恢复演练作为后续内容运营任务继续进行 |
 
 ## 运营管理
 
@@ -149,3 +149,4 @@
 | 2026-07-31 | AI检索 | 完成业务 PostgreSQL 带哈希备份和 D 盘隔离恢复演练，核对 35/99/31、Q11、异常 19 与生产库不变 | DONE |
 | 2026-07-31 | AI检索 | 修复 D 盘 Docker CLI 找不到同目录凭据助手的问题，并确认剩余镜像/模型下载阻塞为官方域名 DNS 超时 | DONE |
 | 2026-07-31 | AI检索 | 连续两轮完成 140/141 后端、34/34 前端、29/29 旧 MVP、构建、密钥扫描和 PostgreSQL/SearXNG 降级浏览器验收 | DONE |
+| 2026-07-31 | AI检索 | 完成 WeKnora、Ollama 嵌入、TokenDance、两个最小权限知识库与 PostgreSQL 网关的真实本地联调 | DONE |
