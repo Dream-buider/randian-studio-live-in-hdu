@@ -10,9 +10,12 @@
 - 运行根目录：`D:\Star\LIVE_IN_HDU_RUNTIME`
 - 当前阶段：Phase A 已验证；Phase B 已完成 D 盘 Docker/Ollama、真实业务
   PostgreSQL、SearXNG 与网关的部分联调，WeKnora 主栈尚未完成。
-- 暂停状态：业务容器、Docker Desktop、Ollama 与应用网关均已停止，数据保留。
-  端口 `3210`、`5433`、`8080`、`8081`、`8082`、`8888`、`11434`
-  已复核为无监听。
+- 当前运行状态：Docker Desktop、Ollama、业务 PostgreSQL、SearXNG 与降级网关
+  正在运行；WeKnora 主栈未运行。网关使用 PostgreSQL、local-json 知识提供者、
+  SearXNG 搜索提供者和无 TokenDance Key 模式。
+- 当前访问：用户端 `http://localhost:3210`，管理端
+  `http://localhost:3210/admin`，本轮 WLAN 地址
+  `http://10.69.184.61:3210`（局域网地址会随网络变化）。
 
 重启后先运行：
 
@@ -36,10 +39,11 @@ DNS、VPN 或代理，也不得从非官方来源下载模型。
 
 ## 已验证基线
 
-- 后端：139 项中 138 通过、1 项真实完整知识栈用例因未显式开启而跳过、0 失败。
-- 前端：34/34。
+- 当前代码连续两轮后端均为 141 项中 140 通过、1 项真实完整知识栈用例因未显式
+  开启而跳过、0 失败。
+- 两轮前端均为 34/34，旧 MVP 均为 29/29。
 - 真实 PostgreSQL 契约通过。
-- 生产构建成功。
+- 两轮生产构建与密钥扫描均成功。
 - 生命周期脚本可从 D 盘运行根解析 Docker/Ollama CLI。
 - 停止脚本不删除容器、卷或 D 盘数据，未执行 `docker compose down -v`。
 - 业务 PostgreSQL 已完成带哈希备份和新 D 盘目录/`55433` 端口的隔离恢复；
@@ -47,6 +51,8 @@ DNS、VPN 或代理，也不得从非官方来源下载模型。
   `D:\Star\LIVE_IN_HDU_RUNTIME\restore-drills\business-20260731-170212\restore-report.json`。
 - D 盘 Docker CLI 会在当前进程补齐凭据助手搜索路径；当前镜像和模型下载的剩余
   失败均发生在官方 registry DNS 解析阶段。
+- 390×844 真实 Edge 验收通过用户空状态、提问抽屉和管理端服务状态；截图位于
+  `D:\Star\LIVE_IN_HDU_RUNTIME\browser-artifacts\phase-b-partial-*-20260731.png`。
 
 ## 继续时优先顺序
 

@@ -1,5 +1,8 @@
 # 2026-07-31 可恢复暂停检查点
 
+> 本文件保留阶段性细节；实时运行状态、最新测试数字和恢复入口以
+> `docs/SESSION_CHECKPOINT_CURRENT.md` 为准。
+
 ## 恢复入口
 
 - 工作区：`C:\Users\Star\Desktop\总项目文件\杭电飞书社区`

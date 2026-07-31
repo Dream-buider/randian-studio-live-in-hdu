@@ -1160,6 +1160,14 @@ This does not satisfy this Phase B step: WeKnora/SearXNG/PostgreSQL were not run
 knowledge-route UI and provider degradation were not exercised, and no physical phone
 was tested.
 
+Partial runtime status 2026-07-31: real Edge at 390×844 passed the current
+PostgreSQL + SearXNG degradation runtime. The user empty state, question drawer
+and admin service panel returned HTTP 200 with no horizontal overflow, console
+errors or page errors. The admin page truthfully showed PostgreSQL healthy,
+SearXNG configured, and TokenDance/WeKnora unconfigured. The WLAN URL returned
+HTTP 200 from the host. This step remains unchecked because no WeKnora knowledge
+route or physical same-Wi-Fi phone has passed.
+
 At 390×844 and on a real phone:
 
 - question-card browsing still works;
