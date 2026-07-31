@@ -58,6 +58,51 @@ async function fixture() {
   };
 }
 
+async function guardedFixture() {
+  const directory = await mkdtemp(path.join(tmpdir(), 'live-in-hdu-public-trial-guarded-'));
+  const publicDir = path.join(directory, 'public');
+  await mkdir(path.join(publicDir, 'assets'), { recursive: true });
+  await writeFile(path.join(publicDir, 'index.html'), '<main>PUBLIC TRIAL APP</main>');
+  await writeFile(path.join(publicDir, 'favicon.svg'), '<svg></svg>');
+  let currentTime = NOW;
+  let sessionNumber = 0;
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const logs: unknown[] = [];
+  const config: PublicTrialConfig = {
+    host: '127.0.0.1',
+    port: 3211,
+    upstreamOrigin: 'http://127.0.0.1:3210',
+    publicDir,
+    runtimeDir: 'D:\\Star\\LIVE_IN_HDU_RUNTIME\\public-trial',
+    accessCode: 'team-2026',
+    sessionSecret: 's'.repeat(32),
+    sessionTtlSeconds: 43_200,
+    questionLimit: 30,
+    questionWindowMs: 600_000,
+    maxQuestionCodePoints: 500,
+  };
+  const app = createPublicTrialApp({
+    config,
+    now: () => currentTime,
+    randomUUID: () => `session-${++sessionNumber}`,
+    writeLog: (entry) => { logs.push(entry); },
+    fetch: async (input, init) => {
+      calls.push({ url: String(input), init });
+      return Response.json({ answer: 'ok' });
+    },
+  });
+  return {
+    app,
+    calls,
+    logs,
+    advance: (milliseconds: number) => { currentTime += milliseconds; },
+    cleanup: async () => {
+      await app.close();
+      await rm(directory, { recursive: true, force: true });
+    },
+  };
+}
+
 async function login(app: ReturnType<typeof createPublicTrialApp>): Promise<string> {
   const response = await app.inject({
     method: 'POST',
@@ -189,6 +234,117 @@ test('public trial returns 404 for every management, health and unknown route wi
       });
     }
     assert.equal(calls.length, 0);
+  } finally {
+    await cleanup();
+  }
+});
+
+test('public trial validates JSON questions by Unicode code point before proxying', async () => {
+  const { app, calls, cleanup } = await guardedFixture();
+  try {
+    const cookie = await login(app);
+    const accepted = await app.inject({
+      method: 'POST',
+      url: '/api/ask',
+      headers: { cookie, 'content-type': 'application/json' },
+      payload: {
+        question: '问'.repeat(500),
+        context: { intentId: 'q01', question: '校园卡', category: '入学准备' },
+        requestId: 'request-1',
+        ignored: 'must-not-forward',
+      },
+    });
+    assert.equal(accepted.statusCode, 200);
+    const forwarded = JSON.parse(String(calls[0].init?.body)) as Record<string, unknown>;
+    assert.equal(forwarded.question, '问'.repeat(500));
+    assert.deepEqual(forwarded.context, {
+      intentId: 'q01', question: '校园卡', category: '入学准备',
+    });
+    assert.equal(forwarded.requestId, 'request-1');
+    assert.equal('ignored' in forwarded, false);
+
+    const tooLong = await app.inject({
+      method: 'POST',
+      url: '/api/ask',
+      headers: { cookie, 'content-type': 'application/json' },
+      payload: { question: '😀'.repeat(501) },
+    });
+    assert.equal(tooLong.statusCode, 400);
+
+    const wrongType = await app.inject({
+      method: 'POST',
+      url: '/api/ask',
+      headers: { cookie, 'content-type': 'text/plain' },
+      payload: 'question=校园卡',
+    });
+    assert.equal(wrongType.statusCode, 415);
+    assert.equal(calls.length, 1);
+  } finally {
+    await cleanup();
+  }
+});
+
+test('public trial limits each signed session to 30 questions per ten minutes', async () => {
+  const { app, calls, advance, cleanup } = await guardedFixture();
+  try {
+    const cookie = await login(app);
+    const ask = () => app.inject({
+      method: 'POST',
+      url: '/api/ask',
+      headers: { cookie, 'content-type': 'application/json' },
+      payload: { question: '校园卡怎么办' },
+    });
+    for (let index = 0; index < 30; index += 1) {
+      assert.equal((await ask()).statusCode, 200, `request ${index + 1}`);
+    }
+    const limited = await ask();
+    assert.equal(limited.statusCode, 429);
+    assert.equal(limited.headers['retry-after'], '600');
+    assert.deepEqual(limited.json(), {
+      error: { code: 'RATE_LIMITED', message: '测试请求较多，请稍后再试' },
+    });
+    assert.equal(calls.length, 30);
+
+    advance(600_001);
+    assert.equal((await ask()).statusCode, 200);
+    assert.equal(calls.length, 31);
+  } finally {
+    await cleanup();
+  }
+});
+
+test('public trial operational logs never contain codes, cookies, questions or authorization', async () => {
+  const { app, logs, cleanup } = await guardedFixture();
+  try {
+    await app.inject({
+      method: 'POST',
+      url: '/trial/login',
+      payload: { code: 'CODE-SENTINEL' },
+    });
+    const cookie = await login(app);
+    await app.inject({
+      method: 'POST',
+      url: '/api/ask',
+      headers: {
+        cookie: `${cookie}; tracking=COOKIE-SENTINEL`,
+        authorization: 'Bearer AUTH-SENTINEL',
+        'content-type': 'application/json',
+      },
+      payload: { question: 'QUESTION-SENTINEL' },
+    });
+    const serialized = JSON.stringify(logs);
+    for (const sentinel of [
+      'CODE-SENTINEL',
+      'COOKIE-SENTINEL',
+      'AUTH-SENTINEL',
+      'QUESTION-SENTINEL',
+    ]) {
+      assert.doesNotMatch(serialized, new RegExp(sentinel));
+    }
+    assert.ok(logs.length >= 3);
+    assert.deepEqual(Object.keys(logs[0] as object).sort(), [
+      'durationMs', 'method', 'requestId', 'route', 'statusCode', 'timestamp',
+    ]);
   } finally {
     await cleanup();
   }

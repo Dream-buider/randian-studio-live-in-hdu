@@ -1,4 +1,4 @@
-import { mkdir, readFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createPublicTrialApp } from './app.js';
@@ -52,8 +52,21 @@ async function loadRuntimeEnvironment(appRoot: string): Promise<NodeJS.ProcessEn
 export async function runPublicTrialGateway(): Promise<void> {
   const appRoot = defaultAppRoot();
   const config = loadPublicTrialConfig(await loadRuntimeEnvironment(appRoot), appRoot);
-  await mkdir(path.join(config.runtimeDir, 'logs'), { recursive: true });
-  const app = createPublicTrialApp({ config });
+  const logsDir = path.join(config.runtimeDir, 'logs');
+  await mkdir(logsDir, { recursive: true });
+  const logPath = path.join(logsDir, 'gateway.jsonl');
+  let logWrites = Promise.resolve();
+  const app = createPublicTrialApp({
+    config,
+    writeLog: (entry) => {
+      logWrites = logWrites.then(() => appendFile(
+        logPath,
+        `${JSON.stringify(entry)}\n`,
+        'utf8',
+      ));
+      return logWrites;
+    },
+  });
   let shuttingDown = false;
   const shutdown = async () => {
     if (shuttingDown) {
@@ -61,6 +74,7 @@ export async function runPublicTrialGateway(): Promise<void> {
     }
     shuttingDown = true;
     await app.close();
+    await logWrites;
   };
   process.once('SIGINT', () => void shutdown().then(() => process.exit(0)));
   process.once('SIGTERM', () => void shutdown().then(() => process.exit(0)));

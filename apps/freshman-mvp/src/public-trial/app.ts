@@ -8,6 +8,7 @@ import Fastify, {
 } from 'fastify';
 import type { PublicTrialConfig } from './config.js';
 import { renderTrialLoginPage } from './login-page.js';
+import { FixedWindowLimiter } from './rate-limit.js';
 import {
   clearSessionCookie,
   createSessionToken,
@@ -15,6 +16,7 @@ import {
   readSessionCookie,
   serializeSessionCookie,
   verifySessionToken,
+  type TrialSessionPayload,
 } from './session.js';
 
 export interface TrialLogEntry {
@@ -38,14 +40,13 @@ const NOT_FOUND = {
   error: { code: 'NOT_FOUND', message: 'Route not found' },
 };
 
-function hasValidSession(
+function validSession(
   request: FastifyRequest,
   config: PublicTrialConfig,
   now: number,
-): boolean {
+): TrialSessionPayload | null {
   const token = readSessionCookie(request.headers.cookie);
-  return token !== null
-    && verifySessionToken(token, config.sessionSecret, now) !== null;
+  return token === null ? null : verifySessionToken(token, config.sessionSecret, now);
 }
 
 function requireBrowserSession(
@@ -54,7 +55,7 @@ function requireBrowserSession(
   config: PublicTrialConfig,
   now: number,
 ): boolean {
-  if (hasValidSession(request, config, now)) {
+  if (validSession(request, config, now)) {
     return true;
   }
   void reply.redirect('/trial/login');
@@ -66,14 +67,15 @@ function requireApiSession(
   reply: FastifyReply,
   config: PublicTrialConfig,
   now: number,
-): boolean {
-  if (hasValidSession(request, config, now)) {
-    return true;
+): TrialSessionPayload | null {
+  const session = validSession(request, config, now);
+  if (session) {
+    return session;
   }
   void reply.code(401).send({
     error: { code: 'AUTH_REQUIRED', message: '请先输入团队测试码' },
   });
-  return false;
+  return null;
 }
 
 function contentTypeFor(fileName: string): string {
@@ -126,6 +128,53 @@ function forwardedHeaders(request: FastifyRequest): Headers {
   return headers;
 }
 
+function isQuestionContext(value: unknown): value is {
+  intentId: string | null;
+  question: string;
+  category: string | null;
+} {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const context = value as Record<string, unknown>;
+  return (context.intentId === null || typeof context.intentId === 'string')
+    && typeof context.question === 'string'
+    && (context.category === null || typeof context.category === 'string');
+}
+
+function publicQuestionBody(
+  body: unknown,
+  maxCodePoints: number,
+): Record<string, unknown> | null {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    return null;
+  }
+  const supplied = body as Record<string, unknown>;
+  if (typeof supplied.question !== 'string') {
+    return null;
+  }
+  const question = supplied.question.trim();
+  if (question.length === 0 || [...question].length > maxCodePoints) {
+    return null;
+  }
+  const result: Record<string, unknown> = { question };
+  if (isQuestionContext(supplied.context)) {
+    result.context = {
+      intentId: supplied.context.intentId,
+      question: supplied.context.question,
+      category: supplied.context.category,
+    };
+  }
+  if (
+    typeof supplied.requestId === 'string'
+    && supplied.requestId.length > 0
+    && supplied.requestId.length <= 200
+  ) {
+    result.requestId = supplied.requestId;
+  }
+  return result;
+}
+
 export function createPublicTrialApp(
   deps: PublicTrialDependencies,
 ): FastifyInstance {
@@ -134,6 +183,38 @@ export function createPublicTrialApp(
   const now = deps.now ?? Date.now;
   const randomUUID = deps.randomUUID ?? createRandomUUID;
   const indexPath = path.resolve(deps.config.publicDir, 'index.html');
+  const limiter = new FixedWindowLimiter(
+    deps.config.questionLimit,
+    deps.config.questionWindowMs,
+  );
+  const requestStarts = new WeakMap<FastifyRequest, number>();
+  const requestLogIds = new WeakMap<FastifyRequest, string>();
+  let requestSequence = 0;
+
+  app.addHook('onRequest', async (request) => {
+    requestStarts.set(request, now());
+    requestSequence += 1;
+    requestLogIds.set(request, `trial-${requestSequence}`);
+  });
+  app.addHook('onResponse', async (request, reply) => {
+    if (!deps.writeLog) {
+      return;
+    }
+    const finishedAt = now();
+    const route = request.routeOptions.url ?? 'unmatched';
+    try {
+      await deps.writeLog({
+        timestamp: new Date(finishedAt).toISOString(),
+        requestId: requestLogIds.get(request) ?? 'trial-unknown',
+        method: request.method,
+        route,
+        statusCode: reply.statusCode,
+        durationMs: Math.max(0, finishedAt - (requestStarts.get(request) ?? finishedAt)),
+      });
+    } catch {
+      // Operational logging must never block or disclose a user response.
+    }
+  });
 
   app.setNotFoundHandler((_request, reply) => reply.code(404).send(NOT_FOUND));
   app.setErrorHandler((_error, _request, reply) => reply.code(500).send({
@@ -141,7 +222,7 @@ export function createPublicTrialApp(
   }));
 
   app.get('/trial/login', async (request, reply) => {
-    if (hasValidSession(request, deps.config, now())) {
+    if (validSession(request, deps.config, now())) {
       return reply.redirect('/');
     }
     return reply.type('text/html; charset=utf-8').send(renderTrialLoginPage());
@@ -205,32 +286,58 @@ export function createPublicTrialApp(
     }
   });
 
-  async function proxyPublicApi(
+  async function proxyUpstream(
     request: FastifyRequest,
     reply: FastifyReply,
     pathname: '/api/questions' | '/api/ask',
+    body?: Record<string, unknown>,
   ): Promise<void> {
-    if (!requireApiSession(request, reply, deps.config, now())) {
-      return;
-    }
     const upstream = await fetchImpl(`${deps.config.upstreamOrigin}${pathname}`, {
       method: request.method,
       headers: forwardedHeaders(request),
-      body: request.method === 'POST' ? JSON.stringify(request.body) : undefined,
+      body: request.method === 'POST' ? JSON.stringify(body) : undefined,
     });
-    const body = await upstream.text();
+    const responseBody = await upstream.text();
     const contentType = upstream.headers.get('content-type');
     if (contentType) {
       void reply.type(contentType);
     }
-    void reply.code(upstream.status).send(body);
+    void reply.code(upstream.status).send(responseBody);
   }
 
   app.get('/api/questions', async (request, reply) => {
-    await proxyPublicApi(request, reply, '/api/questions');
+    if (!requireApiSession(request, reply, deps.config, now())) {
+      return;
+    }
+    await proxyUpstream(request, reply, '/api/questions');
   });
   app.post('/api/ask', async (request, reply) => {
-    await proxyPublicApi(request, reply, '/api/ask');
+    const session = requireApiSession(request, reply, deps.config, now());
+    if (!session) {
+      return;
+    }
+    const contentType = request.headers['content-type']?.split(';', 1)[0]?.trim().toLowerCase();
+    if (contentType !== 'application/json') {
+      return reply.code(415).send({
+        error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: '仅支持 JSON 请求' },
+      });
+    }
+    const body = publicQuestionBody(request.body, deps.config.maxQuestionCodePoints);
+    if (!body) {
+      return reply.code(400).send({
+        error: { code: 'INVALID_QUESTION', message: '问题不能为空且最多 500 个字符' },
+      });
+    }
+    const limit = limiter.consume(session.sessionId, now());
+    if (!limit.allowed) {
+      return reply
+        .header('retry-after', String(limit.retryAfterSeconds))
+        .code(429)
+        .send({
+          error: { code: 'RATE_LIMITED', message: '测试请求较多，请稍后再试' },
+        });
+    }
+    await proxyUpstream(request, reply, '/api/ask', body);
   });
 
   return app;
