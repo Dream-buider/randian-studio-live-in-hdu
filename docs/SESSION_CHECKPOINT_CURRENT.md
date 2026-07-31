@@ -45,6 +45,8 @@ DNS、VPN 或代理，也不得从非官方来源下载模型。
 - 业务 PostgreSQL 已完成带哈希备份和新 D 盘目录/`55433` 端口的隔离恢复；
   恢复报告为
   `D:\Star\LIVE_IN_HDU_RUNTIME\restore-drills\business-20260731-170212\restore-report.json`。
+- D 盘 Docker CLI 会在当前进程补齐凭据助手搜索路径；当前镜像和模型下载的剩余
+  失败均发生在官方 registry DNS 解析阶段。
 
 ## 继续时优先顺序
 

@@ -159,10 +159,15 @@ test('knowledge stack stop executes a resolved Docker CLI and retains every volu
     fakeDocker,
     [
       '@echo off',
+      'where docker-credential-desktop >nul 2>nul || exit /b 91',
       'echo %*>>"%LIVE_IN_HDU_DOCKER_LOG%"',
       'exit /b 0',
       '',
     ].join('\r\n'),
+  );
+  await writeFile(
+    path.join(root, 'docker-credential-desktop.cmd'),
+    '@echo off\r\nexit /b 0\r\n',
   );
   await writeFile(path.join(root, 'vendor', 'WeKnora', '.env'), 'WEKNORA_VERSION=0.7.0\n');
   await writeFile(

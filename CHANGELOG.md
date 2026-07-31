@@ -103,6 +103,15 @@
   通过，35 个意图、99 个别名、31 条原始回答、Q11 0、异常数字 19 为 0。
 - 恢复测试容器已移除、`55433` 无监听，生产 PostgreSQL 仍为 healthy；该结论不
   包含尚未可用的 WeKnora 数据库和文件卷恢复。
+- D 盘 CLI 解析现在会把工具所在目录加入当前进程 `PATH`，使 Docker 能发现同目录
+  `docker-credential-desktop.exe`；回归测试先用假凭据助手复现失败，再验证停止
+  脚本可正常调用且不删除卷。
+- 凭据助手修复后，Docker Hub 访问不再报 helper missing，但官方 registry 域名解析
+  仍在 10 秒内超时；Ollama 官方 `nomic-embed-text:latest` 拉取仍明确报
+  `lookup registry.ollama.ai: no such host`。
+- 已用缓存镜像重新启动 SearXNG，并以真实 PostgreSQL、local-json 知识提供者、
+  SearXNG 搜索提供者和无 TokenDance Key 模式启动网关；健康接口为 ok，PID 元数据
+  仅含 `databaseProvider=postgres` 与无凭据数据库标识。
 
 ## 2026-07-29
 

@@ -49,6 +49,12 @@ CLI。可用以下只读命令核对：
 `LIVE_IN_HDU_DOCKER_CLI` 或 `LIVE_IN_HDU_OLLAMA_CLI` 的绝对路径；脚本会拒绝
 不存在的文件。不要把这两个临时覆盖写成系统级环境变量。
 
+解析 Docker CLI 时，脚本还会把 CLI 所在目录加入当前 PowerShell 进程的
+`PATH`。这是 Docker 拉取镜像时发现同目录
+`docker-credential-desktop.exe` 所必需的；不会永久修改用户或系统 `PATH`。
+如果凭据助手已经可发现但拉取仍停在域名解析，应按网络阻塞处理，不得绕过到
+非官方镜像。
+
 ## 2. 首次配置
 
 1. Docker Desktop（WSL2 后端）和 Ollama 已安装；重装时仍必须沿用本手册的 D 盘
