@@ -17,6 +17,7 @@ $BaseCompose = Join-Path $VendorRoot 'docker-compose.yml'
 $OverrideCompose = Join-Path $RepoRoot 'deploy\local\compose.weknora.override.yml'
 $PlatformCompose = Join-Path $RepoRoot 'deploy\local\compose.platform.yml'
 $PlatformEnvironment = Join-Path $RepoRoot 'deploy\local\.env.local'
+$PublicTrialStop = Join-Path $RepoRoot 'scripts\stop-public-trial.ps1'
 $GatewayStop = Join-Path $RepoRoot 'scripts\stop-freshman-platform.ps1'
 $RuntimeRoot = if ($env:LIVE_IN_HDU_RUNTIME_ROOT) {
     [IO.Path]::GetFullPath($env:LIVE_IN_HDU_RUNTIME_ROOT)
@@ -35,6 +36,8 @@ $dockerTool = Resolve-LiveInHduTool `
 $dockerCli = [string]$dockerTool.Path
 $services = @('frontend', 'app', 'docreader', 'searxng', 'redis', 'postgres')
 $display = @(
+    "& `"$PublicTrialStop`""
+    "& `"$GatewayStop`""
     "`"$dockerCli`" compose --project-directory `"$VendorRoot`" --env-file `"$VendorEnvironment`" -f `"$BaseCompose`" -f `"$OverrideCompose`" --profile searxng stop $($services -join ' ')"
     "`"$dockerCli`" compose --project-name live-in-hdu --env-file `"$PlatformEnvironment`" -f `"$PlatformCompose`" stop live-in-hdu-db"
 ) -join [Environment]::NewLine
@@ -44,6 +47,9 @@ if ($PrintCommandOnly) {
     exit 0
 }
 
+if (Test-Path -LiteralPath $PublicTrialStop) {
+    & $PublicTrialStop
+}
 if (Test-Path -LiteralPath $GatewayStop) {
     & $GatewayStop
 }
