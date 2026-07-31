@@ -3,6 +3,7 @@ param(
     [switch]$StaticOnly,
     [switch]$ValidateOnly,
     [switch]$ResolveToolsOnly,
+    [switch]$BusinessOnly,
     [string]$RepoRootOverride = ''
 )
 
@@ -52,13 +53,52 @@ function Compress-Sql([string]$InputPath, [string]$OutputPath) {
     Remove-Item -LiteralPath $InputPath -Force
 }
 
+$BusinessStateSql = @'
+SELECT json_build_object(
+  'intents', (SELECT COUNT(*) FROM question_intents),
+  'aliases', (SELECT COUNT(*) FROM intent_aliases),
+  'rawAnswers', (SELECT COUNT(*) FROM raw_answers),
+  'canonicalAnswers', (SELECT COUNT(*) FROM canonical_answers),
+  'reviews', (SELECT COUNT(*) FROM review_tasks),
+  'outbox', (SELECT COUNT(*) FROM integration_outbox),
+  'knowledgeImports', (SELECT COUNT(*) FROM knowledge_imports),
+  'q11RawAnswers', (
+    SELECT COUNT(*) FROM raw_answers r
+    JOIN question_intents q ON q.id = r.intent_id
+    WHERE q.external_id = 'Q11'
+  ),
+  'q11Published', (
+    SELECT COUNT(*) FROM canonical_answers c
+    JOIN question_intents q ON q.id = c.intent_id
+    WHERE q.external_id = 'Q11' AND c.status = 'published'
+  ),
+  'invalidNumericRawAnswers', (
+    SELECT COUNT(*) FROM raw_answers WHERE btrim(answer_text) = '19'
+  ),
+  'reviewOrderFingerprint', COALESCE((
+    SELECT md5(string_agg(
+      id::text || ':' || ordinal::text || ':' || created_at::text,
+      '|' ORDER BY created_at ASC, ordinal ASC
+    )) FROM review_tasks
+  ), '')
+)::text;
+'@
+
 if ($StaticOnly) {
+    $mode = if ($BusinessOnly) { 'business-only' } else { 'complete-stack' }
+    $artifacts = if ($BusinessOnly) {
+        @('live-in-hdu.sql.gz', 'config.redacted.json', 'manifest.json')
+    } else {
+        @('live-in-hdu.sql.gz', 'weknora.sql.gz', 'weknora-data-files.tar.gz', 'approved-knowledge-manifest.json', 'config.redacted.json', 'manifest.json')
+    }
     [ordered]@{
         dockerInvoked = $false
+        mode = $mode
+        requiresWeKnora = -not $BusinessOnly
         backupRoot = $BackupRoot
         manifest = (Join-Path $BackupRoot '<timestamp>\manifest.json')
         redactedConfig = (Join-Path $BackupRoot '<timestamp>\config.redacted.json')
-        artifacts = @('live-in-hdu.sql.gz', 'weknora.sql.gz', 'weknora-data-files.tar.gz', 'approved-knowledge-manifest.json', 'config.redacted.json', 'manifest.json')
+        artifacts = $artifacts
         retentionCount = 14
         deletesVolumes = $false
     } | ConvertTo-Json -Compress
@@ -76,12 +116,16 @@ if ($ResolveToolsOnly) {
 }
 if ([IO.Path]::GetPathRoot($BackupRoot).ToUpperInvariant() -ne 'D:\') { throw 'Knowledge backups must remain on D:.' }
 if (
-    -not (Test-Path -LiteralPath $VendorEnvironment) -or
-    -not (Test-Path -LiteralPath $BaseCompose) -or
     -not (Test-Path -LiteralPath $PlatformEnvironment) -or
-    -not (Test-Path -LiteralPath $PlatformCompose) -or
-    -not (Test-Path -LiteralPath $ApprovedManifest)
+    -not (Test-Path -LiteralPath $PlatformCompose)
 ) { throw 'Knowledge stack configuration is incomplete.' }
+if (
+    -not $BusinessOnly -and (
+        -not (Test-Path -LiteralPath $VendorEnvironment) -or
+        -not (Test-Path -LiteralPath $BaseCompose) -or
+        -not (Test-Path -LiteralPath $ApprovedManifest)
+    )
+) { throw 'Complete knowledge stack configuration is incomplete.' }
 if ($ValidateOnly) { [ordered]@{ dockerInvoked = $false; backupRoot = $BackupRoot; validated = $true } | ConvertTo-Json -Compress; exit 0 }
 
 $dockerTool = Get-DockerTool
@@ -89,11 +133,67 @@ $dockerCli = [string]$dockerTool.Path
 Import-LocalEnvironment $PlatformEnvironment
 New-Item -ItemType Directory -Force -Path $BackupRoot | Out-Null
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+$businessCompose = @('compose','--project-name','live-in-hdu','--env-file',$PlatformEnvironment,'-f',$PlatformCompose)
+
+if ($BusinessOnly) {
+    $destination = Join-Path $BackupRoot "business-$stamp"
+    $temporary = "$destination.partial"
+    if (Test-Path -LiteralPath $temporary) {
+        throw "Refusing to reuse an existing partial backup: $temporary"
+    }
+    New-Item -ItemType Directory -Path $temporary | Out-Null
+    $databaseUser = if ($env:LIVE_IN_HDU_DB_USER) { $env:LIVE_IN_HDU_DB_USER } else { 'live_in_hdu' }
+    $databaseName = if ($env:LIVE_IN_HDU_DB_NAME) { $env:LIVE_IN_HDU_DB_NAME } else { 'live_in_hdu' }
+    $businessSql = Join-Path $temporary 'live-in-hdu.sql'
+    & $dockerCli @businessCompose exec -T live-in-hdu-db pg_dump -U $databaseUser $databaseName |
+        Set-Content -LiteralPath $businessSql -Encoding UTF8
+    if ($LASTEXITCODE -ne 0) { throw 'LIVE IN HDU pg_dump failed.' }
+    Compress-Sql $businessSql (Join-Path $temporary 'live-in-hdu.sql.gz')
+    $stateJson = (& $dockerCli @businessCompose exec -T live-in-hdu-db `
+        psql -U $databaseUser -d $databaseName -At -c $BusinessStateSql | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($stateJson)) {
+        throw 'Could not inspect LIVE IN HDU database state after pg_dump.'
+    }
+    try {
+        $databaseState = $stateJson | ConvertFrom-Json
+    } catch {
+        throw 'LIVE IN HDU database state was not valid JSON.'
+    }
+    $redacted = (
+        Get-Content -Raw -LiteralPath $PlatformEnvironment -Encoding UTF8
+    ) -replace '(?m)^([^#\r\n]*(?:PASSWORD|SECRET|KEY|TOKEN)[^=]*=).*$', '$1[REDACTED]'
+    [ordered]@{ '.env.local' = $redacted } |
+        ConvertTo-Json |
+        Set-Content -LiteralPath (Join-Path $temporary 'config.redacted.json') -Encoding UTF8
+    $hashes = Get-ChildItem -LiteralPath $temporary -File | ForEach-Object {
+        [ordered]@{
+            path = $_.Name
+            sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
+        }
+    }
+    [ordered]@{
+        createdAt = [DateTime]::UtcNow.ToString('o')
+        mode = 'business-only'
+        databaseUser = $databaseUser
+        databaseName = $databaseName
+        databaseImage = 'postgres:17-alpine'
+        database = $databaseState
+        hashes = $hashes
+    } | ConvertTo-Json -Depth 5 |
+        Set-Content -LiteralPath (Join-Path $temporary 'manifest.json') -Encoding UTF8
+    Move-Item -LiteralPath $temporary -Destination $destination
+    Get-ChildItem -LiteralPath $BackupRoot -Directory -Filter 'business-*' |
+        Sort-Object LastWriteTimeUtc -Descending |
+        Select-Object -Skip 14 |
+        Remove-Item -Recurse -Force
+    Write-Output $destination
+    exit 0
+}
+
 $destination = Join-Path $BackupRoot "knowledge-$stamp"
 $temporary = "$destination.partial"
 New-Item -ItemType Directory -Force -Path $temporary | Out-Null
 $compose = @('compose','--project-directory',$VendorRoot,'--env-file',$VendorEnvironment,'-f',$BaseCompose,'-f',$OverrideCompose,'--profile','searxng')
-$businessCompose = @('compose','--project-name','live-in-hdu','--env-file',$PlatformEnvironment,'-f',$PlatformCompose)
 $stopped = @()
 try {
     foreach ($service in @('app','docreader')) {

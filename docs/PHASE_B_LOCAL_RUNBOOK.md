@@ -208,6 +208,30 @@ Pop-Location
 未演练的恢复流程宣称为已验证。演练必须使用新项目名和新卷，不得覆盖原卷，并核对
 问题数、回答版本、FIFO 审核顺序、WeKnora 知识数、一次已知检索和 outbox 状态。
 
+WeKnora 外部镜像尚不可用时，可以先对业务 PostgreSQL 执行不冒充完整栈备份的
+独立演练：
+
+```powershell
+$backup = .\scripts\backup-knowledge-stack.ps1 -BusinessOnly
+.\scripts\restore-business-postgres-drill.ps1 `
+  -BackupDirectory $backup `
+  -Port 55433
+```
+
+`-BusinessOnly` 不要求 WeKnora，备份仍包含 SQL、脱敏配置、SHA-256、原数据库
+用户/库名和数据状态。恢复脚本验证全部哈希，等待 PostgreSQL 官方镜像完成最终
+初始化，再用原数据库所有者导入到
+`D:\Star\LIVE_IN_HDU_RUNTIME\restore-drills` 的新目录。它会核对意图、别名、
+原始回答、标准答案、审核队列、outbox、知识导入、Q11、异常数字 19 和审核顺序
+指纹；默认验收后移除测试容器但保留 D 盘恢复数据与 `restore-report.json`。
+
+2026-07-31 业务库演练已通过：备份为
+`D:\Star\LIVE_IN_HDU_RUNTIME\backups\business-20260731-170157`，恢复报告位于
+`D:\Star\LIVE_IN_HDU_RUNTIME\restore-drills\business-20260731-170212`。
+恢复结果为 35 个意图、99 个别名、31 条原始回答，其余业务表 0 条；Q11 与异常
+数字 19 均为 0，生产 PostgreSQL 全程保持健康。该结果只证明业务数据库恢复，
+不替代仍待执行的 WeKnora 数据库、文件卷和知识检索完整恢复演练。
+
 ## 6. 故障与审核
 
 - 管理页：`http://localhost:3210/admin`，仅本机可访问。

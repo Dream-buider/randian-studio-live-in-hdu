@@ -88,6 +88,21 @@
 
 - 新增生命周期回归先复现 PostgreSQL 启动错误创建 SQLite 文件，再修复为不触碰
   SQLite 和导入报告；`lifecycle-scripts.test.ts` 最新为 4/4 通过。
+- `backup-knowledge-stack.ps1` 新增明确的 `-BusinessOnly` 模式；不依赖 WeKnora，
+  生成业务 SQL、脱敏配置、SHA-256、数据库身份与数据状态清单。
+- 新增 `restore-business-postgres-drill.ps1`，只允许从 D 盘备份根恢复到新的
+  D 盘演练目录，使用 `55433` 测试端口，验收后移除测试容器，不修改生产目录。
+
+### Continued restore verification
+
+- 首次真实恢复暴露两项根因：`pg_isready` 在官方镜像临时初始化服务器阶段提前
+  成功，以及恢复用户与 SQL 所有者不一致。诊断确认最终服务器阶段的明确错误为
+  `role "live_in_hdu" does not exist`。
+- 修复后等待官方镜像的最终启动标志，并从备份清单恢复原数据库所有者；真实恢复
+  到 `D:\Star\LIVE_IN_HDU_RUNTIME\restore-drills\business-20260731-170212`
+  通过，35 个意图、99 个别名、31 条原始回答、Q11 0、异常数字 19 为 0。
+- 恢复测试容器已移除、`55433` 无监听，生产 PostgreSQL 仍为 healthy；该结论不
+  包含尚未可用的 WeKnora 数据库和文件卷恢复。
 
 ## 2026-07-29
 

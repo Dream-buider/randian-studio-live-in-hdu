@@ -42,6 +42,9 @@ DNS、VPN 或代理，也不得从非官方来源下载模型。
 - 生产构建成功。
 - 生命周期脚本可从 D 盘运行根解析 Docker/Ollama CLI。
 - 停止脚本不删除容器、卷或 D 盘数据，未执行 `docker compose down -v`。
+- 业务 PostgreSQL 已完成带哈希备份和新 D 盘目录/`55433` 端口的隔离恢复；
+  恢复报告为
+  `D:\Star\LIVE_IN_HDU_RUNTIME\restore-drills\business-20260731-170212\restore-report.json`。
 
 ## 继续时优先顺序
 

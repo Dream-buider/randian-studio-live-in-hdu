@@ -1123,6 +1123,15 @@ For a consistent WeKnora snapshot, stop only WeKnora `app` and `docreader`, run 
 
 - [ ] **Step 6: Perform a clean restore drill**
 
+Partial verified status 2026-07-31: the business PostgreSQL portion now has an
+honest `-BusinessOnly` backup and an isolated restore drill. The restore uses a
+new D-drive data directory, test port `55433`, the source database owner from
+the signed manifest, and waits past the official image's temporary init server.
+It verified 35 intents, 99 aliases, 31 raw answers, zero Q11 answers, zero
+numeric `19` answers, an unchanged review-order fingerprint and no production
+data modification. The WeKnora database/data-files restore and known retrieval
+check remain incomplete, so this step stays unchecked.
+
 Restore into newly named test volumes and test ports, then verify:
 
 - public question count and answer versions;

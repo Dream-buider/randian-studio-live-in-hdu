@@ -9,6 +9,7 @@ const START_SCRIPT = path.join(REPO_ROOT, 'scripts', 'start-knowledge-stack.ps1'
 const STOP_SCRIPT = path.join(REPO_ROOT, 'scripts', 'stop-knowledge-stack.ps1');
 const CHECK_SCRIPT = path.join(REPO_ROOT, 'scripts', 'test-knowledge-stack.ps1');
 const BACKUP_SCRIPT = path.join(REPO_ROOT, 'scripts', 'backup-knowledge-stack.ps1');
+const RESTORE_SCRIPT = path.join(REPO_ROOT, 'scripts', 'restore-business-postgres-drill.ps1');
 const PLATFORM_COMPOSE = path.join(REPO_ROOT, 'deploy', 'local', 'compose.platform.yml');
 const TEMP_ROOT = 'D:\\Star\\LIVE_IN_HDU_RUNTIME\\temp';
 const PINNED_COMMIT = '150c07368b84b4f50421b8957255213cbbadc175';
@@ -249,6 +250,37 @@ test('knowledge stack backup resolves the configured Docker CLI before touching 
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test('business-only backup and restore drill expose an isolated D-drive plan', () => {
+  const backup = run(BACKUP_SCRIPT, ['-StaticOnly', '-BusinessOnly']);
+  const restore = run(RESTORE_SCRIPT, ['-StaticOnly']);
+
+  assert.equal(backup.status, 0, `${backup.stdout}\n${backup.stderr}`);
+  assert.equal(restore.status, 0, `${restore.stdout}\n${restore.stderr}`);
+
+  const backupPlan = JSON.parse(backup.stdout);
+  assert.equal(backupPlan.mode, 'business-only');
+  assert.equal(backupPlan.requiresWeKnora, false);
+  assert.deepEqual(backupPlan.artifacts, [
+    'live-in-hdu.sql.gz',
+    'config.redacted.json',
+    'manifest.json',
+  ]);
+
+  const restorePlan = JSON.parse(restore.stdout);
+  assert.equal(restorePlan.dockerInvoked, false);
+  assert.equal(restorePlan.sourceManifestVerified, true);
+  assert.equal(restorePlan.productionDataModified, false);
+  assert.equal(restorePlan.containerRemovedAfterVerification, true);
+  assert.equal(restorePlan.databaseOwnerFromManifest, true);
+  assert.equal(restorePlan.waitsForFinalPostgresStartup, true);
+  assert.equal(restorePlan.testPort, 55433);
+  assert.match(
+    restorePlan.restoreRoot,
+    /^D:\\Star\\LIVE_IN_HDU_RUNTIME\\restore-drills$/i,
+  );
+  assert.match(restorePlan.projectPrefix, /^live-in-hdu-restore-/);
 });
 
 test('business PostgreSQL is isolated, pinned to 17, and stores its database on D', async () => {
