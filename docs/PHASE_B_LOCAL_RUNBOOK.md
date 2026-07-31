@@ -4,8 +4,8 @@
 当前电脑已把 Docker Desktop 4.84.0、Docker Engine 29.6.2、Compose 5.3.1、
 Ollama 0.32.5、业务 PostgreSQL 17 与 WeKnora 0.7.0 的运行数据落到 D 盘。
 PostgreSQL、WeKnora、DocReader、Ollama 嵌入、SearXNG 与 TokenDance 已完成真实
-联调；两个知识库和最小权限 API Key 已配置。内容仍需人工审核，当前 0 条标准答案
-被发布，也未导入未经批准的资料。
+联调；两个知识库和限定范围的最小权限 API Key 已配置。首批23条人工审核标准答案
+已发布并同步到 WeKnora FAQ；其余内容仍需人工审核，未经批准的资料没有导入。
 
 ## 1. 存储边界
 

@@ -114,6 +114,17 @@ test('FAQ synchronization creates then updates documented WeKnora FAQ endpoints'
   assert.equal(store.links.get('campus-card'), 71);
 });
 
+test('FAQ synchronization accepts the WeKnora 0.7 data.id create response', async () => {
+  const client = new WeKnoraFaqClient({
+    baseUrl: 'http://127.0.0.1:8080/api/v1',
+    apiKey: 'test-api-key',
+    knowledgeBaseId: 'kb-faq',
+    fetch: async () => Response.json({ data: { id: 100000003 } }),
+  });
+
+  assert.equal(await client.upsert(payload, null), 100000003);
+});
+
 test('FAQ synchronization is idempotent and retains retryable failures', async () => {
   const store = new MemoryStore();
   let available = false;

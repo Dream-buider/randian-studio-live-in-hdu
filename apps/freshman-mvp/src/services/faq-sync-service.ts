@@ -57,14 +57,13 @@ function asSeqId(value: unknown): number | null {
   )
     ? value.data
     : value;
-  if (
-    typeof candidate !== 'object'
-    || candidate === null
-    || !('seq_id' in candidate)
-  ) {
+  if (typeof candidate !== 'object' || candidate === null) {
     return null;
   }
-  const seqId = Number(candidate.seq_id);
+  const rawId = 'seq_id' in candidate
+    ? candidate.seq_id
+    : ('id' in candidate ? candidate.id : null);
+  const seqId = Number(rawId);
   return Number.isSafeInteger(seqId) && seqId > 0 ? seqId : null;
 }
 

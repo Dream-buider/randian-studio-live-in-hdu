@@ -9,7 +9,20 @@
 - 生成三工作表发布工作簿和API就绪JSON；12道暂缺/保留问题单独列出，Q11不发布，
   全部纯数字异常占位`19`已排除。
 - 对23条发布记录、12条暂缺记录、必填字段、唯一编号、Q11与异常值进行二次重跑校验；
-  三张工作表均完成渲染检查，未自动调用发布接口。
+  三张工作表均完成渲染检查；用户确认后，23条记录已正式发布。
+
+### Approved FAQ publication completed
+
+- 发布前在 D 盘完成业务 PostgreSQL 与 WeKnora 数据库备份；23条审核答案逐条写入
+  PostgreSQL，Q11 保持未发布，用户端问题卡片为23条。
+- 将 WeKnora API Key 从只读调整为限定两个既有知识库的最小
+  `retrieve + ingest` 权限，未授予完全访问或知识库管理权限。
+- 修复 WeKnora 0.7.0 FAQ 创建响应使用 `data.id`、同步器只识别旧
+  `data.seq_id` 的兼容问题，并增加回归测试。
+- 23个 FAQ outbox 事件最终全部 completed，失败与待处理均为0；WeKnora FAQ
+  共23条、标准问题无重复，问题和完整答案与审核发布包逐条一致，Q11为0条。
+- 将业务网关的 `DATABASE_PROVIDER=postgres` 与连接配置持久化到被 Git 忽略的
+  本地环境文件，标准启停脚本重启后仍连接 PostgreSQL。
 
 ### Phase B local integration completed
 
@@ -18,12 +31,12 @@
 - 配置 `DeepSeek V4 Flash（TokenDance）` 对话模型和本机
   `nomic-embed-text:latest` 嵌入模型，建立 `LIVE IN HDU 新生资料库` 与
   `LIVE IN HDU 新生问答库`。
-- 创建仅允许检索上述两个知识库的最小权限 WeKnora API Key，并把所有真实密钥和
+- 创建仅允许检索和写入上述两个知识库内容的最小权限 WeKnora API Key，并把所有真实密钥和
   知识库标识写入被 Git 忽略的服务端环境文件。
 - Node 24 网关通过本机 HTTP 代理完成 TokenDance 真实生成；三段路由返回精确甄别
   批注并保留 FIFO 审核边界。
-- 网关最终以 PostgreSQL 模式运行；当前 35 个意图中 23 个已有回答，共 31 条原始
-  回答，12 个问题为空，0 条标准答案被自动发布，Q11 仍为空。
+- 网关最终以 PostgreSQL 模式运行；当前 35 个意图中 23 个已有发布答案，12 个问题
+  为空，共31条原始回答；Q11 仍为空。
 
 ### Final verification
 

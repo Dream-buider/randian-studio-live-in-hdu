@@ -36,6 +36,8 @@ $WorkbookPath = Join-Path $RepoRoot 'output\playwright\current-40q-2026-07-27.xl
 $ServerEntrypoint = Join-Path $AppRoot 'dist\server\index.js'
 $ClientEntrypoint = Join-Path $AppRoot 'dist\client\index.html'
 $EnvFile = Join-Path $AppRoot '.env.local'
+$ExplicitDatabaseProvider = [string]$env:DATABASE_PROVIDER
+$ExplicitPostgresUrl = [string]$env:POSTGRES_URL
 
 function Assert-DDriveTarget([string]$PathValue, [string]$Label) {
     if (-not (Test-Path -LiteralPath $PathValue)) {
@@ -173,7 +175,18 @@ Assert-DDriveTarget (Join-Path $AppRoot 'node_modules') 'node_modules junction'
 New-Item -ItemType Directory -Path $InstanceOutput -Force | Out-Null
 
 Import-LocalEnvironment $EnvFile
-$DatabaseProvider = if ([string]::IsNullOrWhiteSpace($env:DATABASE_PROVIDER)) {
+if (-not [string]::IsNullOrWhiteSpace($ExplicitDatabaseProvider)) {
+    $env:DATABASE_PROVIDER = $ExplicitDatabaseProvider
+}
+if (-not [string]::IsNullOrWhiteSpace($ExplicitPostgresUrl)) {
+    $env:POSTGRES_URL = $ExplicitPostgresUrl
+}
+$DatabaseProvider = if (
+    $DatabasePathOverride -and
+    [string]::IsNullOrWhiteSpace($ExplicitDatabaseProvider)
+) {
+    'sqlite'
+} elseif ([string]::IsNullOrWhiteSpace($env:DATABASE_PROVIDER)) {
     'sqlite'
 } else {
     $env:DATABASE_PROVIDER.Trim().ToLowerInvariant()
