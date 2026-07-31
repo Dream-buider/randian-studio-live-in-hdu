@@ -80,6 +80,14 @@
 - 新增稳定恢复入口 `docs/SESSION_CHECKPOINT_CURRENT.md`，记录当前分支、D 盘运行根、
   已验证基线、外部阻塞、继续顺序与禁止事项；暂停时再次确认全部项目服务已停止且
   目标端口无监听。
+- PostgreSQL 网关启动不再检查、创建或导入 SQLite；生命周期 PID 元数据新增
+  `databaseProvider`，PostgreSQL 模式只保存无凭据标识，不保存连接串，同时兼容
+  旧版 SQLite PID 元数据。
+
+### Continued lifecycle verification
+
+- 新增生命周期回归先复现 PostgreSQL 启动错误创建 SQLite 文件，再修复为不触碰
+  SQLite 和导入报告；`lifecycle-scripts.test.ts` 最新为 4/4 通过。
 
 ## 2026-07-29
 

@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { closeSync, mkdirSync, openSync, readFileSync, rmSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  rmSync,
+} from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
@@ -18,7 +25,11 @@ const OUTPUT_ROOT = path.join(REPO_ROOT, 'output', 'freshman-platform');
 const BROWSER_OUTPUT = path.join(REPO_ROOT, 'output', 'playwright', 'runtime');
 const TEMP_ROOT = 'D:\\Star\\LIVE_IN_HDU_RUNTIME\\temp';
 
-function runPowerShell(script: string, args: string[] = []) {
+function runPowerShell(
+  script: string,
+  args: string[] = [],
+  envOverrides: NodeJS.ProcessEnv = {},
+) {
   mkdirSync(TEMP_ROOT, { recursive: true });
   const token = `${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const stdoutPath = path.join(TEMP_ROOT, `pwsh-${token}.stdout.log`);
@@ -34,6 +45,7 @@ function runPowerShell(script: string, args: string[] = []) {
         TEMP: TEMP_ROOT,
         TMP: TEMP_ROOT,
         npm_config_cache: 'D:\\Star\\LIVE_IN_HDU_RUNTIME\\npm-cache',
+        ...envOverrides,
       },
       stdio: ['ignore', stdoutFd, stderrFd],
       timeout: 120_000,
@@ -201,6 +213,41 @@ test('start recovers a partial database without a report and validates a dynamic
   } finally {
     runPowerShell(STOP_SCRIPT, ['-InstanceName', partialInstance]);
     await rm(path.join(OUTPUT_ROOT, partialInstance), { recursive: true, force: true });
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('PostgreSQL lifecycle startup does not inspect, bootstrap, or record a SQLite database', {
+  timeout: 120_000,
+}, async () => {
+  await mkdir(TEMP_ROOT, { recursive: true });
+  const directory = await mkdtemp(path.join(TEMP_ROOT, 'lifecycle-postgres-'));
+  const databasePath = path.join(directory, 'must-not-exist.db');
+  const instance = `postgres-${process.pid}`;
+  const instanceOutput = path.join(OUTPUT_ROOT, instance);
+  const reportPath = path.join(instanceOutput, 'import-report.json');
+
+  try {
+    const result = runPowerShell(START_SCRIPT, [
+      '-InstanceName', instance,
+      '-DatabasePathOverride', databasePath,
+      '-PortOverride', '33994',
+      '-HealthTimeoutSeconds', '1',
+    ], {
+      DATABASE_PROVIDER: 'postgres',
+      POSTGRES_URL: 'postgresql://127.0.0.1:9/live_in_hdu_unavailable',
+    });
+
+    assert.notEqual(result.status, 0, 'An unavailable PostgreSQL endpoint must fail health');
+    assert.equal(existsSync(databasePath), false, 'PostgreSQL startup touched SQLite');
+    assert.equal(existsSync(reportPath), false, 'PostgreSQL startup wrote a SQLite import report');
+    assert.doesNotMatch(
+      `${result.stdout}\n${result.stderr}`,
+      /First-run workbook|bootstrap baseline|production database/i,
+    );
+  } finally {
+    runPowerShell(STOP_SCRIPT, ['-InstanceName', instance]);
+    await rm(instanceOutput, { recursive: true, force: true });
     await rm(directory, { recursive: true, force: true });
   }
 });

@@ -145,3 +145,4 @@
 | 2026-07-31 | AI检索 | 生成安全 WeKnora 环境，启动 loopback SearXNG，并验证 PostgreSQL 网关重启快照 | DONE |
 | 2026-07-31 | 运营管理 | 保存最新可恢复暂停检查点，将 PostgreSQL 客户端依赖迁回 D 盘并确认所有本地服务已停止 | DONE |
 | 2026-07-31 | AI检索 | 修复重启后 Docker/Ollama 不在 PATH 导致知识栈脚本失效的问题，并验证安全停止、卷保留、WSL 资源上限与单一预检失败 | DONE |
+| 2026-07-31 | AI检索 | 解除 PostgreSQL 生命周期对 SQLite 启动导入和 PID 路径的耦合，并用失败测试复现后验证修复 | DONE |

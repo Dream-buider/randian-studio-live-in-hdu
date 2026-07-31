@@ -54,18 +54,31 @@ $metadataPort = [int]$metadata.port
 if ($metadataPort -lt 1 -or $metadataPort -gt 65535) {
     throw 'PID metadata has an invalid port; refusing to stop anything.'
 }
-$metadataDatabase = Get-NormalizedPath ([string]$metadata.database)
-if ($metadataDatabase -ieq (Get-NormalizedPath $ExpectedDefaultDatabase)) {
-    $runtimeItem = Get-Item -LiteralPath (Join-Path $ExpectedAppRoot 'runtime') -Force
-    $runtimeTarget = [string]($runtimeItem.Target | Select-Object -First 1)
-    if (
-        $runtimeItem.LinkType -notin @('Junction', 'SymbolicLink') -or
-        [IO.Path]::GetPathRoot($runtimeTarget).ToUpperInvariant() -ne 'D:\'
-    ) {
-        throw 'Default runtime metadata is not backed by the approved D: junction.'
+$metadataProvider = if ($null -ne $metadata.PSObject.Properties['databaseProvider']) {
+    ([string]$metadata.databaseProvider).Trim().ToLowerInvariant()
+} else {
+    'sqlite'
+}
+if ($metadataProvider -eq 'sqlite') {
+    $metadataDatabase = Get-NormalizedPath ([string]$metadata.database)
+    if ($metadataDatabase -ieq (Get-NormalizedPath $ExpectedDefaultDatabase)) {
+        $runtimeItem = Get-Item -LiteralPath (Join-Path $ExpectedAppRoot 'runtime') -Force
+        $runtimeTarget = [string]($runtimeItem.Target | Select-Object -First 1)
+        if (
+            $runtimeItem.LinkType -notin @('Junction', 'SymbolicLink') -or
+            [IO.Path]::GetPathRoot($runtimeTarget).ToUpperInvariant() -ne 'D:\'
+        ) {
+            throw 'Default runtime metadata is not backed by the approved D: junction.'
+        }
+    } elseif ([IO.Path]::GetPathRoot($metadataDatabase).ToUpperInvariant() -ne 'D:\') {
+        throw 'PID metadata database must be the approved runtime path or an explicit D: override.'
     }
-} elseif ([IO.Path]::GetPathRoot($metadataDatabase).ToUpperInvariant() -ne 'D:\') {
-    throw 'PID metadata database must be the approved runtime path or an explicit D: override.'
+} elseif ($metadataProvider -eq 'postgres') {
+    if ([string]$metadata.database -ne 'postgres') {
+        throw 'PostgreSQL PID metadata must not contain a connection string or SQLite path.'
+    }
+} else {
+    throw "PID metadata has an unsupported database provider: $metadataProvider"
 }
 
 $process = Get-CimInstance Win32_Process -Filter "ProcessId = $pidValue" -ErrorAction SilentlyContinue

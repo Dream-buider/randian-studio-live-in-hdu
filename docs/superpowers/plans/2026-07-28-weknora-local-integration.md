@@ -429,6 +429,12 @@ PostgreSQL container. Before and after restart it reported PostgreSQL mode,
 35 intents, zero reviews, zero published answers and an empty Q11; SearXNG
 remained selected as the independent search provider.
 
+Lifecycle hardening 2026-07-31: `start-freshman-platform.ps1` now branches on
+`DATABASE_PROVIDER` before any bootstrap work. PostgreSQL mode neither opens nor
+imports SQLite, and PID metadata stores only the provider plus the non-secret
+`postgres` identity. A failing test reproduced the prior SQLite side effect
+before the implementation passed the lifecycle suite.
+
 ```powershell
 $env:DATABASE_DRIVER='postgres'
 $escapedPassword = [uri]::EscapeDataString($env:LIVE_IN_HDU_DB_PASSWORD)

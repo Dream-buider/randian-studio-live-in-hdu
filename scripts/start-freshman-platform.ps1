@@ -95,6 +95,21 @@ function Get-OwnedProcess([int]$ProcessId, [string]$ExpectedEntrypoint) {
 }
 
 function Assert-ValidMetadata($Metadata) {
+    $metadataProvider = if ($null -ne $Metadata.PSObject.Properties['databaseProvider']) {
+        ([string]$Metadata.databaseProvider).Trim().ToLowerInvariant()
+    } else {
+        'sqlite'
+    }
+    $metadataDatabaseMatches = if ($DatabaseProvider -eq 'sqlite') {
+        try {
+            (Get-NormalizedPath ([string]$Metadata.database)) -ieq
+                (Get-NormalizedPath $DatabasePath)
+        } catch {
+            $false
+        }
+    } else {
+        [string]$Metadata.database -eq 'postgres'
+    }
     if (
         [int]$Metadata.pid -le 0 -or
         [int]$Metadata.port -lt 1 -or
@@ -105,7 +120,8 @@ function Assert-ValidMetadata($Metadata) {
     if (
         (Get-NormalizedPath ([string]$Metadata.appRoot)) -ine (Get-NormalizedPath $AppRoot) -or
         (Get-NormalizedPath ([string]$Metadata.entrypoint)) -ine (Get-NormalizedPath $ServerEntrypoint) -or
-        (Get-NormalizedPath ([string]$Metadata.database)) -ine (Get-NormalizedPath $DatabasePath)
+        $metadataProvider -ne $DatabaseProvider -or
+        -not $metadataDatabaseMatches
     ) {
         throw 'PID metadata does not describe this exact instance; refusing to accept it.'
     }
@@ -157,10 +173,30 @@ Assert-DDriveTarget (Join-Path $AppRoot 'node_modules') 'node_modules junction'
 New-Item -ItemType Directory -Path $InstanceOutput -Force | Out-Null
 
 Import-LocalEnvironment $EnvFile
+$DatabaseProvider = if ([string]::IsNullOrWhiteSpace($env:DATABASE_PROVIDER)) {
+    'sqlite'
+} else {
+    $env:DATABASE_PROVIDER.Trim().ToLowerInvariant()
+}
+if ($DatabaseProvider -notin @('sqlite', 'postgres')) {
+    throw "DATABASE_PROVIDER must be sqlite or postgres, received: $DatabaseProvider"
+}
+if ($DatabaseProvider -eq 'postgres' -and [string]::IsNullOrWhiteSpace($env:POSTGRES_URL)) {
+    throw 'POSTGRES_URL is required when DATABASE_PROVIDER=postgres.'
+}
+$DatabaseIdentity = if ($DatabaseProvider -eq 'sqlite') {
+    $DatabasePath
+} else {
+    'postgres'
+}
 $env:TEMP = $TempRoot
 $env:TMP = $TempRoot
 $env:npm_config_cache = $NpmCache
-$env:DATABASE_PATH = $DatabasePath
+if ($DatabaseProvider -eq 'sqlite') {
+    $env:DATABASE_PATH = $DatabasePath
+} else {
+    Remove-Item Env:DATABASE_PATH -ErrorAction SilentlyContinue
+}
 $port = if ($PortOverride -gt 0) {
     $PortOverride
 } elseif ($env:PORT) {
@@ -236,31 +272,34 @@ if ($buildRequired) {
 
 $DatabaseStateScript = Join-Path $AppRoot 'scripts\database-state.mts'
 $ImportScript = Join-Path $AppRoot 'scripts\import-feishu-xlsx.mts'
-$stateJson = (& npm --prefix $AppRoot exec -- tsx $DatabaseStateScript --database $DatabasePath | Out-String)
-if ($LASTEXITCODE -ne 0) { throw "Could not inspect production database" }
-$state = $stateJson | ConvertFrom-Json
-$needsBootstrapImport = [int]$state.counts.intents -eq 0 -or
-    -not (Test-Path -LiteralPath $ImportReport)
-if ($needsBootstrapImport) {
-    if (-not (Test-Path -LiteralPath $WorkbookPath)) {
-        throw "First-run workbook is missing: $WorkbookPath"
-    }
-    $importJson = (& npm --prefix $AppRoot exec -- tsx $ImportScript --input $WorkbookPath --database $DatabasePath | Out-String)
-    if ($LASTEXITCODE -ne 0) { throw "First-run workbook import failed" }
-    $reportStaging = "$ImportReport.$PID.tmp"
-    try {
-        [IO.File]::WriteAllText($reportStaging, $importJson, [Text.UTF8Encoding]::new($false))
-        Read-ValidatedImportReport $reportStaging | Out-Null
-        Move-Item -LiteralPath $reportStaging -Destination $ImportReport -Force
-    } finally {
-        Remove-Item -LiteralPath $reportStaging -Force -ErrorAction SilentlyContinue
-    }
+$state = $null
+if ($DatabaseProvider -eq 'sqlite') {
     $stateJson = (& npm --prefix $AppRoot exec -- tsx $DatabaseStateScript --database $DatabasePath | Out-String)
-    if ($LASTEXITCODE -ne 0) { throw "Could not verify imported database" }
+    if ($LASTEXITCODE -ne 0) { throw "Could not inspect production database" }
     $state = $stateJson | ConvertFrom-Json
+    $needsBootstrapImport = [int]$state.counts.intents -eq 0 -or
+        -not (Test-Path -LiteralPath $ImportReport)
+    if ($needsBootstrapImport) {
+        if (-not (Test-Path -LiteralPath $WorkbookPath)) {
+            throw "First-run workbook is missing: $WorkbookPath"
+        }
+        $importJson = (& npm --prefix $AppRoot exec -- tsx $ImportScript --input $WorkbookPath --database $DatabasePath | Out-String)
+        if ($LASTEXITCODE -ne 0) { throw "First-run workbook import failed" }
+        $reportStaging = "$ImportReport.$PID.tmp"
+        try {
+            [IO.File]::WriteAllText($reportStaging, $importJson, [Text.UTF8Encoding]::new($false))
+            Read-ValidatedImportReport $reportStaging | Out-Null
+            Move-Item -LiteralPath $reportStaging -Destination $ImportReport -Force
+        } finally {
+            Remove-Item -LiteralPath $reportStaging -Force -ErrorAction SilentlyContinue
+        }
+        $stateJson = (& npm --prefix $AppRoot exec -- tsx $DatabaseStateScript --database $DatabasePath | Out-String)
+        if ($LASTEXITCODE -ne 0) { throw "Could not verify imported database" }
+        $state = $stateJson | ConvertFrom-Json
+    }
+    $baselineReport = Read-ValidatedImportReport $ImportReport
+    Assert-DynamicBaseline $state $baselineReport
 }
-$baselineReport = Read-ValidatedImportReport $ImportReport
-Assert-DynamicBaseline $state $baselineReport
 
 $node = (Get-Command node -ErrorAction Stop).Source
 Remove-Item -LiteralPath $StdoutLog, $StderrLog -Force -ErrorAction SilentlyContinue
@@ -284,7 +323,8 @@ $metadata = [ordered]@{
     startedAt = [DateTime]::UtcNow.ToString('o')
     appRoot = $AppRoot
     entrypoint = $ServerEntrypoint
-    database = $DatabasePath
+    databaseProvider = $DatabaseProvider
+    database = $DatabaseIdentity
     port = $port
     nodeExecutable = $node
 }
@@ -332,7 +372,11 @@ $addresses = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue 
 foreach ($address in $addresses) {
     Write-Output "同一 Wi-Fi 用户端：http://${address}:$port"
 }
-Write-Output "数据：意图 $($state.counts.intents)，原始回答 $($state.counts.rawAnswers)，已发布 $($state.counts.published)，Q11 原始回答 $($state.counts.q11RawAnswers)"
+if ($DatabaseProvider -eq 'sqlite') {
+    Write-Output "数据：意图 $($state.counts.intents)，原始回答 $($state.counts.rawAnswers)，已发布 $($state.counts.published)，Q11 原始回答 $($state.counts.q11RawAnswers)"
+} else {
+    Write-Output '数据：PostgreSQL（问题数量由当前数据库动态决定）'
+}
 Write-Output "PID：$($process.Id)"
 Write-Output "日志：$StdoutLog"
 if ($OpenBrowser) { Start-Process "http://localhost:$port" }

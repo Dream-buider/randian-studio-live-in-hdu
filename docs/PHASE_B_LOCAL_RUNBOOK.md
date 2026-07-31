@@ -112,6 +112,11 @@ Pop-Location
 .\scripts\start-knowledge-stack.ps1
 ```
 
+知识栈会显式以 `DATABASE_PROVIDER=postgres` 启动网关。该模式不会检查、创建或
+导入 SQLite，也不会把 PostgreSQL 连接串写入 PID 文件；PID 元数据只记录
+`databaseProvider=postgres` 与不含凭据的 `database=postgres` 标识。Phase A
+单独启动仍默认使用 SQLite，并兼容原有 PID 元数据。
+
 安全停止顺序相反，且只执行 `stop`，不会删除数据卷：
 
 ```powershell
