@@ -158,3 +158,23 @@ test('HDU-first search preserves an explicit status when both queries fail', asy
     leads: [],
   });
 });
+
+test('HDU-first search supplies verified official club evidence when live search returns no leads', async () => {
+  for (const question of ['给个社团的建议', '社团有什么作用吗']) {
+    const provider = new HduFirstSearchProvider(sequencedProvider([
+      { status: 'available', leads: [] },
+      { status: 'available', leads: [] },
+    ]));
+
+    const result = await provider.search(question);
+
+    assert.equal(result.status, 'available');
+    assert.deepEqual(result.leads.map((item) => item.url), [
+      'https://www.hdu.edu.cn/news/2025/0610/c7517a279705/page.htm',
+      'https://tuanwei.hdu.edu.cn/',
+      'https://xxgk.hdu.edu.cn/8797/list.htm',
+    ]);
+    assert.ok(result.leads.every((item) => item.title.trim().length > 0));
+    assert.ok(result.leads.every((item) => item.snippet.trim().length > 0));
+  }
+});

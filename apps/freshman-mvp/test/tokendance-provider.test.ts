@@ -156,6 +156,38 @@ test('TokenDance synthesizes a non-empty answer from available or unavailable se
   }
 });
 
+test('TokenDance web synthesis forbids HDU-specific clubs and links absent from supplied evidence', async () => {
+  let requestBody: Record<string, unknown> | undefined;
+  const provider = new TokenDanceProvider({
+    apiKey: 'test-key',
+    fetch: async (_input, init) => {
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return response({
+        choices: [{ message: { content: '仅依据输入线索回答。' } }],
+      });
+    },
+  });
+
+  await provider.synthesize({
+    question: '给个社团的建议',
+    search: {
+      status: 'available',
+      leads: [{
+        title: '杭州电子科技大学校团委',
+        url: 'https://tuanwei.hdu.edu.cn/',
+        snippet: '社团安排以校团委最新通知为准。',
+        engines: ['verified-fallback'],
+        retrievedAt: '2026-08-02T00:00:00.000Z',
+      }],
+    },
+  });
+
+  const serialized = JSON.stringify(requestBody);
+  assert.match(serialized, /不得提及输入标题、摘要和URL中不存在的具体社团名称、数量、公众号、网站或链接/);
+  assert.match(serialized, /杭州电子科技大学校团委/);
+  assert.doesNotMatch(serialized, /杭电轮滑社/);
+});
+
 test('TokenDance grounds knowledge synthesis in HDU hits without sending retrieval metadata', async () => {
   let requestBody: Record<string, unknown> | undefined;
   const provider = new TokenDanceProvider({
