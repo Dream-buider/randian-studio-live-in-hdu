@@ -62,6 +62,20 @@ describe('question deck', () => {
     vi.unstubAllGlobals();
   });
 
+  it('opens the community-organized freshman guide with all four approved sections', async () => {
+    const router = createAppRouter(createMemoryHistory());
+    await router.push('/guide');
+    await router.isReady();
+    const wrapper = mount(App, { global: { plugins: [router] } });
+
+    expect(wrapper.text()).toContain('杭电新生指北');
+    expect(wrapper.text()).toContain('开学准备');
+    expect(wrapper.text()).toContain('宿舍');
+    expect(wrapper.text()).toContain('社区成员整理');
+    expect(wrapper.findAll('a[href*="J7o6wBiJVi36wJk2VSTcyyb1nDd#"]')).toHaveLength(4);
+    wrapper.unmount();
+  });
+
   it('shows the dynamic total, first card, approved trust and next card in server order', async () => {
     const wrapper = mount(QuestionDeckView);
     await flushPromises();

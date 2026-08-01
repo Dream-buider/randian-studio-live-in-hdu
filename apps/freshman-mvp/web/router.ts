@@ -7,6 +7,7 @@ import {
 } from 'vue-router';
 import QuestionDeckView from './views/QuestionDeckView.vue';
 import ChatView from './views/ChatView.vue';
+import GuideView from './views/GuideView.vue';
 
 export interface AppRouterOptions {
   adminEnabled?: boolean;
@@ -19,6 +20,7 @@ export function createAppRouter(
   const routes: RouteRecordRaw[] = [
     { path: '/', name: 'deck', component: QuestionDeckView },
     { path: '/chat', name: 'chat', component: ChatView },
+    { path: '/guide', name: 'guide', component: GuideView },
   ];
   const buildAllowsAdmin = import.meta.env.MODE !== 'public-trial';
   const adminEnabled = buildAllowsAdmin && (options.adminEnabled ?? true);

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, inject, onMounted, ref } from 'vue';
-import { routerKey, type Router } from 'vue-router';
+import { RouterLink, routerKey, type Router } from 'vue-router';
 import { listQuestions, type PublishedQuestion } from '../api.js';
 import type { QuestionContext } from '../api.js';
 import {
@@ -130,14 +130,17 @@ onMounted(async () => {
         <BrandHeader subtitle="杭电新生问答与指北" />
         <p>新生必看 {{ questions.length }} 问</p>
       </div>
-      <button
-        v-if="questions.length"
-        type="button"
-        data-action="catalog"
-        @click="catalogOpen = true"
-      >
-        全部问题
-      </button>
+      <div class="deck-header-actions">
+        <RouterLink v-if="router" to="/guide" data-action="open-guide">新生指北</RouterLink>
+        <button
+          v-if="questions.length"
+          type="button"
+          data-action="catalog"
+          @click="catalogOpen = true"
+        >
+          全部问题
+        </button>
+      </div>
     </header>
     <p v-if="loading" role="status">正在加载新生问题…</p>
     <section v-else-if="loadFailed" class="state-card" role="alert">
