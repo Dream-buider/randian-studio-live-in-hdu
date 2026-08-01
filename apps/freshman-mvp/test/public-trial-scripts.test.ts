@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -45,6 +46,61 @@ test('public trial scripts keep runtime on D, gateway on loopback and never muta
 test('public trial startup builds only isolated server and trial-client artifacts', () => {
   const plan = runStatic(START);
   assert.deepEqual(plan.buildScripts, ['build:server', 'build:trial']);
+});
+
+test('public trial verifier requires the authenticated guide route', async () => {
+  const requests: string[] = [];
+  const server = createServer((request, response) => {
+    const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
+    requests.push(pathname);
+    const authenticated = Boolean(request.headers.cookie);
+    const blocked = ['/admin', '/api/admin/intents', '/api/reviews', '/api/health'];
+    if (pathname === '/' && !authenticated) {
+      response.writeHead(302, { Location: '/trial/login' }).end();
+      return;
+    }
+    if (blocked.includes(pathname)) {
+      response.writeHead(404).end();
+      return;
+    }
+    response.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+
+  try {
+    const result = await new Promise<{ status: number | null; stdout: string; stderr: string }>((resolve) => {
+      const child = spawn(
+        'pwsh',
+        [
+          '-NoProfile',
+          '-File',
+          VERIFY,
+          '-BaseUrl',
+          `http://127.0.0.1:${address.port}`,
+          '-CookieHeader',
+          'live-in-hdu=accepted',
+        ],
+        {
+          cwd: REPO_ROOT,
+          windowsHide: true,
+          env: { ...process.env, TEMP: TEMP_ROOT, TMP: TEMP_ROOT },
+        },
+      );
+      let stdout = '';
+      let stderr = '';
+      child.stdout.on('data', (chunk) => { stdout += String(chunk); });
+      child.stderr.on('data', (chunk) => { stderr += String(chunk); });
+      child.on('close', (status) => resolve({ status, stdout, stderr }));
+    });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.ok(requests.includes('/guide'), 'authenticated guide route was not verified');
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => (
+      error ? reject(error) : resolve()
+    )));
+  }
 });
 
 test('full knowledge-stack shutdown stops the public trial before the private gateway', () => {

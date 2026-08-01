@@ -152,6 +152,7 @@ if ([string]::IsNullOrWhiteSpace($cookie)) {
 $headers = @{ Cookie = $cookie }
 $jsonHeaders = @{ Cookie = $cookie; Accept = 'application/json' }
 $root = Invoke-StatusRequest -Method GET -Path '/' -Headers $headers
+$guide = Invoke-StatusRequest -Method GET -Path '/guide' -Headers $headers
 $chat = Invoke-StatusRequest -Method GET -Path '/chat' -Headers $headers
 $questions = Invoke-StatusRequest -Method GET -Path '/api/questions' -Headers $jsonHeaders
 $ask = Invoke-StatusRequest `
@@ -168,7 +169,7 @@ foreach ($path in @('/admin', '/api/admin/intents', '/api/reviews', '/api/health
         throw "受限路径没有返回 404：$path"
     }
 }
-foreach ($result in @($root, $chat, $questions, $ask)) {
+foreach ($result in @($root, $guide, $chat, $questions, $ask)) {
     if ([int]$result.StatusCode -ne 200) {
         throw '一个允许的公网内测请求没有返回 200。'
     }
@@ -178,6 +179,7 @@ foreach ($result in @($root, $chat, $questions, $ask)) {
     baseUrl = $BaseUrl
     unauthenticatedRoot = [int]$unauthenticated.StatusCode
     authenticatedRoot = [int]$root.StatusCode
+    guide = [int]$guide.StatusCode
     chat = [int]$chat.StatusCode
     questions = [int]$questions.StatusCode
     ask = [int]$ask.StatusCode
