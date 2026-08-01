@@ -34,6 +34,7 @@ $PublicUrlFile = Join-Path $TrialRoot 'public-trial-url.txt'
 $QrScript = Join-Path $AppRoot 'scripts\generate-public-trial-qr.mts'
 $HostAddress = '127.0.0.1'
 $Port = 3211
+$BuildScripts = @('build:server', 'build:trial')
 
 if ($StaticOnly) {
     [ordered]@{
@@ -44,6 +45,7 @@ if ($StaticOnly) {
         entrypoint = $Entrypoint
         processStarted = $false
         firewallMutation = $false
+        buildScripts = $BuildScripts
     } | ConvertTo-Json -Compress
     exit 0
 }
@@ -229,10 +231,12 @@ if (Test-Path -LiteralPath $PidFile -PathType Leaf) {
 }
 
 if (-not $gatewayAlreadyRunning) {
-    & npm --prefix $AppRoot run build
-    if ($LASTEXITCODE -ne 0) { throw '服务端构建失败。' }
-    & npm --prefix $AppRoot run build:trial
-    if ($LASTEXITCODE -ne 0) { throw '公网用户端构建失败。' }
+    foreach ($buildScript in $BuildScripts) {
+        & npm --prefix $AppRoot run $buildScript
+        if ($LASTEXITCODE -ne 0) {
+            throw "公网内测构建失败：$buildScript"
+        }
+    }
     if (-not (Test-Path -LiteralPath $Entrypoint -PathType Leaf)) {
         throw "公网网关入口文件不存在：$Entrypoint"
     }

@@ -42,6 +42,11 @@ test('public trial scripts keep runtime on D, gateway on loopback and never muta
   }
 });
 
+test('public trial startup builds only isolated server and trial-client artifacts', () => {
+  const plan = runStatic(START);
+  assert.deepEqual(plan.buildScripts, ['build:server', 'build:trial']);
+});
+
 test('full knowledge-stack shutdown stops the public trial before the private gateway', () => {
   const contents = readFileSync(STOP_STACK, 'utf8');
   const publicStop = contents.indexOf('stop-public-trial.ps1');
