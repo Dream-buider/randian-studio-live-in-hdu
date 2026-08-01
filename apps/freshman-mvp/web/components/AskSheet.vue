@@ -17,19 +17,21 @@ const question = ref('');
 const panel = ref<HTMLElement | null>(null);
 const { revealInput, viewportStyle } = useVisualViewport(panel);
 let previousBodyStyle = '';
+let previousScrollX = 0;
 let previousScrollY = 0;
 
 useDialogFocus(panel, '#campus-question', () => emit('close'));
 
 onMounted(() => {
   previousBodyStyle = document.body.style.cssText;
+  previousScrollX = window.scrollX;
   previousScrollY = window.scrollY;
   document.body.style.overflow = 'hidden';
 });
 
 onUnmounted(() => {
   document.body.style.cssText = previousBodyStyle;
-  window.scrollTo(0, previousScrollY);
+  window.scrollTo(previousScrollX, previousScrollY);
 });
 
 function revealFocusedInput(event: FocusEvent): void {

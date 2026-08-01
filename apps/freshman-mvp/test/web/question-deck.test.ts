@@ -304,6 +304,7 @@ describe('question deck', () => {
     await flushPromises();
     expect(backdrop.attributes('style')).toContain('--visual-viewport-offset-top: 96px');
 
+    vi.stubGlobal('visualViewport', new EventTarget());
     wrapper.unmount();
     expect(addEventListener).toHaveBeenCalledWith('resize', expect.any(Function));
     expect(addEventListener).toHaveBeenCalledWith('scroll', expect.any(Function));
@@ -329,6 +330,7 @@ describe('question deck', () => {
   it('restores the original body style and scroll position after closing the ask sheet', async () => {
     const originalStyle = 'color: rgb(1, 2, 3);';
     document.body.style.cssText = originalStyle;
+    vi.stubGlobal('scrollX', 120);
     vi.stubGlobal('scrollY', 240);
     const scrollTo = vi.mocked(window.scrollTo);
     const wrapper = mount(QuestionDeckView);
@@ -341,7 +343,7 @@ describe('question deck', () => {
     await wrapper.get('button[aria-label="关闭提问框"]').trigger('click');
     await flushPromises();
     expect(document.body.style.cssText).toBe(originalStyle);
-    expect(scrollTo).toHaveBeenCalledWith(0, 240);
+    expect(scrollTo).toHaveBeenCalledWith(120, 240);
     wrapper.unmount();
   });
 

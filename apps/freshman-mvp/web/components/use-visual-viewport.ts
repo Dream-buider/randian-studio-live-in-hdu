@@ -56,7 +56,6 @@ export function useVisualViewport(panel: Ref<HTMLElement | null>): {
   });
 
   onUnmounted(() => {
-    const visualViewport = window.visualViewport;
     visualViewport?.removeEventListener('resize', updateMetrics);
     visualViewport?.removeEventListener('scroll', updateMetrics);
     if (revealTimer !== undefined) {
