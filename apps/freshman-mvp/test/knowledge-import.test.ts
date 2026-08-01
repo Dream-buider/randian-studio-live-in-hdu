@@ -232,6 +232,45 @@ test('approved knowledge manifest rejects malformed JSON and unsupported version
   });
 });
 
+test('approved guide manifest preserves the exact approval and provenance contract', async () => {
+  await withApprovedFiles(async ({ approvedRoot, manifestPath }) => {
+    await writeFile(
+      path.join(approvedRoot, 'hdu-freshman-guide-2026.md'),
+      '# 杭电新生指北\n',
+      'utf8',
+    );
+    await writeManifest(manifestPath, [{
+      path: 'hdu-freshman-guide-2026.md',
+      title: '杭电新生指北',
+      sourceType: 'community',
+      sourceUrl: 'https://rcncolp2ehkb.feishu.cn/wiki/J7o6wBiJVi36wJk2VSTcyyb1nDd',
+      publishedAt: '2026-07-30',
+      applicableYear: 2026,
+      approvedBy: 'project-owner',
+      approvedAt: '2026-08-02T00:15:00+08:00',
+      ingestMode: 'manual',
+    }]);
+
+    const manifest = await validateApprovedKnowledgeManifest(manifestPath, approvedRoot);
+
+    assert.equal(manifest.items.length, 1);
+    assert.deepEqual(
+      {
+        sourceUrl: manifest.items[0].sourceUrl,
+        applicableYear: manifest.items[0].applicableYear,
+        approvedAt: manifest.items[0].approvedAt,
+        ingestMode: manifest.items[0].ingestMode,
+      },
+      {
+        sourceUrl: 'https://rcncolp2ehkb.feishu.cn/wiki/J7o6wBiJVi36wJk2VSTcyyb1nDd',
+        applicableYear: 2026,
+        approvedAt: '2026-08-02T00:15:00+08:00',
+        ingestMode: 'manual',
+      },
+    );
+  });
+});
+
 test('approved knowledge import is hash-idempotent and changed content requires new approval', async () => {
   await withApprovedFiles(async ({ approvedRoot, manifestPath }) => {
     const filePath = path.join(approvedRoot, 'guide.md');
@@ -371,6 +410,7 @@ test('WeKnora approved import uses only public file, manual, and list endpoints'
     assert.deepEqual(JSON.parse(String(requests[1].init?.body)), {
       title: '手工 Markdown',
       content: '# manual body',
+      status: 'publish',
       channel: 'live-in-hdu-approved',
     });
 
@@ -381,6 +421,62 @@ test('WeKnora approved import uses only public file, manual, and list endpoints'
     assert.equal(requests[2].method, 'GET');
     assert.deepEqual(state, { parseStatus: 'completed', error: null });
     assert.equal(requests.every(({ url }) => !url.includes('test-secret')), true);
+  });
+});
+
+test('WeKnora manual import publishes a returned draft with the same knowledge id', async () => {
+  await withApprovedFiles(async ({ approvedRoot }) => {
+    const manualPath = path.join(approvedRoot, 'manual.md');
+    await writeFile(manualPath, '# approved manual body', 'utf8');
+    const requests: Array<{ url: string; method: string; init?: RequestInit }> = [];
+    const responses = [
+      Response.json({
+        success: true,
+        data: { id: 'knowledge-draft', parse_status: 'draft' },
+      }),
+      Response.json({
+        success: true,
+        data: { id: 'knowledge-draft', parse_status: 'processing' },
+      }),
+    ];
+    const client = new WeKnoraKnowledgeClient({
+      baseUrl: 'http://127.0.0.1:8080/api/v1',
+      apiKey: 'test-secret',
+      fetch: async (input, init) => {
+        requests.push({ url: String(input), method: init?.method ?? 'GET', init });
+        return responses.shift()!;
+      },
+    });
+
+    const result = await client.upload({
+      absolutePath: manualPath,
+      itemPath: 'manual.md',
+      title: '已审批手工知识',
+      sourceType: 'community',
+      sourceUrl: '',
+      publishedAt: '2026-07-30',
+      applicableYear: 2026,
+      approvedBy: 'project-owner',
+      approvedAt: '2026-08-02T00:15:00+08:00',
+      ingestMode: 'manual',
+      contentSha256: 'c'.repeat(64),
+    }, 'kb-documents');
+
+    assert.equal(requests.length, 2);
+    assert.match(requests[0].url, /\/knowledge-bases\/kb-documents\/knowledge\/manual$/);
+    assert.equal(requests[0].method, 'POST');
+    assert.match(requests[1].url, /\/knowledge\/manual\/knowledge-draft$/);
+    assert.equal(requests[1].method, 'PUT');
+    assert.deepEqual(JSON.parse(String(requests[1].init?.body)), {
+      title: '已审批手工知识',
+      content: '# approved manual body',
+      status: 'publish',
+      channel: 'live-in-hdu-approved',
+    });
+    assert.deepEqual(result, {
+      knowledgeId: 'knowledge-draft',
+      parseStatus: 'processing',
+    });
   });
 });
 

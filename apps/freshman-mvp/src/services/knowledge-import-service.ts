@@ -415,6 +415,7 @@ export class WeKnoraKnowledgeClient implements KnowledgeUploadClient {
           body: JSON.stringify({
             title: item.title,
             content: await readFile(item.absolutePath, 'utf8'),
+            status: 'publish',
             channel: APPROVED_CHANNEL,
           }),
         },
@@ -456,10 +457,34 @@ export class WeKnoraKnowledgeClient implements KnowledgeUploadClient {
     if (body?.success !== true || knowledgeId.length === 0) {
       throw new Error('WeKnora upload returned an invalid response');
     }
-    return {
-      knowledgeId,
-      parseStatus: normalizeParseStatus(body.data?.parse_status),
-    };
+    let parseStatus = normalizeParseStatus(body.data?.parse_status);
+    if (item.ingestMode === 'manual' && body.data?.parse_status === 'draft') {
+      const publishResponse = await this.request(
+        `${this.baseUrl}/knowledge/manual/${encodeURIComponent(knowledgeId)}`,
+        {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            title: item.title,
+            content: await readFile(item.absolutePath, 'utf8'),
+            status: 'publish',
+            channel: APPROVED_CHANNEL,
+          }),
+        },
+      );
+      if (!publishResponse.ok) {
+        throw new Error(`WeKnora manual publish failed with HTTP ${publishResponse.status}`);
+      }
+      const publishBody = await publishResponse.json().catch(() => null) as {
+        success?: unknown;
+        data?: RawKnowledge;
+      } | null;
+      if (publishBody?.success !== true || publishBody.data?.id !== knowledgeId) {
+        throw new Error('WeKnora manual publish returned an invalid response');
+      }
+      parseStatus = normalizeParseStatus(publishBody.data.parse_status);
+    }
+    return { knowledgeId, parseStatus };
   }
 
   async getParseState(
