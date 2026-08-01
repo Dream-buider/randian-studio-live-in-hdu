@@ -8,6 +8,7 @@ import {
   listPendingReviews,
   listRawAnswers,
   retryKnowledgeImport,
+  safeHttpUrl,
   type AdminIntent,
   type KnowledgeImportStatus,
   type RawAnswer,
@@ -249,11 +250,26 @@ onMounted(load);
           <strong>{{ item.title }}</strong>
           · v{{ item.version }}
           · {{ item.applicableYear }}
+          · <span class="knowledge-import-type">{{ item.sourceType }}</span>
+          ·
+          <a
+            v-if="safeHttpUrl(item.sourceUrl)"
+            :href="safeHttpUrl(item.sourceUrl) ?? undefined"
+            target="_blank"
+            rel="noreferrer"
+          >
+            原始来源
+          </a>
+          <span v-else>原始来源：{{ item.sourceUrl }}</span>
           · {{ item.parseStatus }}
           · {{ item.approvedBy }}
           · {{ item.contentSha256.slice(0, 12) }}
           · 审批于 {{ item.approvedAt }}
+          · 资料日期 {{ item.publishedAt }}
+          · 导入方式 {{ item.ingestMode }}
+          · 知识库 {{ item.knowledgeBaseId }}
           · WeKnora {{ item.weknoraKnowledgeId ?? '尚未生成' }}
+          · 创建于 {{ item.createdAt }}
           · 更新于 {{ item.updatedAt }}
           <span v-if="item.lastError"> · {{ item.lastError }}</span>
           <button

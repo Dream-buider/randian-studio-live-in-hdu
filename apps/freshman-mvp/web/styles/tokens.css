@@ -108,6 +108,41 @@ input:focus-visible,
   line-height: 1.6;
 }
 
+.import-audit-notice ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.import-audit-notice li {
+  overflow-wrap: anywhere;
+}
+
+.import-audit-notice a {
+  color: var(--hdu-blue);
+  font-weight: 750;
+}
+
+.knowledge-import-type,
+.hdu-evidence-gap {
+  width: fit-content;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.knowledge-import-type {
+  color: #155c71;
+  background: #e7f4f7;
+}
+
+.hdu-evidence-gap {
+  color: #7a4510;
+  background: #fff0d4;
+}
+
 .service-health-card {
   margin: 22px 0;
   padding: 18px;

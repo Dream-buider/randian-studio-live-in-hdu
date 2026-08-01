@@ -78,12 +78,18 @@ export interface KnowledgeImportStatus {
   version: number;
   contentSha256: string;
   title: string;
+  sourceType: 'official' | 'community' | 'student';
+  sourceUrl: string;
+  publishedAt: string;
   applicableYear: number;
   approvedBy: string;
   approvedAt: string;
+  ingestMode: 'file' | 'manual';
+  knowledgeBaseId: string;
   weknoraKnowledgeId: string | null;
   parseStatus: 'validated' | 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
   lastError: string | null;
+  createdAt: string;
   updatedAt: string;
 }
 
@@ -252,13 +258,19 @@ function isKnowledgeImportStatus(value: unknown): value is KnowledgeImportStatus
     && typeof value.version === 'number'
     && typeof value.contentSha256 === 'string'
     && typeof value.title === 'string'
+    && ['official', 'community', 'student'].includes(String(value.sourceType))
+    && typeof value.sourceUrl === 'string'
+    && typeof value.publishedAt === 'string'
     && typeof value.applicableYear === 'number'
     && typeof value.approvedBy === 'string'
     && typeof value.approvedAt === 'string'
+    && ['file', 'manual'].includes(String(value.ingestMode))
+    && typeof value.knowledgeBaseId === 'string'
     && (value.weknoraKnowledgeId === null || typeof value.weknoraKnowledgeId === 'string')
     && ['validated', 'pending', 'processing', 'completed', 'failed', 'cancelled']
       .includes(String(value.parseStatus))
     && (value.lastError === null || typeof value.lastError === 'string')
+    && typeof value.createdAt === 'string'
     && typeof value.updatedAt === 'string';
 }
 

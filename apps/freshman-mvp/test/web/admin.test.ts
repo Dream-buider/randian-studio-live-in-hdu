@@ -191,22 +191,22 @@ function adminFetch(records: Array<{ url: string; init?: RequestInit }> = []) {
         configured: true,
         items: [{
           id: 'knowledge-import-1',
-          itemPath: 'guide.md',
+          itemPath: 'hdu-freshman-guide-2026.md',
           version: 1,
           contentSha256: 'a'.repeat(64),
-          title: '2025 年新生指北',
+          title: '杭电新生指北',
           sourceType: 'community',
-          sourceUrl: '',
-          publishedAt: '2025-08-01',
-          applicableYear: 2025,
-          approvedBy: 'local-admin',
-          approvedAt: '2026-07-28T04:00:00.000Z',
-          ingestMode: 'file',
+          sourceUrl: 'https://rcncolp2ehkb.feishu.cn/wiki/J7o6wBiJVi36wJk2VSTcyyb1nDd',
+          publishedAt: '2026-07-30',
+          applicableYear: 2026,
+          approvedBy: 'project-owner',
+          approvedAt: '2026-08-02T00:15:00+08:00',
+          ingestMode: 'manual',
           knowledgeBaseId: 'kb-documents',
           weknoraKnowledgeId: 'weknora-guide-1',
           parseStatus: 'failed',
           lastError: '解析失败',
-          createdAt: '2026-07-28T04:01:00.000Z',
+          createdAt: '2026-08-02T00:16:00+08:00',
           updatedAt: '2026-07-28T04:02:00.000Z',
         }],
       });
@@ -336,10 +336,18 @@ describe('operations console', () => {
     vi.stubGlobal('fetch', adminFetch(records));
     const wrapper = await mountAdmin();
 
-    expect(wrapper.text()).toContain('2025 年新生指北');
+    expect(wrapper.text()).toContain('杭电新生指北');
+    expect(wrapper.text()).toContain('community');
+    expect(wrapper.text()).toContain('aaaaaaaaaaaa');
+    expect(wrapper.text()).toContain('2026-08-02T00:15:00+08:00');
+    expect(wrapper.text()).toContain('failed');
+    const guideSource = wrapper.get(
+      'a[href="https://rcncolp2ehkb.feishu.cn/wiki/J7o6wBiJVi36wJk2VSTcyyb1nDd"]',
+    );
+    expect(guideSource.attributes('target')).toBe('_blank');
     expect(wrapper.text()).toContain('weknora-guide-1');
-    expect(wrapper.text()).toContain('local-admin');
-    expect(wrapper.text()).toContain('2026-07-28T04:00:00.000Z');
+    expect(wrapper.text()).toContain('project-owner');
+    expect(wrapper.text()).toContain('2026-08-02T00:16:00+08:00');
     expect(wrapper.text()).toContain('2026-07-28T04:02:00.000Z');
     await wrapper.get('[data-action="retry-knowledge-import"]').trigger('click');
     await flushPromises();
@@ -348,6 +356,51 @@ describe('operations console', () => {
       url === '/api/admin/knowledge-imports/knowledge-import-1/retry'
     ));
     expect(request?.init?.method).toBe('POST');
+  });
+
+  it('marks only review rows without official or 新生指北 evidence as lacking HDU material', async () => {
+    vi.stubGlobal('fetch', adminFetch());
+    const wrapper = await mountAdmin();
+    const rows = wrapper.findAll('[data-role="review-row"]');
+
+    expect(rows[0].text()).toContain('杭电资料不足');
+    expect(rows[1].text()).not.toContain('杭电资料不足');
+  });
+
+  it('keeps an unsafe knowledge import source URL as text instead of a link', async () => {
+    const fallback = adminFetch();
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === '/api/admin/knowledge-imports') {
+        return jsonResponse({
+          configured: true,
+          items: [{
+            id: 'unsafe-import',
+            itemPath: 'unsafe.md',
+            version: 1,
+            contentSha256: 'b'.repeat(64),
+            title: '不安全导入记录',
+            sourceType: 'community',
+            sourceUrl: 'javascript:alert(1)',
+            publishedAt: '2026-07-30',
+            applicableYear: 2026,
+            approvedBy: 'project-owner',
+            approvedAt: '2026-08-02T00:15:00+08:00',
+            ingestMode: 'manual',
+            knowledgeBaseId: 'kb-documents',
+            weknoraKnowledgeId: null,
+            parseStatus: 'validated',
+            lastError: null,
+            createdAt: '2026-08-02T00:16:00+08:00',
+            updatedAt: '2026-08-02T00:16:00+08:00',
+          }],
+        });
+      }
+      return fallback(input, init);
+    }));
+    const wrapper = await mountAdmin();
+
+    expect(wrapper.text()).toContain('原始来源：javascript:alert(1)');
+    expect(wrapper.find('a[href^="javascript:"]').exists()).toBe(false);
   });
 
   it('ignores an older raw-answer response after the operator selects a different intent', async () => {

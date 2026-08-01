@@ -46,6 +46,13 @@ function actionLabel(status: Exclude<ReviewStatus, 'pending'>): string {
   return status === 'approved' ? '通过' : status === 'rejected' ? '驳回' : '需补充';
 }
 
+function lacksHduEvidence(review: ReviewTask): boolean {
+  return !review.sources.some((source) => (
+    source.type === 'official'
+    || (source.type === 'community' && source.title.includes('新生指北'))
+  ));
+}
+
 function canDecide(review: ReviewTask, status: Exclude<ReviewStatus, 'pending'>): boolean {
   const draft = drafts[review.id];
   return Boolean(
@@ -108,6 +115,9 @@ async function decide(
       </header>
       <h3>{{ review.question }}</h3>
       <p class="temporary-answer">{{ review.answer }}</p>
+      <p v-if="lacksHduEvidence(review)" class="hdu-evidence-gap" data-role="hdu-evidence-gap">
+        杭电资料不足
+      </p>
       <SourceList
         v-if="review.sources.length"
         :sources="review.sources"
