@@ -1,49 +1,125 @@
 # LIVE IN HDU 当前恢复检查点
 
-更新时间：2026-07-31（Asia/Shanghai）
+更新时间：2026-08-02 07:33:13 +08:00（Asia/Shanghai）
 
 ## 当前结论
 
-- 本地技术链路已经完成并通过验证：手机 H5 / 管理端、Fastify 网关、业务
-  PostgreSQL、WeKnora、Ollama 嵌入模型、SearXNG 与 TokenDance DeepSeek V4 Flash
-  均已接通。
-- 首批人工审核内容已经正式发布：35 个问题意图中，23 个问题已有标准答案并在
-  用户端展示，12 个问题继续留空；发布内容来自用户亲自审核的团队表格，并已同步到
-  `LIVE IN HDU 新生问答库`，本地与 WeKnora 内容逐条比对一致。
-- Q11 仍严格保持 0 条原始回答、0 条发布回答；没有自动导入整个 `最新资料`，也
-  没有把未经审核的团队回答发布给用户。
-- 当前待审核队列为 0，FAQ 同步队列为 0 个待处理、0 个失败。未知问题在管理员离线时仍会先即时回复，再按服务器顺序写入
-  FIFO 队列。
+- 反馈优化版本已经在隔离工作树完成：加入燃点工作室 Logo 与品牌头部、新生指北入口和
+  四节目录、可点击的类型化参考来源、移动端提问面板适配、杭电优先联网检索、基于知识
+  片段的杭电语境回答，以及管理端知识来源和“杭电资料不足”提示。
+- 用户批准的《杭电新生指北》已从 D 盘审批快照导入 WeKnora，状态为 `completed`；
+  没有把飞书导航、评论或未经批准资料混入知识库。
+- 本地完整服务和团队公网测试版均在运行。公网仅开放用户页面和问答接口，管理端、审核
+  队列与健康接口继续返回 404。
+- 当前人工审核队列为 19 条，服务端 FIFO 序号为 1 至 19；本轮验收没有修改任何已有
+  人工审核决定。Q11 仍保持空白。
 
-## 恢复入口
+## 代码与运行位置
 
-- 工作区：`C:\Users\Star\Desktop\总项目文件\杭电飞书社区`
-- 分支：`codex/local-agent-platform`
+- 主工作区：`C:\Users\Star\Desktop\总项目文件\杭电飞书社区`
+- 本轮隔离工作树：
+  `C:\Users\Star\Desktop\总项目文件\杭电飞书社区\.worktrees\live-in-hdu-feedback`
+- 分支：`codex/live-in-hdu-feedback`
+- 写入本检查点前的实现 HEAD：
+  `def0076003e5f943a45833dc510bd09a7ea27fc4`
 - 运行根目录：`D:\Star\LIVE_IN_HDU_RUNTIME`
-- D 盘本轮剩余空间：约 266.54 GB。
+- 验收截图目录：
+  `D:\Star\LIVE_IN_HDU_RUNTIME\acceptance\2026-08-02-feedback-optimization`
+- D 盘审批资料目录：`D:\Star\LIVE_IN_HDU_RUNTIME\approved-knowledge`
 
-当前本机入口：
+当前入口：
 
-- 用户端：`http://127.0.0.1:3210/`
-- 审核后台：`http://127.0.0.1:3210/admin`
+- 本地用户端：`http://127.0.0.1:3210/`
+- 本地新生指北：`http://127.0.0.1:3210/guide`
+- 本地审核后台：`http://127.0.0.1:3210/admin`
+- 团队公网测试版：`https://38a2f881.r6.cpolar.cn`
 - WeKnora 管理端：`http://127.0.0.1:8081/`
-- WeKnora API 健康检查：`http://127.0.0.1:8080/health`
 - SearXNG：`http://127.0.0.1:8888/`
 
-当前知识库：
+2026-08-02 07:33 观察到的进程：
 
-- `LIVE IN HDU 新生资料库`：文档型 RAG 知识库。
-- `LIVE IN HDU 新生问答库`：FAQ 知识库，采用“标准问 + 答案”和相似问分别索引。
-- 应用使用仅有“检索知识库 + 写入知识库内容”能力、且只覆盖上述两个知识库的
-  最小权限 API Key；未授予完全访问或知识库管理权限。
+- 私有网关 3210：PID 9224，命令行指向当前隔离工作树的 `dist/server/index.js`。
+- 公网测试网关 3211：PID 41876，命令行指向当前隔离工作树的
+  `dist/public-trial/index.js`。
+- cpolar 本机管理端 4040：PID 53016。PID 会在重启后变化，恢复时以端口和入口文件
+  所有权校验为准，不要依赖这里的旧 PID 强制结束进程。
 
-## 重启与停止
+## 知识导入审计
 
-电脑重启后，先打开 Docker Desktop、Ollama 和本机网络代理，再运行：
+- 标题：`杭电新生指北`
+- 版本：1
+- 来源类型：`community`
+- 原始来源：
+  `https://rcncolp2ehkb.feishu.cn/wiki/J7o6wBiJVi36wJk2VSTcyyb1nDd`
+- 资料日期：`2026-07-30`
+- 审批人：`project-owner`
+- 导入方式：`manual`
+- WeKnora 解析状态：`completed`
+- 内容 SHA-256：
+  `1aacf02cf6d9527fdf75996d7bbd49d4840ae08f0fd28e49d058f68f408769b0`
+- D 盘快照：
+  `D:\Star\LIVE_IN_HDU_RUNTIME\approved-knowledge\hdu-freshman-guide-2026.md`
+- D 盘清单：
+  `D:\Star\LIVE_IN_HDU_RUNTIME\approved-knowledge\knowledge-manifest.json`
+
+快照和清单不进入 Git。更新时必须先重新导出、人工对比和批准，再 dry-run、导入、等待
+解析完成，并执行第二次幂等导入检查。
+
+## 自动化与构建验证
+
+在实现 HEAD `def0076003e5f943a45833dc510bd09a7ea27fc4` 上最后一次完整运行：
+
+- 后端：187 项，185 通过、2 项明确要求实时环境的测试跳过、0 失败。
+- 前端：3 个测试文件，44/44 通过。
+- `npm run build`：通过。
+- `npm run build:trial`：通过，public-trial 构建断言通过。
+- 本地首页：200；哈希脚本 `/assets/index-C2SQEPa9.js`：200，115771 bytes。
+- `/api/health`：gateway/database 正常，WeKnora available，TokenDance、SearXNG 已配置，
+  FAQ outbox 0 待处理、0 失败。
+
+公网测试脚本已经补充 `/guide` 检查，并实际验证：
+
+- 未登录首页：302。
+- 登录：首页 200、`/guide` 200、`/chat` 200、`/api/questions` 200、
+  `/api/ask` 200。
+- 隔离：`/admin`、`/api/admin/intents`、`/api/reviews`、`/api/health`
+  均为 404。
+- `/guide/admin` 仍为 404；GET/HEAD `/guide` 只返回用户端 SPA，不扩大管理路径白名单。
+
+## 浏览器与移动端验收
+
+- Kimi WebBridge 健康检查为 `running: true`、`extension_connected: true`；真实浏览器已验证
+  首页、四节指北、提问、带来源的回答、管理端导入来源和“杭电资料不足”。
+- 由于 D 盘 npm 缓存没有 `@playwright/cli`，外网 registry DNS 又返回 `ENOTFOUND`，
+  Playwright CLI 本轮不可用。没有联网安装大依赖，也没有在仓库创建 Playwright spec。
+- 受限替代验收复用了本机已有 Playwright Core 1.62.0-alpha 和系统 Chrome；临时目录及
+  所有截图均在 D 盘。
+- 375×667，模拟 visual viewport 高度 360：textarea 底部 324.59，发送按钮底部 338，
+  均处于可视区内。
+- 390×844，模拟 visual viewport 高度 480：textarea 底部 381.66，发送按钮底部 458，
+  均处于可视区内。
+- 两种视口均验证 Logo、燃点工作室、新生指北入口、四个目录卡、四个飞书深链、来源标签
+  与链接、导入来源和 13 条“杭电资料不足”样例。
+- 验收目录中共有 20 张 PNG，包括 Kimi 的 6 张功能截图和精确视口的 14 张截图。
+- **微信键盘实机验收待完成**：本轮没有可操作的 iPhone 与 Android 微信设备，不能把
+  浏览器模拟说成微信真机通过。
+
+## 安全启动与停止摘要
+
+本轮所有增长数据、构建产物、日志、截图、npm 缓存和数据库均放在 D 盘。被 Git 忽略的
+`.env.local` 仍只保存在主工作区，不得复制进文档或提交。合并分支后，从主工作区运行：
 
 ```powershell
 Set-Location 'C:\Users\Star\Desktop\总项目文件\杭电飞书社区'
 .\scripts\start-knowledge-stack.ps1
+.\scripts\start-public-trial.ps1 -StartTunnel `
+  -KnownPublicUrl 'https://38a2f881.r6.cpolar.cn'
+```
+
+只停止公网测试版，保留本地完整服务：
+
+```powershell
+.\scripts\stop-public-trial.ps1
 ```
 
 安全停止全部项目服务：
@@ -52,54 +128,25 @@ Set-Location 'C:\Users\Star\Desktop\总项目文件\杭电飞书社区'
 .\scripts\stop-knowledge-stack.ps1
 ```
 
-停止脚本只停止进程和容器，不删除数据库、容器卷或 D 盘文件。禁止执行
-`docker compose down -v`。
+停止脚本只停止受所有权校验保护的进程和容器，不删除数据库、容器卷或 D 盘资料。禁止
+执行 `docker compose down -v`，不要手工结束未验证命令行所有权的 PID。
 
-本地电脑就是当前服务器，所以电脑关机、休眠、Docker/Ollama 停止或断网后，客户端
-访问都会中断。TokenDance 只提供远程模型能力，不能代替本机服务器。当前 Node 到
-TokenDance 依赖本机 `127.0.0.1:11305` 代理；若代理软件更换端口，需要同步更新被
-Git 忽略的 `apps/freshman-mvp/.env.local`，不得把密钥写入文档或提交。
+本地电脑仍是服务器：电脑关机、休眠、Docker/Ollama 或本机代理停止、网络中断后，
+本地和公网测试版都会中断；TokenDance 模型不能代替本机网关和知识库。
 
-## 当前运行状态
+## 剩余工作
 
-2026-07-31 最后复核：
-
-- 网关健康，业务数据库模式为 `postgres`。
-- 用户端发布问题 23 条；PostgreSQL 中 23 个 FAQ outbox 事件均为 completed，
-  WeKnora FAQ 共 23 条且标准问题无重复；Q11 在两端均为 0 条。
-- WeKnora app、DocReader 与 PostgreSQL 健康，管理端可访问。
-- `nomic-embed-text:latest` 已安装到 D 盘 Ollama 模型目录并被 WeKnora 使用。
-- WeKnora 检索状态为 `available`，SearXNG JSON 搜索返回 200。
-- 用户端、审核后台、WeKnora API、WeKnora 管理端与 SearXNG 五个入口均返回 200。
-- TokenDance 在本轮重启前已完成真实生成验证；重启后健康页的“最近调用”会恢复为
-  `never`，直到产生下一次真实模型请求，这不表示密钥丢失。
-
-## 已验证基线
-
-- 后端：148 项，146 通过、2 项显式实时环境用例跳过、0 失败。
-- 前端：34/34 通过。
-- 旧 MVP：29/29 通过。
-- 生产构建成功，密钥扫描通过。
-- TokenDance 已真实返回模型生成答案；Node 24 使用环境代理后调用成功。
-- WeKnora API Key 已成功列出两个限定知识库，并以最小 `retrieve + ingest` 权限完成
-  FAQ 写入；知识库 ID 已写入被忽略的本地环境文件。
-- 已修复 WeKnora 0.7.0 FAQ 创建接口返回 `data.id`、旧同步器只识别
-  `data.seq_id` 的兼容问题，并加入回归测试。
-- 一次真实三段路由验证得到 `web` / `web-unverified`，返回精确批注：
-  `该条回复并不在我们的知识库以及 40 个预设问题中，请注意甄别`。
-
-## 下一步
-
-1. 继续征集并审核剩余 12 个问题；Q11 仍保持空白，其他问题只有在人工审核后才发布。
-2. 只把明确获批的《2025年新生指南》及后续资料加入审批清单，再导入资料库。
-3. 导入真实语料后执行 20 问检索评测与 WeKnora 完整备份恢复演练。
-4. 本机验收完成后，再做同一 Wi-Fi 的实体手机测试；公网访问与长期运行需迁移到团队
-   云服务器，另行处理域名、备案、HTTPS 与访问控制。
+1. 由 controller 对本轮完整分支做最终代码审查，再决定合并回主工作区。
+2. 使用至少一台 iPhone 和一台 Android，在微信内完成键盘弹出、连续多行输入、收起与
+   再弹出、滚动和提交的实机验收；完成前保持“微信键盘实机验收待完成”。
+3. 按 FIFO 审核当前 19 条待审核问题，只有人工确认后才回流知识库；不要自动发布。
+4. 交付长期使用前迁移到团队云服务器，并另行处理域名、备案、HTTPS、备份和费用。
 
 ## 红线
 
 - Q11 保持空白，纯数字 `19` 不得作为答案。
 - 未经批准不导入整个 `最新资料`，不自动发布原始回答。
-- 不提交 `.env.local`、API Key、数据库密码或连接串。
-- 不把用户已有的未跟踪 `config/`、`vendor/`、`最新资料/` 和中文记录文件加入提交。
+- 不提交 `.env.local`、API Key、Cookie、团队测试码、数据库密码或连接串。
+- 不把用户已有的 `config/`、`vendor/`、`最新资料/`、`LIVE_IN_HDU_搭建记录.txt`、
+  `杭电飞书校园社区搭建方案.txt` 加入提交。
 - 不执行 `docker compose down -v`。
