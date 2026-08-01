@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$StaticOnly,
+    [switch]$UseSavedPublicUrl,
     [string]$BaseUrl = 'http://127.0.0.1:3211',
     [string]$CookieHeader = ''
 )
@@ -11,6 +12,8 @@ $RepoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $AppRoot = Join-Path $RepoRoot 'apps\freshman-mvp'
 $RuntimeRoot = 'D:\Star\LIVE_IN_HDU_RUNTIME'
 $EnvFile = Join-Path $AppRoot '.env.local'
+$PublicUrlFile = Join-Path $RuntimeRoot 'public-trial\public-trial-url.txt'
+$CpolarConfig = Join-Path $RuntimeRoot 'public-trial\cpolar\cpolar.yml'
 
 if ($StaticOnly) {
     [ordered]@{
@@ -21,6 +24,16 @@ if ($StaticOnly) {
         firewallMutation = $false
     } | ConvertTo-Json -Compress
     exit 0
+}
+
+if ($UseSavedPublicUrl) {
+    if (-not (Test-Path -LiteralPath $PublicUrlFile -PathType Leaf)) {
+        throw "尚未生成公网地址文件：$PublicUrlFile"
+    }
+    $BaseUrl = (Get-Content -Raw -LiteralPath $PublicUrlFile -Encoding UTF8).Trim()
+    if (-not $BaseUrl.StartsWith('https://')) {
+        throw '保存的公网地址不是 HTTPS，拒绝测试。'
+    }
 }
 
 function Get-EnvironmentValue([string]$PathValue, [string]$Name) {
@@ -40,6 +53,23 @@ function Get-EnvironmentValue([string]$PathValue, [string]$Name) {
         return $value
     }
     return ''
+}
+
+function Get-CpolarHttpProxy([string]$PathValue) {
+    if (-not (Test-Path -LiteralPath $PathValue -PathType Leaf)) { return $null }
+    foreach ($line in Get-Content -LiteralPath $PathValue -Encoding UTF8) {
+        if ($line -notmatch '^\s*http_proxy\s*:\s*(\S+)\s*$') { continue }
+        try {
+            $uri = [Uri]$Matches[1]
+        } catch {
+            throw 'cpolar 配置中的 HTTP 代理地址无效。'
+        }
+        if ($uri.Scheme -ne 'http' -or -not $uri.IsLoopback) {
+            throw '公网验收仅允许使用 cpolar 配置中的本机 HTTP 代理。'
+        }
+        return $uri
+    }
+    return $null
 }
 
 function Invoke-StatusRequest(
@@ -90,6 +120,13 @@ function Invoke-StatusRequest(
 $handler = [Net.Http.HttpClientHandler]::new()
 $handler.AllowAutoRedirect = $false
 $handler.UseCookies = $false
+if ($UseSavedPublicUrl) {
+    $proxyUri = Get-CpolarHttpProxy $CpolarConfig
+    if ($proxyUri) {
+        $handler.UseProxy = $true
+        $handler.Proxy = [Net.WebProxy]::new($proxyUri)
+    }
+}
 $script:HttpClient = [Net.Http.HttpClient]::new($handler)
 $script:HttpClient.Timeout = [TimeSpan]::FromSeconds(15)
 

@@ -8,6 +8,8 @@ const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
 const START = path.join(REPO_ROOT, 'scripts', 'start-public-trial.ps1');
 const STOP = path.join(REPO_ROOT, 'scripts', 'stop-public-trial.ps1');
 const VERIFY = path.join(REPO_ROOT, 'scripts', 'test-public-trial.ps1');
+const CONFIGURE = path.join(REPO_ROOT, 'scripts', 'configure-public-trial-tunnel.ps1');
+const QR = path.join(REPO_ROOT, 'apps', 'freshman-mvp', 'scripts', 'generate-public-trial-qr.mts');
 const STOP_STACK = path.join(REPO_ROOT, 'scripts', 'stop-knowledge-stack.ps1');
 const TEMP_ROOT = 'D:\\Star\\LIVE_IN_HDU_RUNTIME\\temp';
 
@@ -47,4 +49,46 @@ test('full knowledge-stack shutdown stops the public trial before the private ga
   assert.ok(publicStop >= 0, 'public trial stop script is not integrated');
   assert.ok(privateStop >= 0, 'private platform stop script is missing');
   assert.ok(publicStop < privateStop, 'public trial must be stopped first');
+});
+
+test('starting the tunnel reuses an owned running gateway without treating its PID as foreign', () => {
+  const start = readFileSync(START, 'utf8');
+  assert.match(
+    start,
+    /if \(\$owned\)\s*\{[\s\S]*?\}\s*elseif \(Get-Process -Id \(\[int\]\$metadata\.pid\)[\s\S]*?\}\s*else\s*\{\s*Remove-Item -LiteralPath \$PidFile/,
+  );
+});
+
+test('cpolar tunnel configuration is clipboard-only, D-backed and maps only the trial gateway', () => {
+  const configure = readFileSync(CONFIGURE, 'utf8');
+  const start = readFileSync(START, 'utf8');
+  const stop = readFileSync(STOP, 'utf8');
+  const verify = readFileSync(VERIFY, 'utf8');
+  const qr = readFileSync(QR, 'utf8');
+
+  assert.match(configure, /GetText\(\)/);
+  assert.match(configure, /inspect_db_size:\s*-1/);
+  assert.match(configure, /web_addr:\s*127\.0\.0\.1:4040/);
+  assert.match(configure, /\[string\]\$HttpProxy/);
+  assert.match(configure, /http_proxy:/);
+  assert.match(configure, /IsLoopback/);
+  assert.match(configure, /addr:\s*3211/);
+  assert.match(configure, /proto:\s*http/);
+  assert.match(configure, /inspect:\s*false/);
+  assert.doesNotMatch(
+    configure,
+    /Write-Output[^\r\n]+authtoken|ConvertTo-Json[^\r\n]+authtoken/i,
+  );
+  assert.match(start, /-config=.*cpolar\.yml/is);
+  assert.match(start, /live-in-hdu-trial/);
+  assert.match(start, /\[string\]\$KnownPublicUrl/);
+  assert.match(start, /Test-PublicTrialUrl/);
+  assert.match(start, /\/trial\/login/);
+  assert.match(start, /cpolar\\\.\(cn\|top\|io\|com\)/);
+  assert.match(stop, /cpolar\.pid\.json/);
+  assert.match(verify, /UseSavedPublicUrl/);
+  assert.match(verify, /Get-CpolarHttpProxy/);
+  assert.match(verify, /handler\.Proxy/);
+  assert.match(qr, /errorCorrectionLevel:\s*'M'/);
+  assert.match(qr, /D:\\\\Star\\\\LIVE_IN_HDU_RUNTIME/i);
 });
