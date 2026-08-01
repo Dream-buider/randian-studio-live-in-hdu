@@ -6,6 +6,7 @@ import {
   type ReviewStatus,
   type ReviewTask,
 } from '../api.js';
+import SourceList from './SourceList.vue';
 
 const props = defineProps<{
   reviews: ReviewTask[];
@@ -107,11 +108,12 @@ async function decide(
       </header>
       <h3>{{ review.question }}</h3>
       <p class="temporary-answer">{{ review.answer }}</p>
-      <ul v-if="review.sources.length" aria-label="临时回答来源">
-        <li v-for="item in review.sources" :key="`${item.type}:${item.title}:${item.url}`">
-          {{ item.title }}<span v-if="item.url"> · {{ item.url }}</span>
-        </li>
-      </ul>
+      <SourceList
+        v-if="review.sources.length"
+        :sources="review.sources"
+        heading="参考资料"
+        show-hostname
+      />
       <p v-else>暂无联网来源</p>
       <dl>
         <div><dt>状态</dt><dd>{{ review.status }}</dd></div>

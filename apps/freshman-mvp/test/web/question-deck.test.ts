@@ -100,6 +100,49 @@ describe('question deck', () => {
     expect(wrapper.text()).toContain('第 2 个新生问题是什么？');
   });
 
+  it('labels typed card references and only opens safe URLs in a protected new tab', async () => {
+    const typedQuestion: PublishedQuestion = {
+      ...questions[0],
+      sources: [{
+        type: 'official',
+        title: '学校公开通知',
+        url: 'https://www.hdu.edu.cn/news/example',
+        updatedAt: '2026-07-28',
+      }, {
+        type: 'community',
+        title: '杭电新生指北：开学准备',
+        url: '',
+        updatedAt: '2026-07-28',
+      }, {
+        type: 'student',
+        title: '老生报到经验',
+        url: '',
+        updatedAt: '2026-07-28',
+      }, {
+        type: 'web',
+        title: '不安全来源仍应显示为文本',
+        url: 'javascript:alert(1)',
+        updatedAt: null,
+      }],
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({
+      items: [typedQuestion, ...questions.slice(1)],
+    })));
+    const wrapper = mount(QuestionDeckView);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('参考资料');
+    expect(wrapper.text()).toContain('杭电官方');
+    expect(wrapper.text()).toContain('新生指北');
+    expect(wrapper.text()).toContain('社区经验');
+    expect(wrapper.text()).toContain('网络线索·待核验');
+    expect(wrapper.find('a[href^="javascript:"]').exists()).toBe(false);
+    const officialLink = wrapper.get('a[href="https://www.hdu.edu.cn/news/example"]');
+    expect(officialLink.attributes('target')).toBe('_blank');
+    expect(officialLink.attributes('rel')).toContain('noopener');
+    expect(officialLink.attributes('rel')).toContain('noreferrer');
+  });
+
   it('moves both directions and expands only the current complete answer', async () => {
     const wrapper = mount(QuestionDeckView);
     await flushPromises();
@@ -522,9 +565,19 @@ describe('question deck', () => {
       trustStatus: 'web-unverified',
       answer: '<img src=x onerror=alert(1)>请以学校最新通知为准。',
       sources: [{
-        type: 'web',
+        type: 'official',
         title: '<strong>学校公开通知</strong>',
-        url: 'https://example.test/notice',
+        url: 'https://www.hdu.edu.cn/news/example',
+        updatedAt: null,
+      }, {
+        type: 'community',
+        title: '杭电新生指北：开学准备',
+        url: '',
+        updatedAt: null,
+      }, {
+        type: 'student',
+        title: '老生报到经验',
+        url: '',
         updatedAt: null,
       }, {
         type: 'web',
@@ -547,6 +600,12 @@ describe('question deck', () => {
     expect(wrapper.find('.answer-card strong').exists()).toBe(false);
     expect(wrapper.find('a[href^="javascript:"]').exists()).toBe(false);
     expect(wrapper.text()).toContain('不安全来源仍应显示为文本');
+    expect(wrapper.text()).toContain('参考资料');
+    expect(wrapper.text()).toContain('杭电官方');
+    expect(wrapper.text()).toContain('新生指北');
+    expect(wrapper.text()).toContain('社区经验');
+    expect(wrapper.text()).toContain('网络线索·待核验');
+    expect(wrapper.get('a[href="https://www.hdu.edu.cn/news/example"]').attributes('target')).toBe('_blank');
     expect(wrapper.text()).toContain('联网整理·注意甄别');
     expect(wrapper.text()).toContain('该条回复并不在我们的知识库以及 40 个预设问题中，请注意甄别');
   });

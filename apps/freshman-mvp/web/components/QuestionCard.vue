@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { safeHttpUrl, type PublishedQuestion } from '../api.js';
+import { type PublishedQuestion } from '../api.js';
 import SourceBadge from './SourceBadge.vue';
+import SourceList from './SourceList.vue';
 
 defineProps<{
   item: PublishedQuestion;
@@ -34,19 +35,7 @@ const expanded = ref(false);
     </button>
     <footer>
       <SourceBadge :status="item.trustStatus" />
-      <ul v-if="item.sources.length" class="source-list" aria-label="答案来源">
-        <li v-for="source in item.sources" :key="`${source.title}-${source.url}`">
-          <a
-            v-if="safeHttpUrl(source.url)"
-            :href="safeHttpUrl(source.url) ?? undefined"
-            target="_blank"
-            rel="noreferrer"
-          >
-            {{ source.title }}
-          </a>
-          <span v-else>{{ source.title }}</span>
-        </li>
-      </ul>
+      <SourceList :sources="item.sources" heading="参考资料" />
       <span class="updated">更新于 {{ item.updatedAt.slice(0, 10) }}</span>
       <button class="text-button" type="button" @click="$emit('report')">
         信息过时？告诉我们

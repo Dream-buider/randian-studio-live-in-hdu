@@ -612,19 +612,50 @@ button:disabled {
 }
 
 .source-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.source-list-heading {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.source-list ul {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin: 0;
   padding: 0;
-  color: var(--muted);
-  font-size: 0.8rem;
   list-style: none;
+}
+
+.source-list li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.source-type {
+  padding: 3px 6px;
+  border-radius: 999px;
+  color: #155c71;
+  background: #e7f4f7;
+  font-size: 0.75rem;
+  font-weight: 750;
 }
 
 .source-list a,
 .answer-card a {
   color: var(--hdu-blue);
+}
+
+.source-hostname {
+  color: var(--muted);
 }
 
 .updated {
@@ -809,7 +840,7 @@ button:disabled {
   white-space: pre-wrap;
 }
 
-.answer-card ul {
+.answer-card > ul {
   padding-left: 20px;
 }
 

@@ -3,7 +3,6 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   askQuestion,
-  safeHttpUrl,
   type AnswerResult,
 } from '../api.js';
 import {
@@ -14,6 +13,7 @@ import {
 } from '../chat-session.js';
 import SourceBadge from '../components/SourceBadge.vue';
 import BrandHeader from '../components/BrandHeader.vue';
+import SourceList from '../components/SourceList.vue';
 
 const router = useRouter();
 const pending = ref<ChatSessionRequest | null>(null);
@@ -139,19 +139,7 @@ function returnToDeck(): void {
       <SourceBadge :status="result.trustStatus" />
       <p>{{ result.answer }}</p>
       <p v-if="result.route === 'web'" class="disclaimer">{{ result.disclaimer }}</p>
-      <ul v-if="result.sources.length" aria-label="回答来源">
-        <li v-for="source in result.sources" :key="`${source.title}-${source.url}`">
-          <a
-            v-if="safeHttpUrl(source.url)"
-            :href="safeHttpUrl(source.url) ?? undefined"
-            target="_blank"
-            rel="noreferrer"
-          >
-            {{ source.title }}
-          </a>
-          <span v-else>{{ source.title }}</span>
-        </li>
-      </ul>
+      <SourceList :sources="result.sources" heading="参考资料" />
     </section>
     <section v-else class="empty-chat">
       <h1>还没有待发送的问题</h1>

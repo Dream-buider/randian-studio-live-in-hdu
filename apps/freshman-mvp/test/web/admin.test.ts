@@ -100,7 +100,27 @@ const reviews = [
     id: 'new-high-risk',
     question: '第二个未收录问题',
     answer: '第二条临时回答',
-    sources: [source],
+    sources: [{
+      type: 'official',
+      title: '学校公开通知',
+      url: 'https://www.hdu.edu.cn/news/example',
+      updatedAt: '2025-08-20',
+    }, {
+      type: 'community',
+      title: '杭电新生指北：开学准备',
+      url: '',
+      updatedAt: '2025-08-20',
+    }, {
+      type: 'student',
+      title: '老生报到经验',
+      url: '',
+      updatedAt: '2025-08-20',
+    }, {
+      type: 'web',
+      title: '不安全来源仍应显示为文本',
+      url: 'javascript:alert(1)',
+      updatedAt: null,
+    }],
     riskLevel: 'high',
     status: 'pending',
     ordinal: 12,
@@ -542,6 +562,25 @@ describe('operations console', () => {
       reviewedAnswer: status === 'rejected' ? null : '核对后的结构化回答',
       feedbackTarget: 'community-knowledge',
     });
+  });
+
+  it('labels review sources, exposes their types, and keeps unsafe URLs as text', async () => {
+    vi.stubGlobal('fetch', adminFetch());
+    const wrapper = await mountAdmin();
+    const row = wrapper.findAll('[data-role="review-row"]')[1];
+
+    expect(row.text()).toContain('参考资料');
+    expect(row.text()).toContain('杭电官方');
+    expect(row.text()).toContain('新生指北');
+    expect(row.text()).toContain('社区经验');
+    expect(row.text()).toContain('网络线索·待核验');
+    expect(row.find('[data-source-type="official"]').exists()).toBe(true);
+    expect(row.find('[data-source-type="community"]').exists()).toBe(true);
+    expect(row.find('[data-source-type="student"]').exists()).toBe(true);
+    expect(row.find('[data-source-type="web"]').exists()).toBe(true);
+    expect(row.text()).toContain('www.hdu.edu.cn');
+    expect(row.find('a[href^="javascript:"]').exists()).toBe(false);
+    expect(row.get('a[href="https://www.hdu.edu.cn/news/example"]').attributes('target')).toBe('_blank');
   });
 
   it('removes a decided task from the pending queue and updates the count', async () => {
