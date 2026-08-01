@@ -542,6 +542,43 @@ test('router v2 deterministic fallback uses only real search evidence or officia
   });
 });
 
+test('router v2 classifies HDU search leads as official without trusting lookalike or guide hosts', async () => {
+  await withRepositories(async ({ content, reviews }) => {
+    const official = {
+      title: '杭电官方通知',
+      url: 'https://news.hdu.edu.cn/notice/1',
+      snippet: '请以学校通知为准',
+      engines: ['test'],
+      retrievedAt: '2026-08-02T00:00:00.000Z',
+    };
+    const lookalike = {
+      ...official,
+      title: '仿冒域名',
+      url: 'https://evil-hdu.edu.cn/notice/1',
+    };
+    const guide = {
+      ...official,
+      title: '社区指南',
+      url: 'https://rcncolp2ehkb.feishu.cn/wiki/guide',
+    };
+    const router = makeRouter(content, reviews, {
+      search: {
+        async search() {
+          return { status: 'available', leads: [official, lookalike, guide] };
+        },
+      },
+    });
+
+    const result = await router.answer('未知的学校安排');
+    assert.equal(result.route, 'web');
+    assert.deepEqual(result.sources, [
+      { type: 'official', title: official.title, url: official.url, updatedAt: null },
+      { type: 'web', title: lookalike.title, url: lookalike.url, updatedAt: null },
+      { type: 'web', title: guide.title, url: guide.url, updatedAt: null },
+    ]);
+  });
+});
+
 test('router v2 enqueue failure maps to HTTP 503 without exposing diagnostics', async () => {
   await withRepositories(async ({ content, reviews }) => {
     const failingReviews = Object.create(reviews) as SqliteReviewRepository;

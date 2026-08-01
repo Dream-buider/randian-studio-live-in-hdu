@@ -9,6 +9,7 @@ import type {
   SearchProvider,
   WebSearchResult,
 } from '../providers/contracts.js';
+import { sourceFromSearchLead } from '../providers/hdu-search-provider.js';
 import type {
   ContentRepository,
   ReviewRepository,
@@ -45,12 +46,7 @@ function usableSearchItems(search: WebSearchResult): WebSearchResult['leads'] {
 }
 
 function searchSources(search: WebSearchResult): ModelAnswer['sources'] {
-  return usableSearchItems(search).map((item) => ({
-    type: 'web',
-    title: item.title.trim(),
-    url: item.url.trim(),
-    updatedAt: null,
-  }));
+  return usableSearchItems(search).map(sourceFromSearchLead);
 }
 
 function isKnowledgeSearchResult(

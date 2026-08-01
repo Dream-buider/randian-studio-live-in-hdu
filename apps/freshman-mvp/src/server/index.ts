@@ -17,6 +17,7 @@ import {
   LocalKnowledgeProvider,
   type LocalKnowledgeRecord,
 } from '../providers/local-knowledge-provider.js';
+import { HduFirstSearchProvider } from '../providers/hdu-search-provider.js';
 import { TokenDanceProvider } from '../providers/tokendance-provider.js';
 import { SearxngProvider } from '../providers/searxng-provider.js';
 import { WeKnoraProvider } from '../providers/weknora-provider.js';
@@ -277,7 +278,7 @@ export async function createProductionRuntime(
       faqTimer.unref();
       void processFaqOutbox();
     }
-    const searxng = config.searchProvider === 'searxng'
+    const publicSearch = config.searchProvider === 'searxng'
       ? new SearxngProvider({
           baseUrl: config.searxngBaseUrl,
           fetch: options.fetch,
@@ -285,7 +286,9 @@ export async function createProductionRuntime(
           maxResults: config.searchMaxResults,
         })
       : null;
-    const search = searxng ?? new UnavailableSearchProvider();
+    const search = publicSearch
+      ? new HduFirstSearchProvider(publicSearch, config.searchMaxResults)
+      : new UnavailableSearchProvider();
     const router = new AnswerRouter({
       content,
       reviews,
@@ -334,8 +337,8 @@ export async function createProductionRuntime(
               status: weknora ? 'configured' : 'not-configured',
               mode: 'ollama',
             },
-            search: searxng
-              ? { ...searxng.status(), mode: 'searxng' }
+            search: publicSearch
+              ? { ...publicSearch.status(), mode: 'searxng' }
               : {
                   status: 'unavailable',
                   mode: 'phase-a-disabled',
