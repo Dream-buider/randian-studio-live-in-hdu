@@ -169,12 +169,34 @@ test('HDU-first search supplies verified official club evidence when live search
     const result = await provider.search(question);
 
     assert.equal(result.status, 'available');
-    assert.deepEqual(result.leads.map((item) => item.url), [
-      'https://www.hdu.edu.cn/news/2025/0610/c7517a279705/page.htm',
-      'https://tuanwei.hdu.edu.cn/',
-      'https://xxgk.hdu.edu.cn/8797/list.htm',
+    assert.deepEqual(result.leads.map(({ title, url, snippet }) => ({ title, url, snippet })), [
+      {
+        title: '杭州电子科技大学2025年学生社团科技文化节举行',
+        url: 'https://www.hdu.edu.cn/news/2025/0610/c7517a279705/page.htm',
+        snippet: '学校官方报道展示了学生科技类社团的创新活动；活动旨在促进科技创新、普及科学知识并培养跨学科合作精神。具体社团与活动安排以校方最新通知为准。',
+      },
+      {
+        title: '杭州电子科技大学校团委',
+        url: 'https://tuanwei.hdu.edu.cn/',
+        snippet: '杭州电子科技大学校团委官方网站，设有校园活动、科技创新、通知公告和资料下载等栏目；具体社团信息请以网站可见的最新通知为准。',
+      },
+      {
+        title: '杭州电子科技大学信息公开 · 学生管理服务信息',
+        url: 'https://xxgk.hdu.edu.cn/8797/list.htm',
+        snippet: '学校信息公开栏目包含学生社团管理制度入口；具体规定以页面可见的最新文件为准。',
+      },
     ]);
-    assert.ok(result.leads.every((item) => item.title.trim().length > 0));
-    assert.ok(result.leads.every((item) => item.snippet.trim().length > 0));
   }
+});
+
+test('HDU-first search does not inject club evidence into an unrelated empty search', async () => {
+  const provider = new HduFirstSearchProvider(sequencedProvider([
+    { status: 'available', leads: [] },
+    { status: 'available', leads: [] },
+  ]));
+
+  assert.deepEqual(await provider.search('食堂几点关门'), {
+    status: 'available',
+    leads: [],
+  });
 });

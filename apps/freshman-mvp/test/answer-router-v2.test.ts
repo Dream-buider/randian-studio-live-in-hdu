@@ -656,6 +656,72 @@ test('router v2 deterministic fallback uses only real search evidence or officia
   });
 });
 
+test('router v2 keeps verified static fallback evidence deterministic instead of accepting model inferences', async () => {
+  await withRepositories(async ({ content, reviews }) => {
+    let synthesisCalls = 0;
+    const verifiedLeads = [
+      {
+        title: '杭州电子科技大学2025年学生社团科技文化节举行',
+        url: 'https://www.hdu.edu.cn/news/2025/0610/c7517a279705/page.htm',
+        snippet: '学校官方报道展示了学生科技类社团的创新活动；活动旨在促进科技创新、普及科学知识并培养跨学科合作精神。具体社团与活动安排以校方最新通知为准。',
+        engines: ['verified-official-fallback'],
+        retrievedAt: '2026-08-02T00:00:00.000Z',
+      },
+      {
+        title: '杭州电子科技大学校团委',
+        url: 'https://tuanwei.hdu.edu.cn/',
+        snippet: '杭州电子科技大学校团委官方网站，设有校园活动、科技创新、通知公告和资料下载等栏目；具体社团信息请以网站可见的最新通知为准。',
+        engines: ['verified-official-fallback'],
+        retrievedAt: '2026-08-02T00:00:00.000Z',
+      },
+    ];
+    const router = makeRouter(content, reviews, {
+      model: model({
+        async synthesize() {
+          synthesisCalls += 1;
+          return {
+            text: '2025年6月会在食堂招新，校团委一定发布完整名单和联系方式。',
+            sources: [],
+          };
+        },
+      }),
+      search: {
+        async search() {
+          return { status: 'available', leads: verifiedLeads };
+        },
+      },
+    });
+
+    const result = await router.answer('给个社团的建议');
+
+    assert.equal(result.route, 'web');
+    assert.equal(synthesisCalls, 0);
+    assert.equal(result.disclaimer, DISCLAIMER);
+    assert.equal(result.reviewOrdinal, 1);
+    assert.match(result.answer, /促进科技创新、普及科学知识并培养跨学科合作精神/);
+    assert.match(result.answer, /具体社团信息请以网站可见的最新通知为准/);
+    assert.doesNotMatch(result.answer, /2025年6月|食堂招新|一定发布|联系方式/);
+    assert.deepEqual(result.sources, [
+      {
+        type: 'official',
+        title: verifiedLeads[0].title,
+        url: verifiedLeads[0].url,
+        updatedAt: null,
+      },
+      {
+        type: 'official',
+        title: verifiedLeads[1].title,
+        url: verifiedLeads[1].url,
+        updatedAt: null,
+      },
+    ]);
+    const pending = await reviews.list('pending');
+    assert.equal(pending.length, 1);
+    assert.deepEqual(pending[0].sources, result.sources);
+    assert.deepEqual(pending[0].rawSearchLeads, verifiedLeads);
+  });
+});
+
 test('router v2 classifies HDU search leads as official without trusting lookalike or guide hosts', async () => {
   await withRepositories(async ({ content, reviews }) => {
     const official = {

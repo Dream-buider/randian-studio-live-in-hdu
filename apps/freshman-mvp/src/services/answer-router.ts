@@ -123,6 +123,29 @@ function deterministicFallback(search: WebSearchResult): ModelAnswer {
   };
 }
 
+function isVerifiedOfficialFallback(search: WebSearchResult): boolean {
+  const items = usableSearchItems(search);
+  return items.length > 0 && items.every((item) => (
+    item.engines.includes('verified-official-fallback')
+  ));
+}
+
+function deterministicVerifiedOfficialFallback(search: WebSearchResult): ModelAnswer {
+  const evidence = usableSearchItems(search)
+    .map((item, index) => `${index + 1}. ${item.title.trim()}：${item.snippet.trim()}`)
+    .join('\n');
+  return {
+    text: [
+      '根据已核验的杭州电子科技大学官方页面，可以确认以下内容：',
+      evidence,
+      '现有线索不足以确认当前完整社团名单或招新时间，请以校方网站可见的最新通知为准。',
+      '通用建议：结合自己的兴趣和可投入时间选择社团。',
+      '该问题已进入人工审核队列。',
+    ].join('\n'),
+    sources: searchSources(search),
+  };
+}
+
 interface AnswerRouterDependencies {
   content: ContentRepository;
   reviews: ReviewRepository;
@@ -193,13 +216,18 @@ export class AnswerRouter {
     } catch {
       search = { status: 'temporarily-unavailable', leads: [] };
     }
-    let modelAnswer: ModelAnswer | null;
-    try {
-      modelAnswer = await this.deps.model.synthesize({ question, search });
-    } catch {
-      modelAnswer = null;
+    const verifiedOfficialFallback = isVerifiedOfficialFallback(search);
+    let modelAnswer: ModelAnswer | null = null;
+    if (!verifiedOfficialFallback) {
+      try {
+        modelAnswer = await this.deps.model.synthesize({ question, search });
+      } catch {
+        modelAnswer = null;
+      }
     }
-    const fallback = deterministicFallback(search);
+    const fallback = verifiedOfficialFallback
+      ? deterministicVerifiedOfficialFallback(search)
+      : deterministicFallback(search);
     let answer: string;
     let sources: ModelAnswer['sources'];
     if (modelAnswer !== null && isUsableAnswer(modelAnswer.text)) {

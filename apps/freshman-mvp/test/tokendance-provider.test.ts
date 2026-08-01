@@ -184,6 +184,9 @@ test('TokenDance web synthesis forbids HDU-specific clubs and links absent from 
 
   const serialized = JSON.stringify(requestBody);
   assert.match(serialized, /不得提及输入标题、摘要和URL中不存在的具体社团名称、数量、公众号、网站或链接/);
+  assert.match(serialized, /不得从URL路径推断日期/);
+  assert.match(serialized, /网站存在通知公告等栏目，不代表该网站必然发布社团名单、招新、注册公示或联系方式/);
+  assert.match(serialized, /输入未提供的杭电地点、时间、活动名称、部门或组织不得写入通用建议/);
   assert.match(serialized, /杭州电子科技大学校团委/);
   assert.doesNotMatch(serialized, /杭电轮滑社/);
 });
