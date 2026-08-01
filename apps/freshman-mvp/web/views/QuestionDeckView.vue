@@ -8,6 +8,7 @@ import {
   writeChatSessionRequest,
 } from '../chat-session.js';
 import AskSheet from '../components/AskSheet.vue';
+import BrandHeader from '../components/BrandHeader.vue';
 import QuestionCard from '../components/QuestionCard.vue';
 import QuestionCatalog from '../components/QuestionCatalog.vue';
 
@@ -126,7 +127,7 @@ onMounted(async () => {
   <main class="deck-page">
     <header>
       <div>
-        <p class="brand">LIVE IN HDU</p>
+        <BrandHeader subtitle="杭电新生问答与指北" />
         <p>新生必看 {{ questions.length }} 问</p>
       </div>
       <button

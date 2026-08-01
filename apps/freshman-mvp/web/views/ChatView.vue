@@ -13,6 +13,7 @@ import {
   type ChatSessionRequest,
 } from '../chat-session.js';
 import SourceBadge from '../components/SourceBadge.vue';
+import BrandHeader from '../components/BrandHeader.vue';
 
 const router = useRouter();
 const pending = ref<ChatSessionRequest | null>(null);
@@ -114,7 +115,7 @@ function returnToDeck(): void {
       <button type="button" data-action="return-deck" @click="returnToDeck">
         返回问题卡
       </button>
-      <p class="brand">LIVE IN HDU</p>
+      <BrandHeader subtitle="杭电新生问答与指北" />
     </header>
 
     <section v-if="context" class="context-card">

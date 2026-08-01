@@ -66,6 +66,11 @@ describe('question deck', () => {
     const wrapper = mount(QuestionDeckView);
     await flushPromises();
 
+    const logo = wrapper.get('img[alt="燃点工作室"]');
+    expect(logo.attributes('src')).toBe('/brand/randian-studio-logo.png');
+    expect(wrapper.get('[data-role="brand-header"]').text()).toContain('LIVE IN HDU');
+    expect(wrapper.get('[data-role="brand-header"]').text()).toContain('杭电新生问答与指北');
+    expect(wrapper.text()).not.toContain('橘点工作室');
     expect(wrapper.text()).toContain('新生必看 12 问');
     expect(wrapper.text()).toContain('01 / 12');
     expect(wrapper.text()).toContain('第 1 个新生问题是什么？');
@@ -524,8 +529,8 @@ describe('question deck', () => {
 
     expect(wrapper.text()).toContain('<img src=x onerror=alert(1)>请以学校最新通知为准。');
     expect(wrapper.text()).toContain('<strong>学校公开通知</strong>');
-    expect(wrapper.find('img').exists()).toBe(false);
-    expect(wrapper.find('strong').exists()).toBe(false);
+    expect(wrapper.find('.answer-card img').exists()).toBe(false);
+    expect(wrapper.find('.answer-card strong').exists()).toBe(false);
     expect(wrapper.find('a[href^="javascript:"]').exists()).toBe(false);
     expect(wrapper.text()).toContain('不安全来源仍应显示为文本');
     expect(wrapper.text()).toContain('联网整理·注意甄别');
