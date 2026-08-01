@@ -155,3 +155,49 @@ test('TokenDance synthesizes a non-empty answer from available or unavailable se
     });
   }
 });
+
+test('TokenDance grounds knowledge synthesis in HDU hits without sending retrieval metadata', async () => {
+  let requestBody: Record<string, unknown> | undefined;
+  const provider = new TokenDanceProvider({
+    apiKey: 'test-key',
+    fetch: async (_input, init) => {
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return response({
+        choices: [{ message: { content: '杭电宿舍由学校统一安排，具体以学院通知为准。' } }],
+      });
+    },
+  });
+
+  const result = await provider.synthesizeKnowledge({
+    question: '杭电宿舍怎么安排？',
+    hits: [{
+      content: '宿舍由学校统一安排。',
+      score: 0.91,
+      knowledgeId: 'secret-knowledge-id',
+      chunkId: 'secret-chunk-id',
+      title: '杭电新生指北',
+      sourceType: 'community',
+      sequence: 3,
+      source: {
+        type: 'community',
+        title: '杭电新生指北 · 宿舍',
+        url: 'https://example.test/guide#dormitory',
+        updatedAt: '2026-07-30',
+      },
+    }],
+  });
+
+  assert.equal(result.text, '杭电宿舍由学校统一安排，具体以学院通知为准。');
+  assert.deepEqual(result.sources, []);
+  const serialized = JSON.stringify(requestBody);
+  for (const required of [
+    '杭州电子科技大学',
+    '不得把其他学校的普遍情况写成杭电事实',
+    '只能依据输入知识片段',
+    '通用建议必须单独标注',
+  ]) {
+    assert.match(serialized, new RegExp(required));
+  }
+  assert.match(serialized, /宿舍由学校统一安排/);
+  assert.doesNotMatch(serialized, /secret-knowledge-id|secret-chunk-id|sourceType|sequence|score/);
+});

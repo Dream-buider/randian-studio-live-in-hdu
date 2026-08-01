@@ -2,6 +2,7 @@ import { ServiceUnavailableError } from '../domain/errors.js';
 import type { AnswerResult } from '../domain/models.js';
 import type {
   KnowledgeProviderResult,
+  KnowledgeHit,
   KnowledgeSearchResult,
   KnowledgeProvider,
   ModelAnswer,
@@ -60,7 +61,7 @@ function isKnowledgeSearchResult(
 
 function normalizedKnowledge(
   value: KnowledgeProviderResult,
-): { answer: string; sources: ModelAnswer['sources'] } | null {
+): { answer: string; sources: ModelAnswer['sources']; hits?: KnowledgeHit[] } | null {
   if (value === null) {
     return null;
   }
@@ -71,15 +72,17 @@ function normalizedKnowledge(
   if (value.status !== 'available' || value.hits.length === 0) {
     return null;
   }
-  const answer = value.hits
-    .map((hit) => hit.content.trim())
-    .filter(Boolean)
+  const hits = value.hits
+    .map((hit) => ({ ...hit, content: hit.content.trim(), title: hit.title.trim() }))
+    .filter((hit) => hit.content.length > 0);
+  const answer = hits
+    .map((hit) => hit.content)
     .join('\n\n');
   if (answer.length === 0) {
     return null;
   }
   const seen = new Set<string>();
-  const sources = value.hits
+  const sources = hits
     .map((hit) => hit.source)
     .filter((source) => {
       const key = `${source.type}\0${source.title}\0${source.url}`;
@@ -89,7 +92,7 @@ function normalizedKnowledge(
       seen.add(key);
       return true;
     });
-  return { answer, sources };
+  return { answer, sources, hits };
 }
 
 function deterministicFallback(search: WebSearchResult): ModelAnswer {
@@ -162,10 +165,24 @@ export class AnswerRouter {
     }
     const normalized = normalizedKnowledge(knowledge);
     if (normalized) {
+      let answer = normalized.answer;
+      if (normalized.hits && this.deps.model.synthesizeKnowledge) {
+        try {
+          const synthesized = await this.deps.model.synthesizeKnowledge({
+            question,
+            hits: normalized.hits,
+          });
+          if (isUsableAnswer(synthesized.text)) {
+            answer = synthesized.text.trim();
+          }
+        } catch {
+          // Deterministic hit content remains available when synthesis fails.
+        }
+      }
       return {
         route: 'knowledge',
         trustStatus: 'knowledge',
-        answer: normalized.answer,
+        answer,
         sources: normalized.sources,
       };
     }

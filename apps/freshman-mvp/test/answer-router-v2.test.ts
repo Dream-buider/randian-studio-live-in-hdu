@@ -345,6 +345,120 @@ test('router v2 accepts status-aware WeKnora chunks while provider failure falls
   });
 });
 
+test('router v2 synthesizes knowledge hits but keeps deduplicated hit-owned sources', async () => {
+  await withRepositories(async ({ content, reviews }) => {
+    let searchCalls = 0;
+    const guideSource = {
+      type: 'community' as const,
+      title: '杭电新生指北 · 宿舍',
+      url: 'https://example.test/guide#dormitory',
+      updatedAt: '2026-07-30',
+    };
+    const provider = model({
+      async synthesizeKnowledge({ question, hits }) {
+        assert.equal(question, '杭电宿舍怎么安排？');
+        assert.equal(hits.length, 2);
+        return {
+          text: '杭电宿舍由学校统一安排，具体以学院通知为准。',
+          sources: [{
+            type: 'web',
+            title: '模型编造来源',
+            url: 'https://invented.example/source',
+            updatedAt: null,
+          }],
+        };
+      },
+    });
+    const router = makeRouter(content, reviews, {
+      model: provider,
+      knowledge: {
+        async search() {
+          return {
+            status: 'available',
+            hits: [0, 1].map((sequence) => ({
+              content: sequence === 0 ? '宿舍由学校统一安排。' : '具体安排以学院通知为准。',
+              score: 0.9 - sequence * 0.01,
+              knowledgeId: 'guide',
+              chunkId: `chunk-${sequence}`,
+              title: '杭电新生指北',
+              sourceType: 'community',
+              sequence,
+              source: guideSource,
+            })),
+          };
+        },
+      },
+      search: {
+        async search() {
+          searchCalls += 1;
+          return { status: 'available', leads: [] };
+        },
+      },
+    });
+
+    assert.deepEqual(await router.answer('杭电宿舍怎么安排？'), {
+      route: 'knowledge',
+      trustStatus: 'knowledge',
+      answer: '杭电宿舍由学校统一安排，具体以学院通知为准。',
+      sources: [guideSource],
+    });
+    assert.equal(searchCalls, 0);
+  });
+});
+
+test('router v2 falls back to exact nonblank hit text when knowledge synthesis throws', async () => {
+  await withRepositories(async ({ content, reviews }) => {
+    let searchCalls = 0;
+    let knowledgeSynthesisCalls = 0;
+    const guideSource = {
+      type: 'community' as const,
+      title: '杭电新生指北 · 宿舍',
+      url: 'https://example.test/guide#dormitory',
+      updatedAt: '2026-07-30',
+    };
+    const router = makeRouter(content, reviews, {
+      model: model({
+        async synthesizeKnowledge() {
+          knowledgeSynthesisCalls += 1;
+          throw new Error('model unavailable');
+        },
+      }),
+      knowledge: {
+        async search() {
+          return {
+            status: 'available',
+            hits: [{
+              content: '  宿舍由学校统一安排。  ',
+              score: 0.9,
+              knowledgeId: 'guide',
+              chunkId: 'chunk-1',
+              title: '杭电新生指北',
+              sourceType: 'community',
+              sequence: 0,
+              source: guideSource,
+            }],
+          };
+        },
+      },
+      search: {
+        async search() {
+          searchCalls += 1;
+          return { status: 'available', leads: [] };
+        },
+      },
+    });
+
+    assert.deepEqual(await router.answer('宿舍呢？'), {
+      route: 'knowledge',
+      trustStatus: 'knowledge',
+      answer: '宿舍由学校统一安排。',
+      sources: [guideSource],
+    });
+    assert.equal(knowledgeSynthesisCalls, 1);
+    assert.equal(searchCalls, 0);
+  });
+});
+
 test('router v2 stage 3 handles available and unavailable search, persists first, and uses the exact disclaimer', async (t) => {
   for (const available of [true, false]) {
     await t.test(available ? 'available' : 'unavailable', async () => {

@@ -6,6 +6,7 @@ import type { FastifyInstance } from 'fastify';
 import { migrateDatabase } from '../db/migrations.js';
 import { openDatabase, type SqliteDatabase } from '../db/sqlite.js';
 import type { SourceRef } from '../domain/models.js';
+import { resolveFreshmanGuideSource } from '../content/freshman-guide.js';
 import type {
   IntentClassification,
   KnowledgeProvider,
@@ -216,6 +217,7 @@ export async function createProductionRuntime(
           timeoutMs: 10_000,
           maxHits: 8,
           fetch: options.fetch,
+          sourceResolver: ({ title, content }) => resolveFreshmanGuideSource(title, content),
         })
       : null;
     const knowledge: KnowledgeProvider = weknora

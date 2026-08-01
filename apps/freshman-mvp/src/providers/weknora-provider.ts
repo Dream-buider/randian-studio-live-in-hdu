@@ -4,6 +4,7 @@ import type {
   KnowledgeSearchResult,
   ProviderStatus,
 } from './contracts.js';
+import type { SourceRef } from '../domain/models.js';
 
 export interface WeKnoraProviderOptions {
   baseUrl: string;
@@ -13,6 +14,7 @@ export interface WeKnoraProviderOptions {
   timeoutMs?: number;
   maxHits?: number;
   fetch?: typeof globalThis.fetch;
+  sourceResolver?: (hit: Pick<KnowledgeHit, 'title' | 'content'>) => SourceRef | null;
 }
 
 type RawHit = {
@@ -30,7 +32,11 @@ function trimmedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-function normalizeHit(value: unknown, threshold: number): KnowledgeHit | null {
+function normalizeHit(
+  value: unknown,
+  threshold: number,
+  sourceResolver?: WeKnoraProviderOptions['sourceResolver'],
+): KnowledgeHit | null {
   if (typeof value !== 'object' || value === null) {
     return null;
   }
@@ -55,6 +61,12 @@ function normalizeHit(value: unknown, threshold: number): KnowledgeHit | null {
     return null;
   }
   const sourceType = trimmedString(raw.knowledge_source) || 'community';
+  const source = sourceResolver?.({ title, content }) ?? {
+    type: 'community' as const,
+    title,
+    url: '',
+    updatedAt: null,
+  };
   return {
     content,
     score,
@@ -63,12 +75,7 @@ function normalizeHit(value: unknown, threshold: number): KnowledgeHit | null {
     title,
     sourceType,
     sequence,
-    source: {
-      type: 'community',
-      title,
-      url: '',
-      updatedAt: null,
-    },
+    source,
   };
 }
 
@@ -79,6 +86,7 @@ export class WeKnoraProvider implements KnowledgeProvider {
   private readonly timeoutMs: number;
   private readonly maxHits: number;
   private readonly fetch: typeof globalThis.fetch;
+  private readonly sourceResolver: WeKnoraProviderOptions['sourceResolver'];
   private readonly endpoint: URL | null;
   private readonly configurationStatus: ProviderStatus;
   private lastStatus: ProviderStatus;
@@ -98,6 +106,7 @@ export class WeKnoraProvider implements KnowledgeProvider {
       ? Math.max(1, Math.min(8, Math.trunc(Number(options.maxHits))))
       : 8;
     this.fetch = options.fetch ?? globalThis.fetch;
+    this.sourceResolver = options.sourceResolver;
 
     const baseUrl = options.baseUrl.trim();
     if (baseUrl.length === 0 || this.apiKey.length === 0 || this.knowledgeBaseIds.length < 2) {
@@ -179,7 +188,7 @@ export class WeKnoraProvider implements KnowledgeProvider {
         return this.result('temporarily-unavailable');
       }
       const hits = body.data
-        .map((item) => normalizeHit(item, this.scoreThreshold))
+        .map((item) => normalizeHit(item, this.scoreThreshold, this.sourceResolver))
         .filter((item): item is KnowledgeHit => item !== null)
         .sort((left, right) => left.sequence - right.sequence || right.score - left.score)
         .slice(0, this.maxHits);

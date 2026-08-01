@@ -2,6 +2,7 @@ import { ServiceUnavailableError, ValidationError } from '../domain/errors.js';
 import type { QuestionIntent, SourceRef } from '../domain/models.js';
 import type {
   IntentClassification,
+  KnowledgeSynthesisInput,
   ModelAnswer,
   ModelProvider,
   SynthesisInput,
@@ -228,6 +229,7 @@ export class TokenDanceProvider implements ModelProvider {
           '搜索标题、摘要和链接只是未经审核的公开线索，不是已核实知识。',
           '必须给出非空、谨慎、可执行的回答，只能引用输入中提供的URL，不得编造来源。',
           '若来源冲突或不足以证明事实，要明确说明；不得编造日期、电话、费用、政策、比例或名额。',
+          '不得把其他学校的普遍情况写成杭电事实；通用建议必须单独标注，并与杭州电子科技大学的事实区分。',
           '若搜索不可用，应说明可执行的校方核验途径，但不要回复“未收录”。',
         ].join(''),
       },
@@ -248,5 +250,32 @@ export class TokenDanceProvider implements ModelProvider {
         }))
       : [];
     return { text, sources };
+  }
+
+  async synthesizeKnowledge(input: KnowledgeSynthesisInput): Promise<ModelAnswer> {
+    const text = (await this.complete([
+      {
+        role: 'system',
+        content: [
+          '你是杭州电子科技大学新生答疑助手。',
+          '回答必须先直接回应问题，只能依据输入知识片段，不得补充片段没有提供的杭电事实。',
+          '不得把其他学校的普遍情况写成杭电事实。',
+          '必须区分杭州电子科技大学证据与一般经验，通用建议必须单独标注。',
+          '若知识片段冲突、过时或不足，要明确保留不确定性。',
+          '不得编造日期、电话、费用、政策、比例、名额或URL，也不得输出来源列表。',
+        ].join(''),
+      },
+      {
+        role: 'user',
+        content: JSON.stringify({
+          question: input.question,
+          hits: input.hits.map(({ content, title, source }) => ({ content, title, source })),
+        }),
+      },
+    ], 800)).trim();
+    if (text.length === 0) {
+      throw new ServiceUnavailableError('TokenDance returned an empty answer');
+    }
+    return { text, sources: [] };
   }
 }

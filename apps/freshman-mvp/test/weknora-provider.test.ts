@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { resolveFreshmanGuideSource } from '../src/content/freshman-guide.js';
 import { WeKnoraProvider } from '../src/providers/weknora-provider.js';
 
 const API_KEY = 'weknora-test-key-never-log';
@@ -66,6 +67,52 @@ test('WeKnora provider sends the public retrieval contract and normalizes at mos
   assert.deepEqual(calls[0].body, {
     query: '宿舍条件怎么样？',
     knowledge_base_ids: KB_IDS,
+  });
+});
+
+test('WeKnora resolves guide chunks to section anchors while preserving non-guide sources', async () => {
+  const provider = new WeKnoraProvider({
+    baseUrl: 'http://127.0.0.1:8080/api/v1',
+    apiKey: API_KEY,
+    knowledgeBaseIds: KB_IDS,
+    sourceResolver: ({ title, content }) => resolveFreshmanGuideSource(title, content),
+    fetch: async () => jsonResponse({
+      success: true,
+      data: [
+        {
+          id: 'guide-chunk',
+          content: '宿舍房型和宽带以现场安排为准。',
+          knowledge_id: 'guide-knowledge',
+          knowledge_title: '杭电新生指北',
+          knowledge_source: 'community',
+          seq: 0,
+          score: 0.9,
+        },
+        {
+          id: 'faq-chunk',
+          content: '校园卡由学院发放。',
+          knowledge_id: 'faq-knowledge',
+          knowledge_title: '校园 FAQ',
+          knowledge_source: 'community',
+          seq: 1,
+          score: 0.8,
+        },
+      ],
+    }),
+  });
+
+  const result = await provider.search('宿舍和校园卡');
+  assert.equal(result.hits[0].source.type, 'community');
+  assert.equal(
+    result.hits[0].source.url,
+    'https://rcncolp2ehkb.feishu.cn/wiki/J7o6wBiJVi36wJk2VSTcyyb1nDd#SF3vdsZU3o6FouxCXabcyTnUnTb',
+  );
+  assert.equal(result.hits[0].source.updatedAt, '2026-07-30');
+  assert.deepEqual(result.hits[1].source, {
+    type: 'community',
+    title: '校园 FAQ',
+    url: '',
+    updatedAt: null,
   });
 });
 

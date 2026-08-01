@@ -51,6 +51,11 @@ export interface SynthesisInput {
   search: WebSearchResult;
 }
 
+export interface KnowledgeSynthesisInput {
+  question: string;
+  hits: KnowledgeHit[];
+}
+
 export interface ModelAnswer {
   text: string;
   sources: SourceRef[];
@@ -62,6 +67,7 @@ export interface ModelProvider {
     intents: QuestionIntent[],
   ): Promise<IntentClassification | null>;
   synthesize(input: SynthesisInput): Promise<ModelAnswer>;
+  synthesizeKnowledge?(input: KnowledgeSynthesisInput): Promise<ModelAnswer>;
 }
 
 export interface KnowledgeProvider {
