@@ -297,7 +297,7 @@ describe('question deck', () => {
     const backdrop = wrapper.get('.modal-backdrop');
     expect(backdrop.attributes('style')).toContain('--visual-viewport-height: 420px');
     expect(backdrop.attributes('style')).toContain('--visual-viewport-offset-top: 140px');
-    expect(wrapper.get('[data-action="submit-question"]').exists()).toBe(true);
+    expect(wrapper.find('[data-action="submit-question"]').exists()).toBe(true);
 
     Object.defineProperty(visualViewport, 'offsetTop', { configurable: true, value: 96 });
     visualViewport.dispatchEvent(new Event('scroll'));

@@ -25,7 +25,7 @@ export function useVisualViewport(panel: Ref<HTMLElement | null>): {
 } {
   const metrics = ref(readViewportMetrics(window));
   let revealTimer: number | undefined;
-  let visualViewport: VisualViewport | undefined;
+  let visualViewport: VisualViewport | null = null;
 
   function updateMetrics(): void {
     metrics.value = readViewportMetrics(window);
