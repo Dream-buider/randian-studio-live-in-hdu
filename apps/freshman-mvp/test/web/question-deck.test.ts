@@ -56,9 +56,11 @@ describe('question deck', () => {
     localStorage.clear();
     sessionStorage.clear();
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ items: questions })));
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -274,6 +276,73 @@ describe('question deck', () => {
       wrapper.unmount();
       host.remove();
     }
+  });
+
+  it('follows visual viewport resize and scroll events while the ask sheet is open', async () => {
+    const visualViewport = new EventTarget();
+    Object.defineProperties(visualViewport, {
+      height: { configurable: true, value: 420, writable: true },
+      offsetTop: { configurable: true, value: 140, writable: true },
+    });
+    const addEventListener = vi.spyOn(visualViewport, 'addEventListener');
+    const removeEventListener = vi.spyOn(visualViewport, 'removeEventListener');
+    vi.stubGlobal('visualViewport', visualViewport);
+    const wrapper = mount(QuestionDeckView);
+
+    await flushPromises();
+    await wrapper.get('[data-action="ask"]').trigger('click');
+    visualViewport.dispatchEvent(new Event('resize'));
+    await flushPromises();
+
+    const backdrop = wrapper.get('.modal-backdrop');
+    expect(backdrop.attributes('style')).toContain('--visual-viewport-height: 420px');
+    expect(backdrop.attributes('style')).toContain('--visual-viewport-offset-top: 140px');
+    expect(wrapper.get('[data-action="submit-question"]').exists()).toBe(true);
+
+    Object.defineProperty(visualViewport, 'offsetTop', { configurable: true, value: 96 });
+    visualViewport.dispatchEvent(new Event('scroll'));
+    await flushPromises();
+    expect(backdrop.attributes('style')).toContain('--visual-viewport-offset-top: 96px');
+
+    wrapper.unmount();
+    expect(addEventListener).toHaveBeenCalledWith('resize', expect.any(Function));
+    expect(addEventListener).toHaveBeenCalledWith('scroll', expect.any(Function));
+    expect(removeEventListener).toHaveBeenCalledWith('resize', expect.any(Function));
+    expect(removeEventListener).toHaveBeenCalledWith('scroll', expect.any(Function));
+  });
+
+  it('uses window.innerHeight when visualViewport is unavailable', async () => {
+    vi.stubGlobal('visualViewport', undefined);
+    vi.stubGlobal('innerHeight', 768);
+    const wrapper = mount(QuestionDeckView);
+
+    await flushPromises();
+    await wrapper.get('[data-action="ask"]').trigger('click');
+    await flushPromises();
+
+    const backdrop = wrapper.get('.modal-backdrop');
+    expect(backdrop.attributes('style')).toContain('--visual-viewport-height: 768px');
+    expect(backdrop.attributes('style')).toContain('--visual-viewport-offset-top: 0px');
+    wrapper.unmount();
+  });
+
+  it('restores the original body style and scroll position after closing the ask sheet', async () => {
+    const originalStyle = 'color: rgb(1, 2, 3);';
+    document.body.style.cssText = originalStyle;
+    vi.stubGlobal('scrollY', 240);
+    const scrollTo = vi.mocked(window.scrollTo);
+    const wrapper = mount(QuestionDeckView);
+
+    await flushPromises();
+    await wrapper.get('[data-action="ask"]').trigger('click');
+    await flushPromises();
+    expect(document.body.style.overflow).toBe('hidden');
+
+    await wrapper.get('button[aria-label="关闭提问框"]').trigger('click');
+    await flushPromises();
+    expect(document.body.style.cssText).toBe(originalStyle);
+    expect(scrollTo).toHaveBeenCalledWith(0, 240);
+    wrapper.unmount();
   });
 
   it('moves catalog focus inside, traps both Tab directions, and restores its opener', async () => {
