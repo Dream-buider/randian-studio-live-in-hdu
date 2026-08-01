@@ -152,10 +152,18 @@ test('public trial issues a secure session and serves only the user frontend', a
     });
     assert.match(String(loginResponse.headers['set-cookie']), /HttpOnly.*Secure.*SameSite=Lax/);
 
-    for (const url of ['/', '/chat']) {
-      const response = await app.inject({ method: 'GET', url, headers: { cookie } });
-      assert.equal(response.statusCode, 200);
-      assert.match(response.body, /PUBLIC TRIAL APP/);
+    for (const { method, url } of [
+      { method: 'GET', url: '/' },
+      { method: 'GET', url: '/chat' },
+      { method: 'GET', url: '/guide' },
+      { method: 'HEAD', url: '/guide' },
+      { method: 'GET', url: '/guide?next=/admin' },
+    ] as const) {
+      const response = await app.inject({ method, url, headers: { cookie } });
+      assert.equal(response.statusCode, 200, `${method} ${url}`);
+      if (method === 'GET') {
+        assert.match(response.body, /PUBLIC TRIAL APP/);
+      }
     }
     const asset = await app.inject({
       method: 'GET',
@@ -224,6 +232,7 @@ test('public trial returns 404 for every management, health and unknown route wi
       '/api/reviews',
       '/api/reviews/one',
       '/api/health',
+      '/guide/admin',
       '/unknown',
       '/assets/../index.html',
     ]) {

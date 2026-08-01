@@ -252,7 +252,7 @@ export function createPublicTrialApp(
     .header('set-cookie', clearSessionCookie())
     .send({ status: 'ok' }));
 
-  for (const route of ['/', '/chat']) {
+  for (const route of ['/', '/chat', '/guide']) {
     app.get(route, async (request, reply) => {
       if (!requireBrowserSession(request, reply, deps.config, now())) {
         return;
