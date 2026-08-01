@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { migratePostgres } from '../src/db/postgres-migrations.js';
 import { PostgresKnowledgeImportStore } from '../src/repositories/postgres-knowledge-import-store.js';
+import { createApp } from '../src/server/app.js';
 
 type QueryResult = { rows: Record<string, unknown>[]; rowCount?: number | null };
 
@@ -133,4 +134,32 @@ test('Postgres knowledge import store creates a locked next version and retains 
   );
   assert.ok(pool.queries.some(({ text }) => /UPDATE knowledge_imports/i.test(text)));
   assert.ok(pool.queries.some(({ text }) => /INSERT INTO knowledge_import_events/i.test(text)));
+});
+
+test('Postgres knowledge import store preserves publication calendar dates without timezone conversion', async () => {
+  const pool = new FakePool([{ rows: [{ ...row, published_at: '2026-07-30' }] }]);
+  const store = new PostgresKnowledgeImportStore(pool as never);
+  const app = createApp({
+    config: {} as never,
+    content: {} as never,
+    reviews: {} as never,
+    router: { async answer() { return {}; } },
+    knowledgeImports: store,
+  });
+
+  try {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/admin/knowledge-imports',
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json().items[0].publishedAt, '2026-07-30');
+    assert.match(
+      pool.queries[0].text,
+      /published_at::text\s+AS\s+published_at/i,
+    );
+  } finally {
+    await app.close();
+  }
 });

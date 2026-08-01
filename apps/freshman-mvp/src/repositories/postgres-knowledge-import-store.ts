@@ -48,7 +48,7 @@ function mapRecord(row: Record<string, unknown>): KnowledgeImportRecord {
 
 const RETURNING_COLUMNS = `
   id, manifest_path, item_path, version, content_sha256, title,
-  source_type, source_url, published_at, applicable_year,
+  source_type, source_url, published_at::text AS published_at, applicable_year,
   approved_by, approved_at, ingest_mode, knowledge_base_id,
   weknora_knowledge_id, parse_status, last_error, created_at, updated_at
 `;
