@@ -57,7 +57,12 @@ export function resolveFreshmanGuideSource(title: string, content: string): Sour
     candidate.matchTerms.some((term) => content.includes(term))
   ));
   if (!section) {
-    return null;
+    return {
+      type: 'community',
+      title: '杭电新生指北',
+      url: FRESHMAN_GUIDE_URL,
+      updatedAt: FRESHMAN_GUIDE_UPDATED_AT,
+    };
   }
   return {
     type: 'community',

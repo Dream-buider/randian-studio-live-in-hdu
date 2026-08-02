@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { resolveFreshmanGuideSource } from '../src/content/freshman-guide.js';
+import {
+  FRESHMAN_GUIDE_URL,
+  resolveFreshmanGuideSource,
+} from '../src/content/freshman-guide.js';
 import { WeKnoraProvider } from '../src/providers/weknora-provider.js';
 
 const API_KEY = 'weknora-test-key-never-log';
@@ -12,6 +15,31 @@ function jsonResponse(body: unknown, status = 200): Response {
     headers: { 'content-type': 'application/json' },
   });
 }
+
+test('freshman guide sources use a section deep link, root fallback, or no match by title', () => {
+  assert.deepEqual(
+    resolveFreshmanGuideSource('杭电新生指北', '宿舍房型和宽带以现场安排为准。'),
+    {
+      type: 'community',
+      title: '杭电新生指北 · 宿舍',
+      url: `${FRESHMAN_GUIDE_URL}#SF3vdsZU3o6FouxCXabcyTnUnTb`,
+      updatedAt: '2026-07-30',
+    },
+  );
+  assert.deepEqual(
+    resolveFreshmanGuideSource('杭电新生指北', '国家助学金申请以学校当年通知为准。'),
+    {
+      type: 'community',
+      title: '杭电新生指北',
+      url: FRESHMAN_GUIDE_URL,
+      updatedAt: '2026-07-30',
+    },
+  );
+  assert.equal(
+    resolveFreshmanGuideSource('校园 FAQ', '宿舍房型和宽带以现场安排为准。'),
+    null,
+  );
+});
 
 test('WeKnora provider sends the public retrieval contract and normalizes at most eight ordered chunks', async () => {
   const calls: Array<{ url: string; init: RequestInit; body: Record<string, unknown> }> = [];

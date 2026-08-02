@@ -7,14 +7,20 @@ import type { PublicTrialConfig } from '../src/public-trial/config.js';
 import { createPublicTrialApp } from '../src/public-trial/app.js';
 
 const NOW = Date.parse('2026-08-01T00:00:00.000Z');
+const PNG_BYTES = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  'base64',
+);
 
 async function fixture() {
   const directory = await mkdtemp(path.join(tmpdir(), 'live-in-hdu-public-trial-'));
   const publicDir = path.join(directory, 'public');
   await mkdir(path.join(publicDir, 'assets'), { recursive: true });
+  await mkdir(path.join(publicDir, 'brand'), { recursive: true });
   await writeFile(path.join(publicDir, 'index.html'), '<main>PUBLIC TRIAL APP</main>');
   await writeFile(path.join(publicDir, 'favicon.svg'), '<svg></svg>');
   await writeFile(path.join(publicDir, 'assets', 'app.js'), 'window.PUBLIC_TRIAL=true;');
+  await writeFile(path.join(publicDir, 'brand', 'randian-studio-logo.png'), PNG_BYTES);
   const calls: Array<{ url: string; init?: RequestInit }> = [];
   const fetch: typeof globalThis.fetch = async (input, init) => {
     calls.push({ url: String(input), init });
@@ -173,6 +179,21 @@ test('public trial issues a secure session and serves only the user frontend', a
     assert.equal(asset.statusCode, 200);
     assert.equal(asset.body, 'window.PUBLIC_TRIAL=true;');
 
+    for (const method of ['GET', 'HEAD'] as const) {
+      const logo = await app.inject({
+        method,
+        url: '/brand/randian-studio-logo.png',
+        headers: { cookie },
+      });
+      assert.equal(logo.statusCode, 200, `${method} logo`);
+      assert.match(String(logo.headers['content-type']), /^image\/png(?:;|$)/u);
+      if (method === 'GET') {
+        assert.deepEqual(logo.rawPayload.subarray(0, 8), PNG_BYTES.subarray(0, 8));
+      } else {
+        assert.equal(logo.rawPayload.length, 0);
+      }
+    }
+
     const logout = await app.inject({
       method: 'POST',
       url: '/trial/logout',
@@ -235,6 +256,8 @@ test('public trial returns 404 for every management, health and unknown route wi
       '/guide/admin',
       '/unknown',
       '/assets/../index.html',
+      '/brand/other.png',
+      '/brand/randian-studio-logo.png/admin',
     ]) {
       const response = await app.inject({ method: 'GET', url, headers: { cookie } });
       assert.equal(response.statusCode, 404, url);

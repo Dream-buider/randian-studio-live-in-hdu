@@ -268,6 +268,23 @@ export function createPublicTrialApp(
     await sendFile(reply, path.resolve(deps.config.publicDir, 'favicon.svg'));
   });
 
+  app.get('/brand/randian-studio-logo.png', async (request, reply) => {
+    if (!requireBrowserSession(request, reply, deps.config, now())) {
+      return;
+    }
+    try {
+      await sendFile(
+        reply,
+        path.resolve(deps.config.publicDir, 'brand', 'randian-studio-logo.png'),
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return reply.code(404).send(NOT_FOUND);
+      }
+      throw error;
+    }
+  });
+
   app.get<{ Params: { '*': string } }>('/assets/*', async (request, reply) => {
     if (!requireBrowserSession(request, reply, deps.config, now())) {
       return;

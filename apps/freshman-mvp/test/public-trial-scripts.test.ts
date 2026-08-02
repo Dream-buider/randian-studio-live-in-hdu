@@ -48,7 +48,7 @@ test('public trial startup builds only isolated server and trial-client artifact
   assert.deepEqual(plan.buildScripts, ['build:server', 'build:trial']);
 });
 
-test('public trial verifier requires the authenticated guide route', async () => {
+test('public trial verifier requires the authenticated guide and exact logo routes', async () => {
   const requests: string[] = [];
   const server = createServer((request, response) => {
     const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
@@ -61,6 +61,10 @@ test('public trial verifier requires the authenticated guide route', async () =>
     }
     if (blocked.includes(pathname)) {
       response.writeHead(404).end();
+      return;
+    }
+    if (pathname === '/brand/randian-studio-logo.png') {
+      response.writeHead(200, { 'Content-Type': 'image/png' }).end('png');
       return;
     }
     response.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
@@ -96,6 +100,10 @@ test('public trial verifier requires the authenticated guide route', async () =>
     });
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
     assert.ok(requests.includes('/guide'), 'authenticated guide route was not verified');
+    assert.ok(
+      requests.includes('/brand/randian-studio-logo.png'),
+      'authenticated logo route was not verified',
+    );
   } finally {
     await new Promise<void>((resolve, reject) => server.close((error) => (
       error ? reject(error) : resolve()

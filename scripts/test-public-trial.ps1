@@ -104,9 +104,14 @@ function Invoke-StatusRequest(
             if ($response.Headers.TryGetValues('Set-Cookie', [ref]$cookieValues)) {
                 $setCookie = [string]($cookieValues | Select-Object -First 1)
             }
+            $contentType = ''
+            if ($null -ne $response.Content.Headers.ContentType) {
+                $contentType = [string]$response.Content.Headers.ContentType.MediaType
+            }
             return [pscustomobject]@{
                 StatusCode = [int]$response.StatusCode
                 SetCookie = $setCookie
+                ContentType = $contentType
                 Body = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
             }
         } finally {
@@ -154,6 +159,7 @@ $jsonHeaders = @{ Cookie = $cookie; Accept = 'application/json' }
 $root = Invoke-StatusRequest -Method GET -Path '/' -Headers $headers
 $guide = Invoke-StatusRequest -Method GET -Path '/guide' -Headers $headers
 $chat = Invoke-StatusRequest -Method GET -Path '/chat' -Headers $headers
+$logo = Invoke-StatusRequest -Method GET -Path '/brand/randian-studio-logo.png' -Headers $headers
 $questions = Invoke-StatusRequest -Method GET -Path '/api/questions' -Headers $jsonHeaders
 $ask = Invoke-StatusRequest `
     -Method POST `
@@ -169,10 +175,13 @@ foreach ($path in @('/admin', '/api/admin/intents', '/api/reviews', '/api/health
         throw "受限路径没有返回 404：$path"
     }
 }
-foreach ($result in @($root, $guide, $chat, $questions, $ask)) {
+foreach ($result in @($root, $guide, $chat, $logo, $questions, $ask)) {
     if ([int]$result.StatusCode -ne 200) {
         throw '一个允许的公网内测请求没有返回 200。'
     }
+}
+if ([string]$logo.ContentType -ne 'image/png') {
+    throw '燃点工作室 Logo 没有返回 image/png。'
 }
 
 [ordered]@{
@@ -181,6 +190,7 @@ foreach ($result in @($root, $guide, $chat, $questions, $ask)) {
     authenticatedRoot = [int]$root.StatusCode
     guide = [int]$guide.StatusCode
     chat = [int]$chat.StatusCode
+    logo = [int]$logo.StatusCode
     questions = [int]$questions.StatusCode
     ask = [int]$ask.StatusCode
     blocked = $blocked
