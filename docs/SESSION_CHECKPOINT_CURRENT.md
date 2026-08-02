@@ -1,6 +1,6 @@
 # LIVE IN HDU 当前恢复检查点
 
-更新时间：2026-08-02 07:33:13 +08:00（Asia/Shanghai）
+更新时间：2026-08-02 08:37:35 +08:00（Asia/Shanghai）
 
 ## 当前结论
 
@@ -11,6 +11,9 @@
   没有把飞书导航、评论或未经批准资料混入知识库。
 - 本地完整服务和团队公网测试版均在运行。公网仅开放用户页面和问答接口，管理端、审核
   队列与健康接口继续返回 404。
+- 最终整分支审查后的三个发布缺口均已修复：公网测试版只开放精确的燃点工作室 Logo
+  路径；所有标题精确为《杭电新生指北》的知识片段都保留根来源链接和 `2026-07-30`
+  日期（命中目录时仍使用深链）；本地 3210 的 `/guide` 现在可以直接访问。
 - 当前人工审核队列为 19 条，服务端 FIFO 序号为 1 至 19；本轮验收没有修改任何已有
   人工审核决定。Q11 仍保持空白。
 
@@ -21,7 +24,7 @@
   `C:\Users\Star\Desktop\总项目文件\杭电飞书社区\.worktrees\live-in-hdu-feedback`
 - 分支：`codex/live-in-hdu-feedback`
 - 写入本检查点前的实现 HEAD：
-  `def0076003e5f943a45833dc510bd09a7ea27fc4`
+  `fa0e475452546bbb907ceed0a6e006af9c0ebbf4`
 - 运行根目录：`D:\Star\LIVE_IN_HDU_RUNTIME`
 - 验收截图目录：
   `D:\Star\LIVE_IN_HDU_RUNTIME\acceptance\2026-08-02-feedback-optimization`
@@ -36,12 +39,13 @@
 - WeKnora 管理端：`http://127.0.0.1:8081/`
 - SearXNG：`http://127.0.0.1:8888/`
 
-2026-08-02 07:33 观察到的进程：
+2026-08-02 08:37 观察到的进程：
 
-- 私有网关 3210：PID 9224，命令行指向当前隔离工作树的 `dist/server/index.js`。
-- 公网测试网关 3211：PID 41876，命令行指向当前隔离工作树的
+- 私有网关 3210：PID 50604，命令行指向当前隔离工作树的 `dist/server/index.js`；
+  运行 metadata 的 `databaseProvider` 为 `postgres`。
+- 公网测试网关 3211：PID 46920，命令行指向当前隔离工作树的
   `dist/public-trial/index.js`。
-- cpolar 本机管理端 4040：PID 53016。PID 会在重启后变化，恢复时以端口和入口文件
+- cpolar 本机管理端 4040：PID 8532。PID 会在重启后变化，恢复时以端口和入口文件
   所有权校验为准，不要依赖这里的旧 PID 强制结束进程。
 
 ## 知识导入审计
@@ -67,21 +71,26 @@
 
 ## 自动化与构建验证
 
-在实现 HEAD `def0076003e5f943a45833dc510bd09a7ea27fc4` 上最后一次完整运行：
+在实现 HEAD `fa0e475452546bbb907ceed0a6e006af9c0ebbf4` 上由 controller
+重新完整运行：
 
-- 后端：187 项，185 通过、2 项明确要求实时环境的测试跳过、0 失败。
+- focused 正常服务 E2E：4/4 通过，覆盖 `/guide` 的 GET、HEAD、带 query 访问以及
+  `/guide/admin` 和未知路径隔离。
+- 后端：188 项，186 通过、2 项明确要求实时环境的 opt-in 测试跳过、0 失败。
 - 前端：3 个测试文件，44/44 通过。
 - `npm run build`：通过。
 - `npm run build:trial`：通过，public-trial 构建断言通过。
-- 本地首页：200；哈希脚本 `/assets/index-C2SQEPa9.js`：200，115771 bytes。
+- 本地首页 GET/HEAD：200；`/guide` GET/HEAD：200；精确 Logo：200、`image/png`、
+  7615 bytes。
 - `/api/health`：gateway/database 正常，WeKnora available，TokenDance、SearXNG 已配置，
-  FAQ outbox 0 待处理、0 失败。
+  FAQ outbox 0 待处理、0 失败；database provider 为 PostgreSQL。
 
-公网测试脚本已经补充 `/guide` 检查，并实际验证：
+公网测试脚本已经补充 `/guide` 和精确 Logo 检查，并在
+`https://38a2f881.r6.cpolar.cn` 实际验证：
 
 - 未登录首页：302。
-- 登录：首页 200、`/guide` 200、`/chat` 200、`/api/questions` 200、
-  `/api/ask` 200。
+- 登录：首页 200、`/guide` 200、`/chat` 200、精确 Logo 200、
+  `/api/questions` 200、`/api/ask` 200。
 - 隔离：`/admin`、`/api/admin/intents`、`/api/reviews`、`/api/health`
   均为 404。
 - `/guide/admin` 仍为 404；GET/HEAD `/guide` 只返回用户端 SPA，不扩大管理路径白名单。
