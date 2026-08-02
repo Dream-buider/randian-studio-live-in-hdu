@@ -131,11 +131,29 @@ test('full local flow reports honest health, serves SPA routes, and persists rev
     assert.match(unknown.json().answer, /学校官网|官方/);
     assert.equal(unknown.json().reviewOrdinal, 1);
 
-    for (const url of ['/', '/chat', '/admin']) {
-      const page = await runtime.app.inject({ method: 'GET', url });
-      assert.equal(page.statusCode, 200, url);
+    for (const { method, url } of [
+      { method: 'GET', url: '/' },
+      { method: 'GET', url: '/chat' },
+      { method: 'GET', url: '/admin' },
+      { method: 'GET', url: '/guide' },
+      { method: 'HEAD', url: '/guide' },
+      { method: 'GET', url: '/guide?source=homepage' },
+    ] as const) {
+      const page = await runtime.app.inject({ method, url });
+      assert.equal(page.statusCode, 200, `${method} ${url}`);
       assert.match(page.headers['content-type'] ?? '', /text\/html/);
-      assert.match(page.body, /id="app"/);
+      if (method === 'GET') {
+        assert.match(page.body, /id="app"/);
+      } else {
+        assert.equal(page.body, '');
+      }
+    }
+    for (const url of ['/guide/admin', '/not-a-spa-route']) {
+      const page = await runtime.app.inject({ method: 'GET', url });
+      assert.equal(page.statusCode, 404, url);
+      assert.deepEqual(page.json(), {
+        error: { code: 'NOT_FOUND', message: 'Route not found' },
+      });
     }
 
     await runtime.close();
