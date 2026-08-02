@@ -1,0 +1,40 @@
+{
+  "name": "@live-in-hdu/freshman-platform",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server/index.ts",
+    "dev:web": "vite",
+    "build": "vue-tsc --noEmit -p tsconfig.json && tsc -p tsconfig.server.json && vite build",
+    "build:server": "tsc -p tsconfig.server.json",
+    "build:trial": "vue-tsc --noEmit -p tsconfig.json && vite build --mode public-trial && tsx scripts/assert-public-trial-build.mts",
+    "start": "node --preserve-symlinks --preserve-symlinks-main dist/server/index.js",
+    "start:trial": "node --preserve-symlinks --preserve-symlinks-main dist/public-trial/index.js",
+    "test": "tsx --test test/*.test.ts",
+    "test:web": "vitest run test/web",
+    "test:all": "npm test && npm run test:web"
+  },
+  "dependencies": {
+    "@fastify/static": "^8",
+    "exceljs": "^4.4.0",
+    "fastify": "^5",
+    "pg": "^8",
+    "tdesign-mobile-vue": "^1",
+    "tdesign-vue-next": "^1",
+    "vue": "^3",
+    "vue-router": "^4"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "@types/pg": "^8",
+    "@vitejs/plugin-vue": "^6",
+    "@vue/test-utils": "^2",
+    "jsdom": "^26",
+    "tsx": "^4",
+    "typescript": "^6",
+    "vite": "^7",
+    "vitest": "^3",
+    "vue-tsc": "^3"
+  }
+}

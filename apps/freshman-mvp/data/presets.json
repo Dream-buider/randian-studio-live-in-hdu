@@ -1,0 +1,406 @@
+{
+  "description": "2026 本科新生首批 40 个问题意图。当前全部处于团队征集阶段，审核通过前不作为正式答案。",
+  "items": [
+    {
+      "id": "campus-assignment",
+      "category": "报到与开学准备",
+      "question": "我会在哪个校区学习？不同校区有什么差别？",
+      "intentDescription": "询问录取专业对应的学习校区，以及不同校区在教学住宿交通和生活方面的差异。",
+      "aliases": ["新生去哪个校区", "我是在下沙还是文一", "不同校区有什么区别"],
+      "keywords": ["校区", "下沙", "文一"],
+      "intentKeywords": ["哪个校区", "在哪里上学", "校区区别"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "registration-flow",
+      "category": "报到与开学准备",
+      "question": "新生报到的时间、地点和完整流程是什么？",
+      "intentDescription": "询问新生到校前后从线上登记到学院签到宿舍入住的完整报到步骤和时间地点。",
+      "aliases": ["开学报到流程是什么", "到学校以后先做什么", "新生什么时候去哪里报到"],
+      "keywords": ["报到", "流程", "时间", "地点"],
+      "intentKeywords": ["流程", "几点", "哪里报到", "先做什么"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "registration-materials",
+      "category": "报到与开学准备",
+      "question": "新生报到必须携带哪些证件和材料？",
+      "intentDescription": "询问录取通知书证件照片档案党团关系户口贷款等报到材料及其必选条件。",
+      "aliases": ["开学要带什么证件", "报到材料清单", "录取通知书之外还要带什么"],
+      "keywords": ["报到", "材料", "证件", "录取通知书"],
+      "intentKeywords": ["带什么", "材料", "证件", "清单"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "packing-list",
+      "category": "报到与开学准备",
+      "question": "开学前应该准备哪些生活用品？哪些东西不必提前买？",
+      "intentDescription": "询问寝具收纳洗护等开学生活用品准备，以及可到校购买和容易浪费的物品。",
+      "aliases": ["大学开学行李清单", "新生生活用品带什么", "哪些东西可以到学校再买"],
+      "keywords": ["生活用品", "行李", "开学", "准备"],
+      "intentKeywords": ["带什么", "买什么", "行李", "准备"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "arrival-transport",
+      "category": "报到与开学准备",
+      "question": "到校交通怎么选？家长陪同和临时住宿有什么经验？",
+      "intentDescription": "询问车站机场到校路线行李交通家长进校以及报到期间周边住宿的实际经验。",
+      "aliases": ["高铁站怎么到学校", "家长能陪我进学校吗", "报到住哪里方便"],
+      "keywords": ["到校", "交通", "家长", "住宿"],
+      "intentKeywords": ["怎么去", "怎么到", "家长", "酒店", "住宿"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "military-training",
+      "category": "报到与开学准备",
+      "question": "军训通常怎么安排？需要提前准备什么？",
+      "intentDescription": "询问军训时间时长作息装备防晒防暑以及因身体原因请假缓训的具体情况。",
+      "aliases": ["军训要多久", "军训带什么", "身体不好可以不军训吗"],
+      "keywords": ["军训", "准备", "请假", "缓训"],
+      "intentKeywords": ["多久", "带什么", "准备", "请假", "缓训"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "first-week-tasks",
+      "category": "报到与开学准备",
+      "question": "开学第一周通常有哪些必须完成的事情？",
+      "intentDescription": "询问体检入学教育选课班会证件领取信息采集和分级测试等第一周任务。",
+      "aliases": ["开学第一周做什么", "新生有哪些必须办的事", "刚入学会安排什么"],
+      "keywords": ["开学", "第一周", "任务", "新生"],
+      "intentKeywords": ["做什么", "办什么", "安排", "任务"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "dorm-condition",
+      "category": "宿舍与校园生活",
+      "question": "宿舍一般是几人间？基础条件怎么样？",
+      "intentDescription": "询问不同校区楼栋的住宿人数床桌柜阳台卫浴空调电梯和门禁等基础条件。",
+      "aliases": ["寝室住几个人", "宿舍有独立卫浴吗", "宿舍环境怎么样"],
+      "keywords": ["宿舍", "寝室", "几人间", "独卫"],
+      "intentKeywords": ["几个人", "几人间", "条件", "环境", "独卫"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "dorm-allocation",
+      "category": "宿舍与校园生活",
+      "question": "宿舍是怎样分配的？可以申请换宿舍吗？",
+      "intentDescription": "询问宿舍和室友分配方式信息公布时间特殊住宿需求以及换宿条件和流程。",
+      "aliases": ["室友是怎么分的", "能自己选宿舍吗", "宿舍不合适能换吗"],
+      "keywords": ["宿舍", "分配", "室友", "换宿"],
+      "intentKeywords": ["怎么分", "自己选", "换宿舍", "换寝室"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "dorm-utilities",
+      "category": "宿舍与校园生活",
+      "question": "宿舍用水、用电、洗澡、洗衣和空调分别怎么使用？",
+      "intentDescription": "询问宿舍水电充值热水洗浴洗衣空调租赁缴费以及断电维修等日常使用。",
+      "aliases": ["宿舍电费怎么交", "去哪里洗澡洗衣服", "空调要不要租"],
+      "keywords": ["宿舍", "水电", "洗澡", "洗衣", "空调"],
+      "intentKeywords": ["怎么交", "怎么用", "充值", "洗澡", "洗衣", "空调"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "campus-network",
+      "category": "宿舍与校园生活",
+      "question": "校园网和宿舍网络怎么开通？网速和设备限制怎么样？",
+      "intentDescription": "询问校园网络办理认证套餐网速路由器规定设备数量限制和故障报修。",
+      "aliases": ["校园网怎么办", "宿舍能装路由器吗", "校园网登录不了找谁"],
+      "keywords": ["校园网", "宿舍网络", "路由器", "认证"],
+      "intentKeywords": ["开通", "办理", "连接", "网速", "路由器", "登录"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "canteen-dining",
+      "category": "宿舍与校园生活",
+      "question": "学校食堂和日常吃饭情况怎么样？",
+      "intentDescription": "询问各校区食堂位置营业时间价格口味特殊饮食需求和外卖取餐情况。",
+      "aliases": ["学校吃饭贵吗", "食堂有哪些", "杭电哪里吃饭比较好"],
+      "keywords": ["食堂", "吃饭", "餐厅", "外卖"],
+      "intentKeywords": ["吃饭", "食堂", "好吃", "价格", "外卖"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "campus-card-issue",
+      "category": "宿舍与校园生活",
+      "question": "校园卡如何领取、激活、充值和使用？",
+      "intentDescription": "询问新生校园卡或一卡通的领取办理激活充值和首次使用，不包含丢失挂失补卡。",
+      "aliases": ["学校怎么办校园卡", "一卡通去哪里领", "饭卡怎么激活", "校园卡在哪办理"],
+      "keywords": ["校园卡", "一卡通", "饭卡"],
+      "intentKeywords": ["领取", "办理", "激活", "充值", "怎么用"],
+      "excludeKeywords": ["挂失", "丢", "补卡", "找不到"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "delivery-pickup",
+      "category": "宿舍与校园生活",
+      "question": "快递地址怎么填写？不同快递在哪里取？",
+      "intentDescription": "询问校园收货地址格式各快递取件点大件寄件方式和开学季营业排队情况。",
+      "aliases": ["学校快递写什么地址", "快递去哪里拿", "校内有没有菜鸟驿站"],
+      "keywords": ["快递", "地址", "取件", "驿站"],
+      "intentKeywords": ["地址", "哪里取", "哪里拿", "寄件", "驿站"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "campus-transport-life",
+      "category": "宿舍与校园生活",
+      "question": "校内交通和学校周边生活方便吗？",
+      "intentDescription": "询问校内步行骑行公交地铁以及周边超市打印维修理发等生活服务便利程度。",
+      "aliases": ["学校附近方便吗", "校内可以骑车吗", "周边有哪些生活服务"],
+      "keywords": ["校内交通", "学校周边", "生活", "地铁"],
+      "intentKeywords": ["方便吗", "骑车", "公交", "地铁", "周边"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "freshman-schedule",
+      "category": "课程选课与学籍",
+      "question": "大一课程、课表和日常作息大致是什么样？",
+      "intentDescription": "询问大一公共课基础课早晚课自习周末安排和不同专业学习工作量。",
+      "aliases": ["大一每天上几节课", "大学作息是什么样", "新生课多不多"],
+      "keywords": ["大一", "课表", "作息", "课程"],
+      "intentKeywords": ["几节课", "课多不多", "作息", "课表", "每天"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "course-selection",
+      "category": "课程选课与学籍",
+      "question": "新生如何选课、退课和补选？有哪些选课经验？",
+      "intentDescription": "询问选课系统轮次必修选修容量退补选课程冲突及选课失败处理办法。",
+      "aliases": ["大学怎么选课", "抢课抢不到怎么办", "选错课可以退吗"],
+      "keywords": ["选课", "退课", "补选", "抢课"],
+      "intentKeywords": ["怎么选", "抢不到", "退课", "补选", "选错"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "credits-gpa-ranking",
+      "category": "课程选课与学籍",
+      "question": "学分、绩点和成绩排名分别怎么计算和使用？",
+      "intentDescription": "询问课程学分绩点计算成绩排名口径以及这些指标在评奖升学中的用途。",
+      "aliases": ["绩点怎么算", "大学成绩怎么排名", "学分和绩点有什么区别"],
+      "keywords": ["学分", "绩点", "成绩", "排名"],
+      "intentKeywords": ["怎么算", "排名", "区别", "有什么用"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "failure-makeup-retake",
+      "category": "课程选课与学籍",
+      "question": "挂科后会怎样？补考、重修和缓考怎么处理？",
+      "intentDescription": "询问课程不及格后的补考重修缓考流程成绩记录费用和可能产生的影响。",
+      "aliases": ["大学挂科有什么后果", "补考没过怎么办", "生病可以申请缓考吗"],
+      "keywords": ["挂科", "补考", "重修", "缓考"],
+      "intentKeywords": ["后果", "怎么办", "补考", "重修", "缓考"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "major-change-eligibility",
+      "category": "课程选课与学籍",
+      "question": "转专业需要满足哪些基本条件？",
+      "intentDescription": "询问转专业申请资格成绩门槛限制情形接收名额和不同学院的基本条件。",
+      "aliases": ["转专业有什么要求", "大一可以转专业吗", "成绩多少能转专业"],
+      "keywords": ["转专业", "条件", "资格", "成绩"],
+      "intentKeywords": ["条件", "要求", "可以吗", "资格", "成绩多少"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "major-change-process",
+      "category": "课程选课与学籍",
+      "question": "转专业什么时候申请、具体怎么考核和准备？",
+      "intentDescription": "询问转专业申请时间材料笔试面试目标学院考核方式和实际准备策略。",
+      "aliases": ["怎么申请转专业", "转专业要考试吗", "转专业面试怎么准备"],
+      "keywords": ["转专业", "申请", "考核", "准备"],
+      "intentKeywords": ["怎么申请", "什么时候", "考试", "面试", "准备"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "major-streaming",
+      "category": "课程选课与学籍",
+      "question": "大类招生或专业分流是怎么进行的？",
+      "intentDescription": "询问适用学院的大类培养专业分流时间志愿成绩规则名额和热门方向。",
+      "aliases": ["大类什么时候分专业", "专业分流看什么成绩", "分流能选自己想要的吗"],
+      "keywords": ["大类", "专业分流", "志愿", "成绩"],
+      "intentKeywords": ["分专业", "分流", "怎么分", "志愿", "名额"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "physical-fitness-run",
+      "category": "课程选课与学籍",
+      "question": "体育课、体测和校园跑有哪些真实注意事项？",
+      "intentDescription": "询问体育选课体测项目校园跑规则免测缓测补测以及常见操作误区。",
+      "aliases": ["大学体测考什么", "校园跑要跑多少", "体育课怎么选"],
+      "keywords": ["体育课", "体测", "校园跑", "免测"],
+      "intentKeywords": ["考什么", "跑多少", "怎么选", "免测", "补测"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "computer-textbooks",
+      "category": "课程选课与学籍",
+      "question": "新生是否需要买电脑、教材或其他学习设备？",
+      "intentDescription": "询问不同专业电脑配置购买时间机房替代性教材渠道和其他学习设备需求。",
+      "aliases": ["大学要买笔记本吗", "新生电脑买什么配置", "教材在哪里购买"],
+      "keywords": ["电脑", "笔记本", "教材", "学习设备"],
+      "intentKeywords": ["要买吗", "什么配置", "购买", "教材", "设备"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "major-curriculum",
+      "category": "专业理解与选择",
+      "question": "我被录取的专业主要学什么？核心课程有哪些？",
+      "intentDescription": "询问具体录取专业的培养方向核心课程实践环节和各年级课程结构。",
+      "aliases": ["这个专业学什么", "专业课有哪些", "培养方案怎么看"],
+      "keywords": ["专业", "核心课程", "培养方向", "培养方案"],
+      "intentKeywords": ["学什么", "课程", "培养", "主要学"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "major-difficulty",
+      "category": "专业理解与选择",
+      "question": "这个专业学习难度和真实学习体验怎么样？",
+      "intentDescription": "询问具体专业课程难点作业实验量基础要求和高年级学生的真实学习感受。",
+      "aliases": ["这个专业难不难", "专业作业多吗", "零基础能学会吗"],
+      "keywords": ["专业", "难度", "作业", "实验"],
+      "intentKeywords": ["难不难", "作业多", "能学会吗", "体验"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "major-comparison",
+      "category": "专业理解与选择",
+      "question": "相近专业之间有什么区别？",
+      "intentDescription": "询问两个或多个相近专业在课程培养方向实验内容就业和升学方面的具体差异。",
+      "aliases": ["这两个专业有什么不同", "计科和软工怎么选", "相似专业差别大吗"],
+      "keywords": ["专业区别", "专业对比", "怎么选"],
+      "intentKeywords": ["区别", "不同", "对比", "怎么选", "差别"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "major-fit",
+      "category": "专业理解与选择",
+      "question": "什么样的人适合这个专业？哪些人可能学得比较痛苦？",
+      "intentDescription": "询问具体专业对兴趣基础学习方式和能力倾向的要求，以及可能面临的适应困难。",
+      "aliases": ["我适合这个专业吗", "这个专业需要什么基础", "不擅长数学能学吗"],
+      "keywords": ["适合", "专业", "基础", "兴趣"],
+      "intentKeywords": ["适合吗", "什么基础", "能学吗", "需要什么"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "major-career",
+      "category": "专业理解与选择",
+      "question": "这个专业毕业后的就业方向和真实去向如何？",
+      "intentDescription": "询问具体专业毕业生常见行业岗位城市能力要求和可核实的真实就业去向。",
+      "aliases": ["这个专业以后做什么工作", "专业就业怎么样", "毕业能去哪些公司"],
+      "keywords": ["专业", "就业", "工作", "去向"],
+      "intentKeywords": ["做什么", "就业", "工作", "公司", "去向"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "major-dissatisfaction-choice",
+      "category": "专业理解与选择",
+      "question": "如果对录取专业不满意，应该先体验还是尽早准备转专业？",
+      "intentDescription": "询问对录取专业不满意时的试学判断转专业准备辅修跨学科学习等决策经验。",
+      "aliases": ["不喜欢现在的专业怎么办", "要不要一入学就准备转专业", "专业选错了还有什么办法"],
+      "keywords": ["不喜欢专业", "转专业", "试学", "辅修"],
+      "intentKeywords": ["不满意", "不喜欢", "要不要转", "选错", "怎么办"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "postgraduate-recommendation",
+      "category": "升学科研与就业",
+      "question": "保研需要提前做哪些准备？主要看哪些条件？",
+      "intentDescription": "询问推荐免试研究生对成绩排名英语竞赛科研综合素质的要求和准备时间线。",
+      "aliases": ["杭电怎么保研", "保研看什么", "大一怎么为保研准备"],
+      "keywords": ["保研", "推免", "排名", "准备"],
+      "intentKeywords": ["怎么保", "看什么", "条件", "准备", "比例"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "postgraduate-exam",
+      "category": "升学科研与就业",
+      "question": "考研氛围、常见目标院校和备考资源怎么样？",
+      "intentDescription": "询问不同专业考研氛围备考场所信息资源常见目标院校和往届升学去向。",
+      "aliases": ["学校考研的人多吗", "考研一般去哪些学校", "哪里适合复习考研"],
+      "keywords": ["考研", "目标院校", "备考", "自习"],
+      "intentKeywords": ["人多吗", "去哪些学校", "怎么准备", "哪里复习"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "overseas-exchange",
+      "category": "升学科研与就业",
+      "question": "出国、交换或联合培养有哪些渠道？",
+      "intentDescription": "询问学校和学院的海外交流交换联合培养项目及语言成绩费用学分认定要求。",
+      "aliases": ["学校有交换项目吗", "想出国要怎么准备", "有没有联合培养"],
+      "keywords": ["出国", "交换", "联合培养", "海外"],
+      "intentKeywords": ["项目", "怎么申请", "怎么准备", "交换", "出国"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "competition-research",
+      "category": "升学科研与就业",
+      "question": "新生怎样参加竞赛、科研、实验室或大学生创新项目？",
+      "intentDescription": "询问低年级进入竞赛科研实验室大创项目的渠道时间先修能力导师和团队寻找。",
+      "aliases": ["大一能进实验室吗", "竞赛去哪里找队伍", "怎么参加大创"],
+      "keywords": ["竞赛", "科研", "实验室", "大创"],
+      "intentKeywords": ["怎么参加", "怎么进", "找队伍", "找导师", "大创"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "internship-career",
+      "category": "升学科研与就业",
+      "question": "实习和就业应该从什么时候准备？学校能提供哪些资源？",
+      "intentDescription": "询问不同专业实习就业准备节奏简历招聘平台双选会和学校职业服务资源。",
+      "aliases": ["大几开始找实习", "学校招聘资源怎么样", "就业应该提前准备什么"],
+      "keywords": ["实习", "就业", "招聘", "双选会"],
+      "intentKeywords": ["什么时候", "大几", "怎么找", "准备什么", "资源"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "financial-aid",
+      "category": "资源健康与安全",
+      "question": "奖学金、助学金、助学贷款和勤工助学怎么申请？",
+      "intentDescription": "询问奖助学金贷款勤工助学的项目类型申请时间条件材料评定流程和咨询入口。",
+      "aliases": ["奖学金怎么拿", "家庭困难怎么申请助学金", "学校有勤工助学吗"],
+      "keywords": ["奖学金", "助学金", "贷款", "勤工助学"],
+      "intentKeywords": ["怎么申请", "怎么拿", "条件", "材料", "家庭困难"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "clubs-organizations",
+      "category": "资源健康与安全",
+      "question": "社团、学生组织和班级岗位应该怎么选择？",
+      "intentDescription": "询问社团学生组织班委的招新时间真实工作内容时间成本选择和退出经验。",
+      "aliases": ["大学要不要加社团", "学生会值得参加吗", "班委选什么比较好"],
+      "keywords": ["社团", "学生组织", "学生会", "班委"],
+      "intentKeywords": ["要不要加", "值得吗", "怎么选", "参加", "招新"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "health-mental-support",
+      "category": "资源健康与安全",
+      "question": "在学校生病、受伤或遇到心理压力时可以找谁？",
+      "intentDescription": "询问校内医疗急诊医保辅导员心理咨询和紧急求助渠道，不涉及在线医疗诊断。",
+      "aliases": ["校医院在哪里", "在学校发烧怎么办", "压力太大可以找谁聊"],
+      "keywords": ["生病", "校医院", "心理咨询", "求助"],
+      "intentKeywords": ["怎么办", "在哪里", "找谁", "看病", "心理"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "fraud-safety",
+      "category": "资源健康与安全",
+      "question": "新生最常遇到哪些诈骗或安全风险？",
+      "intentDescription": "询问收费群推销兼职刷单验证码二手交易冒充师生等新生常见诈骗和识别方式。",
+      "aliases": ["新生群收费可信吗", "有人冒充学长卖东西怎么办", "大学有哪些常见骗局"],
+      "keywords": ["诈骗", "骗局", "收费群", "安全"],
+      "intentKeywords": ["可信吗", "骗局", "被骗", "风险", "推销"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    },
+    {
+      "id": "senior-advice",
+      "category": "资源健康与安全",
+      "question": "如果只能给新生一条建议，你最想提醒什么？",
+      "intentDescription": "征集学长学姐最真实的一次踩坑最值得提前做的事和希望大一时知道的信息。",
+      "aliases": ["学长学姐有什么建议", "大一最需要注意什么", "有什么后悔没早点知道的"],
+      "keywords": ["建议", "提醒", "踩坑", "大一"],
+      "intentKeywords": ["建议", "注意", "提醒", "踩坑", "早点知道"],
+      "answerStatus": "collecting", "answer": "", "sources": []
+    }
+  ]
+}

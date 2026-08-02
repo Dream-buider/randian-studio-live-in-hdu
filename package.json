@@ -1,0 +1,20 @@
+{
+  "name": "live-in-hdu",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npm --prefix apps/freshman-mvp run dev",
+    "dev:web": "npm --prefix apps/freshman-mvp run dev:web",
+    "build": "npm --prefix apps/freshman-mvp run build",
+    "start": "npm --prefix apps/freshman-mvp run start",
+    "test": "npm --prefix apps/freshman-mvp test",
+    "test:web": "npm --prefix apps/freshman-mvp run test:web",
+    "test:all": "npm test && npm run test:web",
+    "mvp": "node apps/freshman-mvp/server.mjs",
+    "test:mvp": "node --test apps/freshman-mvp/test/*.test.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "^1.60.0"
+  }
+}
