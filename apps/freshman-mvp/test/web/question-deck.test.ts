@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryHistory } from 'vue-router';
 import type { PublishedQuestion } from '../../web/api.js';
 import App from '../../web/App.vue';
+import { UI_PREVIEW_QUESTIONS } from '../../web/mock/questions.js';
 import { createAppRouter } from '../../web/router.js';
 import QuestionDeckView from '../../web/views/QuestionDeckView.vue';
 
@@ -100,6 +101,17 @@ describe('question deck', () => {
 
     expect(wrapper.text()).toContain('02 / 12');
     expect(wrapper.text()).toContain('第 2 个新生问题是什么？');
+  });
+
+  it('labels the five-question page as simulated UI content', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ items: UI_PREVIEW_QUESTIONS })));
+    const wrapper = mount(QuestionDeckView, { props: { uiPreview: true } });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('新生必看 5 问');
+    expect(wrapper.text()).toContain('01 / 05');
+    expect(wrapper.text()).toContain('新生报到前需要准备哪些材料？');
+    expect(wrapper.get('[data-role="ui-preview-notice"]').text()).toContain('模拟内容');
   });
 
   it('labels typed card references and only opens safe URLs in a protected new tab', async () => {
@@ -423,7 +435,7 @@ describe('question deck', () => {
       });
     }));
     const router = createAppRouter(createMemoryHistory());
-    await router.push('/');
+    await router.push('/questions');
     await router.isReady();
     const wrapper = mount(App, { global: { plugins: [router] } });
     await flushPromises();
@@ -464,7 +476,7 @@ describe('question deck', () => {
 
     await wrapper.get('[data-action="return-deck"]').trigger('click');
     await flushPromises();
-    expect(router.currentRoute.value.path).toBe('/');
+    expect(router.currentRoute.value.path).toBe('/questions');
     expect(wrapper.text()).toContain('04 / 12');
   });
 
@@ -493,7 +505,7 @@ describe('question deck', () => {
       });
     }));
     const router = createAppRouter(createMemoryHistory());
-    await router.push('/');
+    await router.push('/questions');
     await router.isReady();
     const wrapper = mount(App, { global: { plugins: [router] } });
     await flushPromises();
@@ -527,7 +539,7 @@ describe('question deck', () => {
       });
     }));
     const router = createAppRouter(createMemoryHistory());
-    await router.push('/');
+    await router.push('/questions');
     await router.isReady();
     const wrapper = mount(App, { global: { plugins: [router] } });
     await flushPromises();

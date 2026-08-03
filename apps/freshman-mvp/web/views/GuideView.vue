@@ -14,7 +14,7 @@ import {
         <h1>杭电新生指北</h1>
         <p>按入学准备、住宿与日常校园生活快速找到对应信息。</p>
       </div>
-      <RouterLink class="guide-return" to="/">返回问答</RouterLink>
+      <RouterLink class="guide-return" :to="{ name: 'deck' }">返回问答</RouterLink>
     </header>
 
     <aside class="guide-disclaimer">

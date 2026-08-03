@@ -354,8 +354,30 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
-export async function listQuestions(): Promise<PublishedQuestion[]> {
-  const response = await fetch('/api/questions');
+export interface ListQuestionsOptions {
+  fetcher?: typeof fetch;
+}
+
+export function isUiPreviewMode(mode: string): boolean {
+  return mode === 'ui-preview';
+}
+
+async function loadPreviewQuestions(): Promise<PublishedQuestion[]> {
+  const { UI_PREVIEW_QUESTIONS } = await import('./mock/questions.js');
+  return UI_PREVIEW_QUESTIONS.map((item) => ({
+    ...item,
+    sources: item.sources.map((source) => ({ ...source })),
+  }));
+}
+
+export async function listQuestions(
+  options: ListQuestionsOptions = {},
+): Promise<PublishedQuestion[]> {
+  if (import.meta.env.MODE === 'ui-preview') {
+    return loadPreviewQuestions();
+  }
+  const fetcher = options.fetcher ?? fetch;
+  const response = await fetcher('/api/questions');
   const body = await readJson(response);
   if (!isRecord(body) || !Array.isArray(body.items) || !body.items.every(isPublishedQuestion)) {
     throw new ApiResponseError();

@@ -8,7 +8,14 @@ describe('public trial router', () => {
   it('keeps the guide public while admin is disabled', () => {
     const router = createAppRouter(createMemoryHistory(), { adminEnabled: false });
 
-    expect(router.getRoutes().map((route) => route.path).sort()).toEqual(['/', '/chat', '/guide']);
+    expect(router.getRoutes().map((route) => route.path).sort()).toEqual([
+      '/',
+      '/chat',
+      '/guide',
+      '/questions',
+    ]);
+    expect(router.resolve('/').name).toBe('welcome');
+    expect(router.resolve('/questions').name).toBe('deck');
     expect(router.resolve('/guide').matched).not.toHaveLength(0);
     expect(router.getRoutes().some((route) => route.path === '/admin')).toBe(false);
   });

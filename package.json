@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "npm --prefix apps/freshman-mvp run dev",
     "dev:web": "npm --prefix apps/freshman-mvp run dev:web",
+    "dev:ui": "npm --prefix apps/freshman-mvp run dev:ui",
     "build": "npm --prefix apps/freshman-mvp run build",
     "start": "npm --prefix apps/freshman-mvp run start",
     "test": "npm --prefix apps/freshman-mvp test",
