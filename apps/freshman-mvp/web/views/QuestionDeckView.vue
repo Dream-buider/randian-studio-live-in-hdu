@@ -12,6 +12,10 @@ import BrandHeader from '../components/BrandHeader.vue';
 import QuestionCard from '../components/QuestionCard.vue';
 import QuestionCatalog from '../components/QuestionCatalog.vue';
 
+const props = withDefaults(defineProps<{ uiPreview?: boolean }>(), {
+  uiPreview: import.meta.env.MODE === 'ui-preview',
+});
+
 const STORAGE_KEY = 'live-in-hdu:current-question-id';
 const router = inject<Router | null>(routerKey, null);
 const questions = ref<PublishedQuestion[]>([]);
@@ -142,6 +146,9 @@ onMounted(async () => {
         </button>
       </div>
     </header>
+    <aside v-if="props.uiPreview" class="ui-preview-notice" data-role="ui-preview-notice">
+      当前为 UI 设计预览，问题与回答均为模拟内容，不代表正式发布数据。
+    </aside>
     <p v-if="loading" role="status">正在加载新生问题…</p>
     <section v-else-if="loadFailed" class="state-card" role="alert">
       <h1>问题列表暂时加载失败</h1>

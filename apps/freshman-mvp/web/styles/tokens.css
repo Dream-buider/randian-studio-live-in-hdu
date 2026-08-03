@@ -535,6 +535,17 @@ button:disabled {
   gap: 8px;
 }
 
+.ui-preview-notice {
+  margin: 0 0 16px;
+  padding: 11px 14px;
+  border: 1px solid #e8d7ad;
+  border-radius: 12px;
+  color: #684b19;
+  background: #fff9e9;
+  font-size: 0.86rem;
+  line-height: 1.6;
+}
+
 .deck-header-actions a,
 .deck-page > header button,
 .chat-page > header button,
