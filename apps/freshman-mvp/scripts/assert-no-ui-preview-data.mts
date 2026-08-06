@@ -8,6 +8,7 @@ const forbiddenPreviewMarkers = [
   'ui-preview-registration',
   '新生报到前需要准备哪些材料？',
   '宿舍环境怎么样，需要自带哪些生活用品？',
+  'UI 测试版 · 模拟回答（不代表正式发布数据）',
 ];
 
 async function collectFiles(directory: string): Promise<string[]> {

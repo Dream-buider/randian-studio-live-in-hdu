@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryHistory } from 'vue-router';
@@ -8,6 +10,14 @@ import App from '../../web/App.vue';
 import { UI_PREVIEW_QUESTIONS } from '../../web/mock/questions.js';
 import { createAppRouter } from '../../web/router.js';
 import QuestionDeckView from '../../web/views/QuestionDeckView.vue';
+
+const TOKENS_CSS = readFileSync(resolve(process.cwd(), 'web/styles/tokens.css'), 'utf8')
+  .replace(/\r\n/g, '\n');
+
+function cssRule(selector: string): string {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return TOKENS_CSS.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`))?.[1] ?? '';
+}
 
 const questions: PublishedQuestion[] = Array.from({ length: 12 }, (_, index) => ({
   id: `question-${index + 1}`,
@@ -53,6 +63,27 @@ function storedChatRequest(
 }
 
 describe('question deck', () => {
+  it('scopes the complete dawn palette to the student question deck', () => {
+    expect(TOKENS_CSS).toContain('.deck-page[data-theme="randian-dawn"] {');
+    expect(TOKENS_CSS).toContain('background-color: var(--student-bg);');
+    expect(TOKENS_CSS).toContain('.deck-page[data-theme="randian-dawn"] .question-card');
+    expect(TOKENS_CSS).toContain('.deck-page[data-theme="randian-dawn"] > nav button:last-child');
+    expect(TOKENS_CSS).toContain('.deck-page[data-theme="randian-dawn"] .ask-action');
+  });
+
+  it('keeps chat eyebrow contrast and source touch targets inside the dawn answer stage', () => {
+    expect(TOKENS_CSS).toContain(
+      '.chat-page[data-theme="randian-dawn"] .context-card .eyebrow {\n  color: var(--student-action);',
+    );
+    const sourceTargetRule = cssRule(
+      '.chat-page[data-theme="randian-dawn"] [data-role="answer-stage"] .source-list a',
+    );
+    expect(sourceTargetRule).toContain('display: inline-flex;');
+    expect(sourceTargetRule).toContain('align-items: center;');
+    expect(sourceTargetRule).toContain('min-width: 44px;');
+    expect(sourceTargetRule).toContain('min-height: 44px;');
+  });
+
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
@@ -83,6 +114,7 @@ describe('question deck', () => {
     const wrapper = mount(QuestionDeckView);
     await flushPromises();
 
+    expect(wrapper.get('main').attributes('data-theme')).toBe('randian-dawn');
     const logo = wrapper.get('img[alt="燃点工作室"]');
     expect(logo.attributes('src')).toBe('/brand/randian-studio-logo.png');
     expect(wrapper.get('[data-role="brand-header"]').text()).toContain('LIVE IN HDU');
@@ -160,6 +192,7 @@ describe('question deck', () => {
   it('moves both directions and expands only the current complete answer', async () => {
     const wrapper = mount(QuestionDeckView);
     await flushPromises();
+    const surface = wrapper.get('[data-role="deck-surface"]');
 
     expect(wrapper.text()).not.toContain('包含需要注意的具体安排');
     await wrapper.get('[data-action="expand"]').trigger('click');
@@ -168,8 +201,10 @@ describe('question deck', () => {
 
     await wrapper.get('[data-action="next"]').trigger('click');
     expect(wrapper.text()).toContain('02 / 12');
+    expect(surface.attributes('data-direction')).toBe('next');
     await wrapper.get('[data-action="previous"]').trigger('click');
     expect(wrapper.text()).toContain('01 / 12');
+    expect(surface.attributes('data-direction')).toBe('previous');
   });
 
   it('restores and persists a question ID instead of an array position', async () => {
@@ -190,7 +225,10 @@ describe('question deck', () => {
 
     await wrapper.get('[data-action="catalog"]').trigger('click');
     const catalog = wrapper.get('[data-role="question-catalog"]');
+    const catalogPanel = wrapper.get('[role="dialog"][aria-labelledby="catalog-title"]');
     expect(catalog.attributes('role')).toBe('dialog');
+    expect(catalogPanel.attributes('data-surface')).toBe('cinematic-sheet');
+    expect(catalogPanel.get('.sheet-grab-handle').attributes('aria-hidden')).toBe('true');
     expect(catalog.text()).toContain('报到准备');
     expect(catalog.text()).toContain('校园生活');
     expect(catalog.text()).toContain('学业发展');
@@ -205,6 +243,7 @@ describe('question deck', () => {
     await wrapper.get('[data-question-id="question-10"]').trigger('click');
     expect(wrapper.text()).toContain('10 / 12');
     expect(wrapper.text()).toContain('第 10 个新生问题是什么？');
+    expect(wrapper.get('[data-role="deck-surface"]').attributes('data-direction')).toBe('direct');
     expect(wrapper.find('[data-role="question-catalog"]').exists()).toBe(false);
   });
 
@@ -445,7 +484,10 @@ describe('question deck', () => {
     }
     await wrapper.get('[data-action="ask"]').trigger('click');
     const sheet = wrapper.get('[data-role="ask-sheet"]');
+    const askPanel = wrapper.get('[role="dialog"][aria-labelledby="ask-title"]');
     expect(sheet.attributes('role')).toBe('dialog');
+    expect(askPanel.attributes('data-surface')).toBe('cinematic-sheet');
+    expect(askPanel.get('.sheet-grab-handle').attributes('aria-hidden')).toBe('true');
     expect(sheet.text()).toContain('正在参考：第 4 个新生问题是什么？');
 
     document.dispatchEvent(new KeyboardEvent('keydown', {
@@ -614,6 +656,7 @@ describe('question deck', () => {
     await router.isReady();
     const wrapper = mount(App, { global: { plugins: [router] } });
 
+    expect(wrapper.get('main.chat-page').attributes('data-theme')).toBe('randian-dawn');
     expect(wrapper.text()).toContain('正在整理回答');
     resolveFirst(jsonResponse({
       route: 'web',
@@ -677,6 +720,7 @@ describe('question deck', () => {
     const wrapper = mount(App, { global: { plugins: [router] } });
     await flushPromises();
 
+    expect(wrapper.get('[data-role="answer-stage"]').attributes('aria-live')).toBe('polite');
     expect(wrapper.text()).toContain('<img src=x onerror=alert(1)>请以学校最新通知为准。');
     expect(wrapper.text()).toContain('<strong>学校公开通知</strong>');
     expect(wrapper.find('.answer-card img').exists()).toBe(false);

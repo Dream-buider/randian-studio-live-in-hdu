@@ -38,6 +38,10 @@ const fragment = /* glsl */ `
   uniform float uSpeed;
   uniform float uIntensity;
   uniform float uPulse;
+  uniform float uConvergence;
+  uniform float uHorizon;
+  uniform float uWarmth;
+  uniform float uExposure;
   uniform vec2 uResolution;
   varying vec2 vUv;
 
@@ -77,11 +81,24 @@ const fragment = /* glsl */ `
     float depthScale = mix(0.55, 1.35, resolvedDepth);
     float depthPace = pace * mix(0.74, 1.20, resolvedDepth);
     float phase = fract(uTime * uSpeed * depthPace + offset);
-    vec2 origin = vec2(
+    vec2 freeOrigin = vec2(
       mix(-0.18, aspect + 0.18, phase),
       mix(1.12, -0.10, phase) + lane
     );
-    vec2 direction = normalize(vec2(aspect + 0.36, -1.22));
+    float sourceIndex = fract(offset * 7.13 + depth * 0.37);
+    vec2 source = vec2(
+      mix(-0.10, aspect + 0.10, sourceIndex),
+      1.12 + depth * 0.10
+    );
+    vec2 target = vec2(
+      aspect * (0.50 + lane * 0.14),
+      uHorizon + abs(lane) * 0.035
+    );
+    vec2 convergenceDirection = normalize(target - source);
+    vec2 convergenceOrigin = mix(source, target, smoothstep(0.0, 0.96, phase));
+    vec2 freeDirection = normalize(vec2(aspect + 0.36, -1.22));
+    vec2 direction = normalize(mix(freeDirection, convergenceDirection, uConvergence));
+    vec2 origin = mix(freeOrigin, convergenceOrigin, uConvergence);
     float resolvedLength = length * depthScale;
     float resolvedWidth = width * depthScale;
     float resolvedStrength = strength * mix(0.42, 1.18, resolvedDepth);
@@ -116,10 +133,16 @@ const fragment = /* glsl */ `
     light += fallingLight(uv, aspect, 0.82, -0.20, 0.98, 0.25, 0.0030, 0.98, 0.86);
     light += fallingLight(uv, aspect, 0.90,  0.04, 1.06, 0.22, 0.0025, 0.89, 0.56);
 
-    vec3 cool = vec3(0.70, 0.86, 1.0);
-    vec3 dawn = vec3(1.0, 0.58, 0.40);
-    vec3 color = mix(cool, dawn, 0.10 + vUv.y * 0.05);
-    float alpha = clamp(light * uIntensity, 0.0, 0.86);
+    float horizonDistance = abs(vUv.y - uHorizon);
+    float horizon = exp(-horizonDistance * horizonDistance / 0.00034);
+    horizon *= 0.10 + uPulse * 0.08 * (0.5 + 0.5 * sin(uTime * 1.7));
+
+    vec3 cool = vec3(0.70, 0.84, 0.96);
+    vec3 ember = vec3(1.0, 0.34, 0.18);
+    vec3 sunlight = vec3(1.0, 0.72, 0.32);
+    vec3 color = mix(cool, ember, uWarmth * (0.38 + vUv.y * 0.18));
+    color = mix(color, sunlight, clamp(horizon * uExposure * 5.0, 0.0, 0.62));
+    float alpha = clamp(light * uIntensity + horizon, 0.0, 0.88);
     gl_FragColor = vec4(color, alpha);
   }
 `;
@@ -202,6 +225,10 @@ onMounted(() => {
         uSpeed: { value: 0.18 },
         uIntensity: { value: 0.9 },
         uPulse: { value: 0.26 },
+        uConvergence: { value: 0.72 },
+        uHorizon: { value: 0.16 },
+        uWarmth: { value: 0.68 },
+        uExposure: { value: 0.22 },
         uResolution: { value: [1, 1] },
       },
     });

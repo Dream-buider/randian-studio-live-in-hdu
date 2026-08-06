@@ -35,8 +35,10 @@ const groups = computed(() => {
       aria-modal="true"
       aria-labelledby="catalog-title"
       data-role="question-catalog"
+      data-surface="cinematic-sheet"
       tabindex="-1"
     >
+      <span class="sheet-grab-handle" aria-hidden="true" />
       <header>
         <h2 id="catalog-title">全部问题</h2>
         <button type="button" aria-label="关闭全部问题" @click="$emit('close')">关闭</button>

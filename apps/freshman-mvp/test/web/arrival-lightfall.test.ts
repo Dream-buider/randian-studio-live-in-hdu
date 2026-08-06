@@ -99,6 +99,10 @@ describe('ArrivalLightfall', () => {
     expect(ogl.programUniforms?.uSpeed?.value).toBe(0.18);
     expect(ogl.programUniforms?.uIntensity?.value).toBe(0.9);
     expect(ogl.programUniforms?.uPulse?.value).toBe(0.26);
+    expect(ogl.programUniforms?.uConvergence?.value).toBe(0.72);
+    expect(ogl.programUniforms?.uHorizon?.value).toBe(0.16);
+    expect(ogl.programUniforms?.uWarmth?.value).toBe(0.68);
+    expect(ogl.programUniforms?.uExposure?.value).toBe(0.22);
 
     wrapper.unmount();
   });
