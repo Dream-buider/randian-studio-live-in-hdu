@@ -525,11 +525,14 @@ button:disabled {
 
 .brand-header {
   display: flex;
+  flex: 1 1 auto;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 
 .brand-header img {
+  flex: 0 0 auto;
   width: 40px;
   height: 40px;
   object-fit: contain;
@@ -538,6 +541,7 @@ button:disabled {
 .brand-header > div {
   display: grid;
   gap: 3px;
+  min-width: 0;
 }
 
 .brand-header strong {
@@ -554,10 +558,37 @@ button:disabled {
   font-size: 0.92rem;
 }
 
+.brand-header span {
+  display: block;
+  font-size: clamp(0.72rem, 3vw, 0.88rem);
+  white-space: nowrap;
+}
+
 .deck-header-actions {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+}
+
+.deck-header-actions > * {
+  flex: 0 0 auto;
+  min-width: 0;
+  padding-inline: 10px;
+  font-size: clamp(0.8rem, 3.2vw, 0.92rem);
+  white-space: nowrap;
+}
+
+@media (max-width: 359px) {
+  .deck-page > header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .deck-header-actions {
+    justify-content: flex-end;
+  }
 }
 
 .ui-preview-notice {
@@ -587,6 +618,30 @@ button:disabled {
   background: var(--surface);
   font-weight: 650;
   text-decoration: none;
+}
+
+@media (max-width: 420px) {
+  .deck-page > header {
+    gap: 8px;
+  }
+
+  .deck-page .brand-header {
+    gap: 8px;
+  }
+
+  .deck-page .brand-header img {
+    width: 36px;
+    height: 36px;
+  }
+
+  .deck-page .brand-header span {
+    font-size: 0.72rem;
+  }
+
+  .deck-page .deck-header-actions > * {
+    padding-inline: 6px;
+    font-size: 0.78rem;
+  }
 }
 
 [data-role="deck-surface"] {
@@ -701,8 +756,7 @@ button:disabled {
 }
 
 .source-list ul {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 8px;
   margin: 0;
   padding: 0;
@@ -710,9 +764,11 @@ button:disabled {
 }
 
 .source-list li {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: start;
+  column-gap: 8px;
+  width: 100%;
 }
 
 .source-type {
@@ -722,6 +778,18 @@ button:disabled {
   background: #e7f4f7;
   font-size: 0.75rem;
   font-weight: 750;
+  white-space: nowrap;
+}
+
+.source-list li > a,
+.source-list li > span:not(.source-type) {
+  min-width: 0;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.source-list li > .source-hostname {
+  grid-column: 2;
 }
 
 .source-list a,

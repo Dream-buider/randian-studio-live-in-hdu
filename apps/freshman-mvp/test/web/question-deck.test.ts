@@ -84,6 +84,16 @@ describe('question deck', () => {
     expect(sourceTargetRule).toContain('min-height: 44px;');
   });
 
+  it('keeps mobile deck labels on one line and gives source titles a fluid column', () => {
+    expect(cssRule('.brand-header span')).toContain('white-space: nowrap;');
+    expect(cssRule('.deck-header-actions > *')).toContain('white-space: nowrap;');
+
+    const sourceItemRule = cssRule('.source-list li');
+    expect(sourceItemRule).toContain('display: grid;');
+    expect(sourceItemRule).toContain('grid-template-columns: max-content minmax(0, 1fr);');
+    expect(cssRule('.source-type')).toContain('white-space: nowrap;');
+  });
+
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
