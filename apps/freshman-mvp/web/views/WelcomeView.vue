@@ -51,31 +51,33 @@ onUnmounted(() => {
       </div>
     </header>
 
-    <section class="welcome-copy">
-      <h1 v-if="!countdown.complete">距离开学，还有</h1>
-      <h1 v-else role="status">开学啦</h1>
-    </section>
+    <section class="welcome-stage">
+      <section class="welcome-copy">
+        <h1 v-if="!countdown.complete">距离开学，还有</h1>
+        <h1 v-else role="status">开学啦</h1>
+      </section>
 
-    <section class="countdown-grid" role="timer" :aria-label="timerLabel">
-      <div class="countdown-card" data-unit="days">
-        <strong data-role="value">{{ countdown.days }}</strong>
-        <span>天</span>
-      </div>
-      <i aria-hidden="true">:</i>
-      <div class="countdown-card" data-unit="hours">
-        <strong data-role="value">{{ twoDigits(countdown.hours) }}</strong>
-        <span>时</span>
-      </div>
-      <i aria-hidden="true">:</i>
-      <div class="countdown-card" data-unit="minutes">
-        <strong data-role="value">{{ twoDigits(countdown.minutes) }}</strong>
-        <span>分</span>
-      </div>
-      <i aria-hidden="true">:</i>
-      <div class="countdown-card countdown-card-seconds" data-unit="seconds">
-        <strong :key="countdown.seconds" data-role="value">{{ twoDigits(countdown.seconds) }}</strong>
-        <span>秒</span>
-      </div>
+      <section class="countdown-grid" role="timer" :aria-label="timerLabel">
+        <div class="countdown-card" data-unit="days">
+          <strong data-role="value">{{ countdown.days }}</strong>
+          <span>天</span>
+        </div>
+        <i aria-hidden="true">:</i>
+        <div class="countdown-card" data-unit="hours">
+          <strong data-role="value">{{ twoDigits(countdown.hours) }}</strong>
+          <span>时</span>
+        </div>
+        <i aria-hidden="true">:</i>
+        <div class="countdown-card" data-unit="minutes">
+          <strong data-role="value">{{ twoDigits(countdown.minutes) }}</strong>
+          <span>分</span>
+        </div>
+        <i aria-hidden="true">:</i>
+        <div class="countdown-card countdown-card-seconds" data-unit="seconds">
+          <strong :key="countdown.seconds" data-role="value">{{ twoDigits(countdown.seconds) }}</strong>
+          <span>秒</span>
+        </div>
+      </section>
     </section>
 
     <footer class="welcome-footer">
@@ -106,9 +108,9 @@ onUnmounted(() => {
   position: relative;
   isolation: isolate;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   width: min(100%, 430px);
-  min-height: 100vh;
+  min-height: 100svh;
   min-height: 100dvh;
   margin: 0 auto;
   overflow: hidden;
@@ -304,11 +306,18 @@ onUnmounted(() => {
   box-shadow: 0 0 8px 2px rgb(255 183 90 / 46%);
 }
 
-.welcome-copy {
+.welcome-stage {
   position: relative;
   z-index: 4;
-  align-self: end;
-  margin-bottom: clamp(18px, 3dvh, 28px);
+  display: grid;
+  align-self: center;
+  gap: clamp(16px, 3dvh, 30px);
+  width: 100%;
+  padding-block: clamp(20px, 5dvh, 58px);
+}
+
+.welcome-copy {
+  margin: 0;
   animation: reveal-copy 720ms 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
@@ -443,7 +452,7 @@ onUnmounted(() => {
 .welcome-footer {
   position: relative;
   z-index: 5;
-  padding-top: clamp(132px, 19dvh, 190px);
+  padding-top: clamp(12px, 3dvh, 30px);
   text-align: center;
   animation: reveal-action 760ms 680ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
@@ -645,7 +654,7 @@ onUnmounted(() => {
   }
 
   .welcome-copy {
-    margin-bottom: 13px;
+    margin: 0;
   }
 
   .welcome-copy h1 {
@@ -660,8 +669,9 @@ onUnmounted(() => {
     font-size: clamp(2.1rem, 10.5vw, 2.8rem);
   }
 
-  .welcome-footer {
-    padding-top: clamp(88px, 15dvh, 116px);
+  .welcome-stage {
+    gap: 13px;
+    padding-block: clamp(12px, 2.5dvh, 22px);
   }
 
   .welcome-footer a {

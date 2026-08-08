@@ -75,6 +75,19 @@ describe('WelcomeView', () => {
     wrapper.unmount();
   });
 
+  it('keeps the headline and countdown together in one responsive stage', async () => {
+    const wrapper = await mountWelcome(TARGET - 10_000);
+
+    const stage = wrapper.get('.welcome-stage');
+    expect(stage.find('.welcome-copy').exists()).toBe(true);
+    expect(stage.find('[role="timer"]').exists()).toBe(true);
+    expect(wrapper.get('.welcome-footer').element.parentElement).toBe(
+      wrapper.get('main').element,
+    );
+
+    wrapper.unmount();
+  });
+
   it('keeps the arrival message focused without a duplicate date eyebrow', async () => {
     const wrapper = await mountWelcome(TARGET - 10_000);
 
