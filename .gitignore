@@ -1,3 +1,7 @@
+.env
+.env.*
+!.env.example
+
 node_modules/
 apps/freshman-mvp/node_modules/
 apps/freshman-mvp/dist/
@@ -16,4 +20,5 @@ tmp/
 .playwright-cli/
 .superpowers/
 .worktrees/
+.finesse/
 *.log

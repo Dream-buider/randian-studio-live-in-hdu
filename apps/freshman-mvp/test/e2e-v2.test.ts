@@ -133,6 +133,8 @@ test('full local flow reports honest health, serves SPA routes, and persists rev
 
     for (const { method, url } of [
       { method: 'GET', url: '/' },
+      { method: 'GET', url: '/questions' },
+      { method: 'HEAD', url: '/questions' },
       { method: 'GET', url: '/chat' },
       { method: 'GET', url: '/admin' },
       { method: 'GET', url: '/guide' },

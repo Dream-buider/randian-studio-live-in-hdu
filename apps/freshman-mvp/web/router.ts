@@ -6,6 +6,7 @@ import {
   type RouterHistory,
 } from 'vue-router';
 import QuestionDeckView from './views/QuestionDeckView.vue';
+import WelcomeView from './views/WelcomeView.vue';
 import ChatView from './views/ChatView.vue';
 import GuideView from './views/GuideView.vue';
 
@@ -18,7 +19,8 @@ export function createAppRouter(
   options: AppRouterOptions = {},
 ): Router {
   const routes: RouteRecordRaw[] = [
-    { path: '/', name: 'deck', component: QuestionDeckView },
+    { path: '/', name: 'welcome', component: WelcomeView },
+    { path: '/questions', name: 'deck', component: QuestionDeckView },
     { path: '/chat', name: 'chat', component: ChatView },
     { path: '/guide', name: 'guide', component: GuideView },
   ];

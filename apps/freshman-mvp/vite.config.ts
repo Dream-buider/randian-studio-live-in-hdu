@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 
+export const API_PROXY_KEY = '^/api(?:/|$)';
+
 export default defineConfig(({ mode }) => {
   const testMode = mode === 'test';
   const publicTrialMode = mode === 'public-trial';
@@ -15,6 +17,6 @@ export default defineConfig(({ mode }) => {
           : '../dist/client',
       emptyOutDir: true,
     },
-    server: { proxy: { '/api': 'http://localhost:3210' } },
+    server: { proxy: { [API_PROXY_KEY]: 'http://localhost:3210' } },
   };
 });

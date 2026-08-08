@@ -12,10 +12,17 @@ import BrandHeader from '../components/BrandHeader.vue';
 import QuestionCard from '../components/QuestionCard.vue';
 import QuestionCatalog from '../components/QuestionCatalog.vue';
 
+const props = withDefaults(defineProps<{ uiPreview?: boolean }>(), {
+  uiPreview: import.meta.env.MODE === 'ui-preview',
+});
+
 const STORAGE_KEY = 'live-in-hdu:current-question-id';
+type TransitionDirection = 'next' | 'previous' | 'direct';
+
 const router = inject<Router | null>(routerKey, null);
 const questions = ref<PublishedQuestion[]>([]);
 const currentIndex = ref(0);
+const transitionDirection = ref<TransitionDirection>('next');
 const catalogOpen = ref(false);
 const askOpen = ref(false);
 const touchStartX = ref<number | null>(null);
@@ -36,12 +43,14 @@ const progress = computed(() => {
 
 function next(): void {
   if (currentIndex.value < questions.value.length - 1) {
+    transitionDirection.value = 'next';
     selectIndex(currentIndex.value + 1);
   }
 }
 
 function previous(): void {
   if (currentIndex.value > 0) {
+    transitionDirection.value = 'previous';
     selectIndex(currentIndex.value - 1);
   }
 }
@@ -57,6 +66,7 @@ function selectIndex(index: number): void {
 function selectQuestion(id: string): void {
   const index = questions.value.findIndex((question) => question.id === id);
   if (index >= 0) {
+    transitionDirection.value = 'direct';
     selectIndex(index);
     catalogOpen.value = false;
   }
@@ -124,7 +134,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <main class="deck-page">
+  <main class="deck-page" data-theme="randian-dawn">
     <header>
       <div>
         <BrandHeader subtitle="杭电新生问答与指北" />
@@ -142,6 +152,9 @@ onMounted(async () => {
         </button>
       </div>
     </header>
+    <aside v-if="props.uiPreview" class="ui-preview-notice" data-role="ui-preview-notice">
+      当前为 UI 设计预览，问题与回答均为模拟内容，不代表正式发布数据。
+    </aside>
     <p v-if="loading" role="status">正在加载新生问题…</p>
     <section v-else-if="loadFailed" class="state-card" role="alert">
       <h1>问题列表暂时加载失败</h1>
@@ -155,6 +168,7 @@ onMounted(async () => {
     <div
       v-if="current"
       data-role="deck-surface"
+      :data-direction="transitionDirection"
       @touchstart.passive="onTouchStart"
       @touchend.passive="onTouchEnd"
     >

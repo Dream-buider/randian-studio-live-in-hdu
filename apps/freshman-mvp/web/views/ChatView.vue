@@ -110,7 +110,7 @@ function returnToDeck(): void {
 </script>
 
 <template>
-  <main class="chat-page">
+  <main class="chat-page" data-theme="randian-dawn">
     <header>
       <button type="button" data-action="return-deck" @click="returnToDeck">
         返回问题卡
@@ -135,7 +135,7 @@ function returnToDeck(): void {
       <p>没有显示不完整的结果，请稍后重新尝试。</p>
       <button type="button" data-action="retry-answer" @click="loadAnswer">重新获取回答</button>
     </section>
-    <section v-else-if="result" class="answer-card" aria-live="polite">
+    <section v-else-if="result" class="answer-card" data-role="answer-stage" aria-live="polite">
       <SourceBadge :status="result.trustStatus" />
       <p>{{ result.answer }}</p>
       <p v-if="result.route === 'web'" class="disclaimer">{{ result.disclaimer }}</p>

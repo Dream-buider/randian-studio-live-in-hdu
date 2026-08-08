@@ -160,6 +160,8 @@ test('public trial issues a secure session and serves only the user frontend', a
 
     for (const { method, url } of [
       { method: 'GET', url: '/' },
+      { method: 'GET', url: '/questions' },
+      { method: 'HEAD', url: '/questions' },
       { method: 'GET', url: '/chat' },
       { method: 'GET', url: '/guide' },
       { method: 'HEAD', url: '/guide' },
