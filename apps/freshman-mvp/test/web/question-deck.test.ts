@@ -503,9 +503,12 @@ describe('question deck', () => {
     await flushPromises();
 
     expect(router.currentRoute.value.path).toBe('/chat');
-    expect(wrapper.text()).toContain('参考问题');
-    expect(wrapper.text()).toContain('第 4 个新生问题是什么？');
-    expect(wrapper.text()).toContain('社区资料建议以当年宿管通知为准。');
+    const userMessage = wrapper.get('[data-role="user-message"]');
+    expect(userMessage.text()).toContain('宿舍晚上几点熄灯？');
+    expect(wrapper.text()).not.toContain('参考问题');
+    expect(wrapper.text()).not.toContain('第 4 个新生问题是什么？');
+    expect(wrapper.get('[data-role="answer-stage"]').text())
+      .toContain('社区资料建议以当年宿管通知为准。');
     expect(wrapper.text()).toContain('社区知识库');
     expect(wrapper.text()).toContain('宿舍生活说明');
     const storedRequest = JSON.parse(
@@ -657,7 +660,12 @@ describe('question deck', () => {
     const wrapper = mount(App, { global: { plugins: [router] } });
 
     expect(wrapper.get('main.chat-page').attributes('data-theme')).toBe('randian-dawn');
-    expect(wrapper.text()).toContain('正在整理回答');
+    expect(wrapper.get('[data-role="user-message"]').text()).toContain('一个未命中的问题');
+    const thinking = wrapper.get('[data-role="assistant-thinking"]');
+    expect(thinking.attributes('role')).toBe('status');
+    expect(thinking.attributes('aria-label')).toBe('AI 正在整理回复');
+    expect(thinking.text()).toContain('正在整理回复');
+    expect(thinking.findAll('[data-role="thinking-dot"]')).toHaveLength(3);
     resolveFirst(jsonResponse({
       route: 'web',
       trustStatus: 'web-unverified',
@@ -672,7 +680,8 @@ describe('question deck', () => {
     expect(wrapper.text()).not.toContain('provider-secret-diagnostic');
     await wrapper.get('[data-action="retry-answer"]').trigger('click');
     await flushPromises();
-    expect(wrapper.text()).toContain('已审核的补充回答。');
+    expect(wrapper.find('[data-role="assistant-thinking"]').exists()).toBe(false);
+    expect(wrapper.get('[data-role="answer-stage"]').text()).toContain('已审核的补充回答。');
     expect(wrapper.text()).toContain('已审核标准答案');
   });
 

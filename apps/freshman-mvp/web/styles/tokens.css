@@ -1063,6 +1063,70 @@ button:disabled {
   color: var(--student-muted);
 }
 
+.chat-page[data-theme="randian-dawn"] .chat-thread {
+  display: grid;
+  align-items: start;
+  gap: 16px;
+}
+
+.chat-page[data-theme="randian-dawn"] .chat-message-user {
+  max-width: min(82%, 520px);
+  justify-self: end;
+  padding: 13px 16px;
+  border-radius: 20px 20px 6px 20px;
+  color: #fffaf2;
+  background: var(--student-action);
+  box-shadow: 0 14px 30px -22px rgb(151 67 41 / 76%);
+}
+
+.chat-page[data-theme="randian-dawn"] .chat-message-user p {
+  margin: 0;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.chat-page[data-theme="randian-dawn"] .chat-message-assistant {
+  width: min(92%, 620px);
+  justify-self: start;
+}
+
+.chat-page[data-theme="randian-dawn"] .thinking-message {
+  display: inline-flex;
+  width: auto;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 16px;
+  border: 1px solid var(--student-line);
+  border-radius: 20px 20px 20px 6px;
+  color: var(--student-muted);
+  background: var(--student-surface);
+  animation: chat-thinking-glow 1.8s ease-in-out infinite;
+}
+
+.thinking-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.thinking-dots i {
+  display: block;
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--student-action);
+  animation: chat-thinking-dot 1.1s ease-in-out infinite;
+}
+
+.thinking-dots i:nth-child(2) {
+  animation-delay: 0.16s;
+}
+
+.thinking-dots i:nth-child(3) {
+  animation-delay: 0.32s;
+}
+
 .chat-page[data-theme="randian-dawn"] .context-card,
 .chat-page[data-theme="randian-dawn"] .state-card,
 .chat-page[data-theme="randian-dawn"] .answer-card {
@@ -1990,6 +2054,29 @@ button:disabled {
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes chat-thinking-dot {
+  0%,
+  70%,
+  100% {
+    opacity: 0.28;
+    transform: translateY(0);
+  }
+  35% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes chat-thinking-glow {
+  0%,
+  100% {
+    box-shadow: 0 10px 26px -24px rgb(214 84 61 / 30%);
+  }
+  50% {
+    box-shadow: 0 12px 30px -16px rgb(240 162 58 / 48%);
   }
 }
 

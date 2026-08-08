@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   askQuestion,
@@ -16,14 +16,12 @@ import BrandHeader from '../components/BrandHeader.vue';
 import SourceList from '../components/SourceList.vue';
 
 const router = useRouter();
-const pending = ref<ChatSessionRequest | null>(null);
+const pending = ref<ChatSessionRequest | null>(readChatSessionRequest());
 const result = ref<AnswerResult | null>(null);
 const loading = ref(true);
 const failed = ref(false);
 const requiresExplicitRetry = ref(false);
 let mounted = false;
-
-const context = computed(() => pending.value?.context ?? null);
 
 async function loadAnswer(): Promise<void> {
   if (!pending.value) {
@@ -77,7 +75,6 @@ async function loadAnswer(): Promise<void> {
 
 onMounted(async () => {
   mounted = true;
-  pending.value = readChatSessionRequest();
   if (!pending.value) {
     loading.value = false;
     return;
@@ -118,28 +115,58 @@ function returnToDeck(): void {
       <BrandHeader subtitle="杭电新生问答与指北" />
     </header>
 
-    <section v-if="context" class="context-card">
-      <p class="eyebrow">参考问题</p>
-      <h1>{{ context.question }}</h1>
-      <p v-if="context.category">{{ context.category }}</p>
-    </section>
+    <section v-if="pending" class="chat-thread" data-role="chat-thread">
+      <article
+        class="chat-message chat-message-user"
+        data-role="user-message"
+        aria-label="你的问题"
+      >
+        <p>{{ pending.question }}</p>
+      </article>
 
-    <p v-if="loading" role="status">正在整理回答…</p>
-    <section v-else-if="requiresExplicitRetry" class="state-card" role="alert">
-      <h1>上一次请求可能仍在处理中</h1>
-      <p>为避免重复提交，页面不会自动再次发送；如需继续，请明确重试。</p>
-      <button type="button" data-action="retry-answer" @click="loadAnswer">明确重试</button>
-    </section>
-    <section v-else-if="failed" class="state-card" role="alert">
-      <h1>回答暂时加载失败</h1>
-      <p>没有显示不完整的结果，请稍后重新尝试。</p>
-      <button type="button" data-action="retry-answer" @click="loadAnswer">重新获取回答</button>
-    </section>
-    <section v-else-if="result" class="answer-card" data-role="answer-stage" aria-live="polite">
-      <SourceBadge :status="result.trustStatus" />
-      <p>{{ result.answer }}</p>
-      <p v-if="result.route === 'web'" class="disclaimer">{{ result.disclaimer }}</p>
-      <SourceList :sources="result.sources" heading="参考资料" />
+      <div
+        v-if="loading"
+        class="chat-message chat-message-assistant thinking-message"
+        data-role="assistant-thinking"
+        role="status"
+        aria-label="AI 正在整理回复"
+      >
+        <span>正在整理回复</span>
+        <span class="thinking-dots" aria-hidden="true">
+          <i data-role="thinking-dot"></i>
+          <i data-role="thinking-dot"></i>
+          <i data-role="thinking-dot"></i>
+        </span>
+      </div>
+      <section
+        v-else-if="requiresExplicitRetry"
+        class="state-card chat-message-assistant"
+        role="alert"
+      >
+        <h1>上一次请求可能仍在处理中</h1>
+        <p>为避免重复提交，页面不会自动再次发送；如需继续，请明确重试。</p>
+        <button type="button" data-action="retry-answer" @click="loadAnswer">明确重试</button>
+      </section>
+      <section
+        v-else-if="failed"
+        class="state-card chat-message-assistant"
+        role="alert"
+      >
+        <h1>回答暂时加载失败</h1>
+        <p>没有显示不完整的结果，请稍后重新尝试。</p>
+        <button type="button" data-action="retry-answer" @click="loadAnswer">重新获取回答</button>
+      </section>
+      <section
+        v-else-if="result"
+        class="answer-card chat-message-assistant"
+        data-role="answer-stage"
+        aria-live="polite"
+      >
+        <SourceBadge :status="result.trustStatus" />
+        <p>{{ result.answer }}</p>
+        <p v-if="result.route === 'web'" class="disclaimer">{{ result.disclaimer }}</p>
+        <SourceList :sources="result.sources" heading="参考资料" />
+      </section>
     </section>
     <section v-else class="empty-chat">
       <h1>还没有待发送的问题</h1>
