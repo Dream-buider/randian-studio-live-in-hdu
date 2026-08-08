@@ -45,6 +45,7 @@ describe('WelcomeView', () => {
     const now = TARGET - (((24 + 2) * 60 * 60 + 3 * 60 + 4) * 1000);
     const wrapper = await mountWelcome(now);
 
+    expect(wrapper.get('main').attributes('data-theme')).toBe('randian-dawn');
     expect(wrapper.get('[role="timer"]').attributes('aria-label')).toBe(
       '距离开学还有1天2小时3分4秒',
     );
@@ -54,7 +55,11 @@ describe('WelcomeView', () => {
     expect(wrapper.get('[data-unit="seconds"] [data-role="value"]').text()).toBe('04');
     expect(wrapper.text()).toContain('北京时间 2026.09.16 00:00');
     expect(wrapper.get('.welcome-scene').attributes('aria-hidden')).toBe('true');
+    expect(wrapper.get('.welcome-scene').attributes('data-scene-grade')).toBe('bright-dawn');
     expect(wrapper.get('[data-role="arrival-lightfall"]').attributes('aria-hidden')).toBe('true');
+    expect(wrapper.get('[data-role="cinema-aperture"]').attributes('aria-hidden')).toBe('true');
+    expect(wrapper.findAll('[data-role="film-focus-ring"]')).toHaveLength(3);
+    expect(wrapper.get('[data-role="exposure-horizon"]').attributes('aria-hidden')).toBe('true');
     expect(wrapper.get('.countdown-grid').findAll('.countdown-card')).toHaveLength(4);
 
     wrapper.unmount();

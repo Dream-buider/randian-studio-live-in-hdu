@@ -358,6 +358,10 @@ export interface ListQuestionsOptions {
   fetcher?: typeof fetch;
 }
 
+export interface AskQuestionOptions {
+  fetcher?: typeof fetch;
+}
+
 export function isUiPreviewMode(mode: string): boolean {
   return mode === 'ui-preview';
 }
@@ -368,6 +372,14 @@ async function loadPreviewQuestions(): Promise<PublishedQuestion[]> {
     ...item,
     sources: item.sources.map((source) => ({ ...source })),
   }));
+}
+
+async function loadPreviewAnswer(
+  question: string,
+  context?: QuestionContext,
+): Promise<AnswerResult> {
+  const { createUiPreviewAnswer } = await import('./mock/answers.js');
+  return createUiPreviewAnswer(question, context);
 }
 
 export async function listQuestions(
@@ -398,8 +410,13 @@ export async function askQuestion(
   question: string,
   context?: QuestionContext,
   requestId?: string,
+  options: AskQuestionOptions = {},
 ): Promise<AnswerResult> {
-  const response = await fetch('/api/ask', {
+  if (import.meta.env.MODE === 'ui-preview') {
+    return loadPreviewAnswer(question, context);
+  }
+  const fetcher = options.fetcher ?? fetch;
+  const response = await fetcher('/api/ask', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ question, context, requestId }),

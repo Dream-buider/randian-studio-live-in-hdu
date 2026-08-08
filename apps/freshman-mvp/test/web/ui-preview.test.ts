@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { API_PROXY_KEY } from '../../vite.config.js';
-import { isUiPreviewMode, listQuestions } from '../../web/api.js';
+import {
+  askQuestion,
+  isUiPreviewMode,
+  listQuestions,
+} from '../../web/api.js';
 import { UI_PREVIEW_QUESTIONS } from '../../web/mock/questions.js';
 
 function jsonResponse(body: unknown): Response {
@@ -40,6 +44,33 @@ describe('UI preview boundaries', () => {
     expect(isUiPreviewMode('ui-preview')).toBe(true);
     expect(isUiPreviewMode('production')).toBe(false);
     expect(isUiPreviewMode('test')).toBe(false);
+  });
+
+  it('answers preview questions locally with an explicit simulated-content label', async () => {
+    const fetcher = async (): Promise<Response> => {
+      throw new Error('UI preview must not send a network request');
+    };
+    vi.stubEnv('MODE', 'ui-preview');
+    try {
+      const result = await askQuestion(
+        '宿舍晚上几点熄灯？',
+        {
+          intentId: 'ui-preview-dormitory',
+          question: '宿舍环境怎么样，需要自带哪些生活用品？',
+          category: '宿舍生活',
+        },
+        'ui-preview-request',
+        { fetcher },
+      );
+
+      expect(result.route).toBe('knowledge');
+      expect(result.answer).toContain('UI 测试版');
+      expect(result.answer).toContain('宿舍晚上几点熄灯？');
+      expect(result.sources[0]?.title).toContain('模拟回答');
+      expect(result.sources[0]?.url).toBe('');
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it('keeps production question loading on the real API path', async () => {

@@ -17,9 +17,12 @@ const props = withDefaults(defineProps<{ uiPreview?: boolean }>(), {
 });
 
 const STORAGE_KEY = 'live-in-hdu:current-question-id';
+type TransitionDirection = 'next' | 'previous' | 'direct';
+
 const router = inject<Router | null>(routerKey, null);
 const questions = ref<PublishedQuestion[]>([]);
 const currentIndex = ref(0);
+const transitionDirection = ref<TransitionDirection>('next');
 const catalogOpen = ref(false);
 const askOpen = ref(false);
 const touchStartX = ref<number | null>(null);
@@ -40,12 +43,14 @@ const progress = computed(() => {
 
 function next(): void {
   if (currentIndex.value < questions.value.length - 1) {
+    transitionDirection.value = 'next';
     selectIndex(currentIndex.value + 1);
   }
 }
 
 function previous(): void {
   if (currentIndex.value > 0) {
+    transitionDirection.value = 'previous';
     selectIndex(currentIndex.value - 1);
   }
 }
@@ -61,6 +66,7 @@ function selectIndex(index: number): void {
 function selectQuestion(id: string): void {
   const index = questions.value.findIndex((question) => question.id === id);
   if (index >= 0) {
+    transitionDirection.value = 'direct';
     selectIndex(index);
     catalogOpen.value = false;
   }
@@ -128,7 +134,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <main class="deck-page">
+  <main class="deck-page" data-theme="randian-dawn">
     <header>
       <div>
         <BrandHeader subtitle="杭电新生问答与指北" />
@@ -162,6 +168,7 @@ onMounted(async () => {
     <div
       v-if="current"
       data-role="deck-surface"
+      :data-direction="transitionDirection"
       @touchstart.passive="onTouchStart"
       @touchend.passive="onTouchEnd"
     >

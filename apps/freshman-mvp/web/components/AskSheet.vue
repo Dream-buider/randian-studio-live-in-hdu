@@ -57,8 +57,10 @@ function submit(): void {
       aria-modal="true"
       aria-labelledby="ask-title"
       data-role="ask-sheet"
+      data-surface="cinematic-sheet"
       tabindex="-1"
     >
+      <span class="sheet-grab-handle" aria-hidden="true" />
       <header>
         <div>
           <p class="eyebrow">继续提问</p>
