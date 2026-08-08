@@ -11,16 +11,21 @@ const PNG_BYTES = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
   'base64',
 );
+const WEBP_BYTES = Buffer.from('welcome-webp');
+const WOFF2_BYTES = Buffer.from('arrival-woff2');
 
 async function fixture() {
   const directory = await mkdtemp(path.join(tmpdir(), 'live-in-hdu-public-trial-'));
   const publicDir = path.join(directory, 'public');
   await mkdir(path.join(publicDir, 'assets'), { recursive: true });
   await mkdir(path.join(publicDir, 'brand'), { recursive: true });
+  await mkdir(path.join(publicDir, 'fonts'), { recursive: true });
   await writeFile(path.join(publicDir, 'index.html'), '<main>PUBLIC TRIAL APP</main>');
   await writeFile(path.join(publicDir, 'favicon.svg'), '<svg></svg>');
   await writeFile(path.join(publicDir, 'assets', 'app.js'), 'window.PUBLIC_TRIAL=true;');
   await writeFile(path.join(publicDir, 'brand', 'randian-studio-logo.png'), PNG_BYTES);
+  await writeFile(path.join(publicDir, 'brand', 'campus-dawn-welcome.webp'), WEBP_BYTES);
+  await writeFile(path.join(publicDir, 'fonts', 'hdu-arrival-display.woff2'), WOFF2_BYTES);
   const calls: Array<{ url: string; init?: RequestInit }> = [];
   const fetch: typeof globalThis.fetch = async (input, init) => {
     calls.push({ url: String(input), init });
@@ -196,6 +201,37 @@ test('public trial issues a secure session and serves only the user frontend', a
       }
     }
 
+    for (const expected of [
+      {
+        url: '/brand/campus-dawn-welcome.webp',
+        contentType: 'image/webp',
+        body: WEBP_BYTES,
+      },
+      {
+        url: '/fonts/hdu-arrival-display.woff2',
+        contentType: 'font/woff2',
+        body: WOFF2_BYTES,
+      },
+    ]) {
+      for (const method of ['GET', 'HEAD'] as const) {
+        const response = await app.inject({
+          method,
+          url: expected.url,
+          headers: { cookie },
+        });
+        assert.equal(response.statusCode, 200, `${method} ${expected.url}`);
+        assert.match(
+          String(response.headers['content-type']),
+          new RegExp(`^${expected.contentType}(?:;|$)`, 'u'),
+        );
+        if (method === 'GET') {
+          assert.deepEqual(response.rawPayload, expected.body);
+        } else {
+          assert.equal(response.rawPayload.length, 0);
+        }
+      }
+    }
+
     const logout = await app.inject({
       method: 'POST',
       url: '/trial/logout',
@@ -259,6 +295,7 @@ test('public trial returns 404 for every management, health and unknown route wi
       '/unknown',
       '/assets/../index.html',
       '/brand/other.png',
+      '/fonts/other.woff2',
       '/brand/randian-studio-logo.png/admin',
     ]) {
       const response = await app.inject({ method: 'GET', url, headers: { cookie } });

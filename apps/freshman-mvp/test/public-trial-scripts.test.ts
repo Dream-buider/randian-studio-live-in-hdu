@@ -48,7 +48,7 @@ test('public trial startup builds only isolated server and trial-client artifact
   assert.deepEqual(plan.buildScripts, ['build:server', 'build:trial']);
 });
 
-test('public trial verifier requires the authenticated guide and exact logo routes', async () => {
+test('public trial verifier requires the authenticated guide and exact welcome assets', async () => {
   const requests: string[] = [];
   const server = createServer((request, response) => {
     const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
@@ -65,6 +65,14 @@ test('public trial verifier requires the authenticated guide and exact logo rout
     }
     if (pathname === '/brand/randian-studio-logo.png') {
       response.writeHead(200, { 'Content-Type': 'image/png' }).end('png');
+      return;
+    }
+    if (pathname === '/brand/campus-dawn-welcome.webp') {
+      response.writeHead(200, { 'Content-Type': 'image/webp' }).end('webp');
+      return;
+    }
+    if (pathname === '/fonts/hdu-arrival-display.woff2') {
+      response.writeHead(200, { 'Content-Type': 'font/woff2' }).end('woff2');
       return;
     }
     response.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
@@ -103,6 +111,14 @@ test('public trial verifier requires the authenticated guide and exact logo rout
     assert.ok(
       requests.includes('/brand/randian-studio-logo.png'),
       'authenticated logo route was not verified',
+    );
+    assert.ok(
+      requests.includes('/brand/campus-dawn-welcome.webp'),
+      'authenticated welcome background route was not verified',
+    );
+    assert.ok(
+      requests.includes('/fonts/hdu-arrival-display.woff2'),
+      'authenticated welcome font route was not verified',
     );
   } finally {
     await new Promise<void>((resolve, reject) => server.close((error) => (

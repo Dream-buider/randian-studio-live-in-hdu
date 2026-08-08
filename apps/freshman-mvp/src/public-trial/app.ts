@@ -40,6 +40,13 @@ const NOT_FOUND = {
   error: { code: 'NOT_FOUND', message: 'Route not found' },
 };
 
+const PUBLIC_FILE_ROUTES: Readonly<Record<string, readonly string[]>> = {
+  '/favicon.svg': ['favicon.svg'],
+  '/brand/randian-studio-logo.png': ['brand', 'randian-studio-logo.png'],
+  '/brand/campus-dawn-welcome.webp': ['brand', 'campus-dawn-welcome.webp'],
+  '/fonts/hdu-arrival-display.woff2': ['fonts', 'hdu-arrival-display.woff2'],
+};
+
 function validSession(
   request: FastifyRequest,
   config: PublicTrialConfig,
@@ -261,29 +268,21 @@ export function createPublicTrialApp(
     });
   }
 
-  app.get('/favicon.svg', async (request, reply) => {
-    if (!requireBrowserSession(request, reply, deps.config, now())) {
-      return;
-    }
-    await sendFile(reply, path.resolve(deps.config.publicDir, 'favicon.svg'));
-  });
-
-  app.get('/brand/randian-studio-logo.png', async (request, reply) => {
-    if (!requireBrowserSession(request, reply, deps.config, now())) {
-      return;
-    }
-    try {
-      await sendFile(
-        reply,
-        path.resolve(deps.config.publicDir, 'brand', 'randian-studio-logo.png'),
-      );
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        return reply.code(404).send(NOT_FOUND);
+  for (const [route, relativePath] of Object.entries(PUBLIC_FILE_ROUTES)) {
+    app.get(route, async (request, reply) => {
+      if (!requireBrowserSession(request, reply, deps.config, now())) {
+        return;
       }
-      throw error;
-    }
-  });
+      try {
+        await sendFile(reply, path.resolve(deps.config.publicDir, ...relativePath));
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          return reply.code(404).send(NOT_FOUND);
+        }
+        throw error;
+      }
+    });
+  }
 
   app.get<{ Params: { '*': string } }>('/assets/*', async (request, reply) => {
     if (!requireBrowserSession(request, reply, deps.config, now())) {

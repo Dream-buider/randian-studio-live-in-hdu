@@ -160,6 +160,14 @@ $root = Invoke-StatusRequest -Method GET -Path '/' -Headers $headers
 $guide = Invoke-StatusRequest -Method GET -Path '/guide' -Headers $headers
 $chat = Invoke-StatusRequest -Method GET -Path '/chat' -Headers $headers
 $logo = Invoke-StatusRequest -Method GET -Path '/brand/randian-studio-logo.png' -Headers $headers
+$background = Invoke-StatusRequest `
+    -Method GET `
+    -Path '/brand/campus-dawn-welcome.webp' `
+    -Headers $headers
+$font = Invoke-StatusRequest `
+    -Method GET `
+    -Path '/fonts/hdu-arrival-display.woff2' `
+    -Headers $headers
 $questions = Invoke-StatusRequest -Method GET -Path '/api/questions' -Headers $jsonHeaders
 $ask = Invoke-StatusRequest `
     -Method POST `
@@ -175,13 +183,19 @@ foreach ($path in @('/admin', '/api/admin/intents', '/api/reviews', '/api/health
         throw "受限路径没有返回 404：$path"
     }
 }
-foreach ($result in @($root, $guide, $chat, $logo, $questions, $ask)) {
+foreach ($result in @($root, $guide, $chat, $logo, $background, $font, $questions, $ask)) {
     if ([int]$result.StatusCode -ne 200) {
         throw '一个允许的公网内测请求没有返回 200。'
     }
 }
 if ([string]$logo.ContentType -ne 'image/png') {
     throw '燃点工作室 Logo 没有返回 image/png。'
+}
+if ([string]$background.ContentType -ne 'image/webp') {
+    throw '初始化页背景图没有返回 image/webp。'
+}
+if ([string]$font.ContentType -ne 'font/woff2') {
+    throw '初始化页字体没有返回 font/woff2。'
 }
 
 [ordered]@{
@@ -191,6 +205,8 @@ if ([string]$logo.ContentType -ne 'image/png') {
     guide = [int]$guide.StatusCode
     chat = [int]$chat.StatusCode
     logo = [int]$logo.StatusCode
+    background = [int]$background.StatusCode
+    font = [int]$font.StatusCode
     questions = [int]$questions.StatusCode
     ask = [int]$ask.StatusCode
     blocked = $blocked
