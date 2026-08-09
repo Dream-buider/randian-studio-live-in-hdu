@@ -141,16 +141,30 @@ function firstSentenceUnits(content: string): string {
 
 function deterministicGuideAnswer(hits: readonly KnowledgeHit[]): GuideAnswer | null {
   const selected: KnowledgeHit[] = [];
-  const excerpts: string[] = [];
+  const parts: string[] = [];
+  let remainingCodePoints = 700;
   for (const hit of hits.slice(0, 3)) {
     const excerpt = firstSentenceUnits(hit.content);
     if (excerpt.length === 0) {
       continue;
     }
+    const separator = parts.length > 0 ? '\n\n' : '';
+    const availableCodePoints = remainingCodePoints - Array.from(separator).length;
+    if (availableCodePoints <= 0) {
+      break;
+    }
+    const contribution = Array.from(excerpt).slice(0, availableCodePoints).join('');
+    if (contribution.length === 0) {
+      break;
+    }
+    parts.push(`${separator}${contribution}`);
     selected.push(hit);
-    excerpts.push(excerpt);
+    remainingCodePoints -= Array.from(separator).length + Array.from(contribution).length;
+    if (remainingCodePoints === 0) {
+      break;
+    }
   }
-  const text = Array.from(excerpts.join('\n\n')).slice(0, 700).join('').trim();
+  const text = parts.join('').trim();
   if (text.length === 0) {
     return null;
   }

@@ -239,6 +239,30 @@ test('guide synthesis failure falls back to the first two sentence units from th
   });
 });
 
+test('deterministic guide truncation attributes only hits that contribute Unicode code points', async () => {
+  await withRepositories(async ({ content, reviews }) => {
+    const firstSource = source('杭电新生指北 · 超长片段', 'https://example.test/guide#long');
+    const secondSource = source('杭电新生指北 · 第二片段', 'https://example.test/guide#second');
+    const thirdSource = source('杭电新生指北 · 第三片段', 'https://example.test/guide#third');
+    const router = makeRouter(content, reviews, {
+      model: model({
+        async synthesizeGuide() { throw new Error('model unavailable'); },
+      }),
+      guideKnowledge: availableGuide(
+        guideHit('long', `${'😀'.repeat(700)}。第二句。`, firstSource),
+        guideHit('second', '这个片段不应贡献文本。', secondSource, 1),
+        guideHit('third', '这个片段也不应贡献文本。', thirdSource, 2),
+      ),
+    });
+
+    const result = await router.answer('超长指北问题');
+
+    assert.equal(result.answer, '😀'.repeat(700));
+    assert.equal(Array.from(result.answer).length, 700);
+    assert.deepEqual(result.sources, [firstSource]);
+  });
+});
+
 test('guide synthesis containing a model-generated URL is rejected for deterministic fallback', async () => {
   await withRepositories(async ({ content, reviews }) => {
     const guideSource = source('杭电新生指北 · 报到', 'https://example.test/guide#check-in');
