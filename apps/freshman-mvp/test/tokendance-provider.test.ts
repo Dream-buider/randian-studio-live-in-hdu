@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { ServiceUnavailableError } from '../src/domain/errors.js';
 import { TokenDanceProvider } from '../src/providers/tokendance-provider.js';
 
 type FetchCall = { input: string; init: RequestInit };
@@ -235,4 +236,116 @@ test('TokenDance grounds knowledge synthesis in HDU hits without sending retriev
   }
   assert.match(serialized, /宿舍由学校统一安排/);
   assert.doesNotMatch(serialized, /secret-knowledge-id|secret-chunk-id|sourceType|sequence|score/);
+});
+
+test('TokenDance guide synthesis returns the answer and selected retrieved chunk IDs', async () => {
+  const provider = new TokenDanceProvider({
+    apiKey: 'test-key',
+    fetch: async () => response({
+      choices: [{ message: { content: JSON.stringify({ answer: '先获取学号，再完成钉钉杭电认证。', selectedChunkIds: ['student-id', 'dingtalk'] }) } }],
+    }),
+  });
+  const hits = [
+    {
+      content: '新生可在迎新系统获取学号。', score: 0.95, knowledgeId: 'knowledge-student-id', chunkId: 'student-id', title: '学号获取', sourceType: 'official', sequence: 1,
+      source: { type: 'official', title: '迎新指南', url: 'https://example.test/student-id', updatedAt: null },
+    },
+    {
+      content: '完成钉钉杭电认证后可查看通知。', score: 0.92, knowledgeId: 'knowledge-dingtalk', chunkId: 'dingtalk', title: '钉钉认证', sourceType: 'official', sequence: 2,
+      source: { type: 'official', title: '认证指南', url: 'https://example.test/dingtalk', updatedAt: null },
+    },
+  ];
+
+  const result = await provider.synthesizeGuide({ question: '入学前先做什么？', hits });
+
+  assert.deepEqual(result, {
+    text: '先获取学号，再完成钉钉杭电认证。',
+    selectedChunkIds: ['student-id', 'dingtalk'],
+  });
+});
+
+test('TokenDance guide synthesis filters unknown and duplicate selected chunk IDs', async () => {
+  const provider = new TokenDanceProvider({
+    apiKey: 'test-key',
+    fetch: async () => response({
+      choices: [{ message: { content: '{"answer":"请查看已检索片段。","selectedChunkIds":["known","unknown","known"]}' } }],
+    }),
+  });
+
+  const result = await provider.synthesizeGuide({
+    question: '问题',
+    hits: [{
+      content: '片段内容。', score: 0.8, knowledgeId: 'secret', chunkId: 'known', title: '已知片段', sourceType: 'official', sequence: 1,
+      source: { type: 'official', title: '来源', url: 'https://example.test/known', updatedAt: null },
+    }],
+  });
+
+  assert.deepEqual(result.selectedChunkIds, ['known']);
+});
+
+test('TokenDance guide synthesis rejects answers without a known selected chunk ID', async () => {
+  const provider = new TokenDanceProvider({
+    apiKey: 'test-key',
+    fetch: async () => response({
+      choices: [{ message: { content: '{"answer":"请查看已检索片段。","selectedChunkIds":["unknown"]}' } }],
+    }),
+  });
+
+  await assert.rejects(
+    provider.synthesizeGuide({
+      question: '问题',
+      hits: [{
+        content: '片段内容。', score: 0.8, knowledgeId: 'secret', chunkId: 'known', title: '已知片段', sourceType: 'official', sequence: 1,
+        source: { type: 'official', title: '来源', url: 'https://example.test/known', updatedAt: null },
+      }],
+    }),
+    ServiceUnavailableError,
+  );
+});
+
+test('TokenDance guide synthesis rejects a blank answer', async () => {
+  const provider = new TokenDanceProvider({
+    apiKey: 'test-key',
+    fetch: async () => response({
+      choices: [{ message: { content: '{"answer":" ","selectedChunkIds":["known"]}' } }],
+    }),
+  });
+
+  await assert.rejects(
+    provider.synthesizeGuide({
+      question: '问题',
+      hits: [{
+        content: '片段内容。', score: 0.8, knowledgeId: 'secret', chunkId: 'known', title: '已知片段', sourceType: 'official', sequence: 1,
+        source: { type: 'official', title: '来源', url: 'https://example.test/known', updatedAt: null },
+      }],
+    }),
+    ServiceUnavailableError,
+  );
+});
+
+test('TokenDance guide synthesis sends the model only candidate IDs, titles, and content', async () => {
+  let requestBody: Record<string, unknown> | undefined;
+  const provider = new TokenDanceProvider({
+    apiKey: 'apiKey-that-must-not-enter-the-prompt',
+    fetch: async (_input, init) => {
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return response({
+        choices: [{ message: { content: '{"answer":"请查看片段。","selectedChunkIds":["known"]}' } }],
+      });
+    },
+  });
+
+  await provider.synthesizeGuide({
+    question: '问题',
+    hits: [{
+      content: '片段内容。', score: 0.8, knowledgeId: 'knowledgeId-that-must-not-enter-the-prompt', chunkId: 'known', title: '已知片段', sourceType: 'official', sequence: 1,
+      source: { type: 'official', title: '来源', url: 'https://example.test/known', updatedAt: null },
+    }],
+  });
+
+  const serialized = JSON.stringify(requestBody);
+  assert.doesNotMatch(serialized, /https:\/\//);
+  assert.doesNotMatch(serialized, /knowledgeId/);
+  assert.doesNotMatch(serialized, /score/);
+  assert.doesNotMatch(serialized, /apiKey/);
 });

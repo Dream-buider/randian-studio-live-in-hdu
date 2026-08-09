@@ -56,6 +56,16 @@ export interface KnowledgeSynthesisInput {
   hits: KnowledgeHit[];
 }
 
+export interface GuideSynthesisInput {
+  question: string;
+  hits: KnowledgeHit[];
+}
+
+export interface GuideSynthesisResult {
+  text: string;
+  selectedChunkIds: string[];
+}
+
 export interface ModelAnswer {
   text: string;
   sources: SourceRef[];
@@ -68,6 +78,7 @@ export interface ModelProvider {
   ): Promise<IntentClassification | null>;
   synthesize(input: SynthesisInput): Promise<ModelAnswer>;
   synthesizeKnowledge?(input: KnowledgeSynthesisInput): Promise<ModelAnswer>;
+  synthesizeGuide?(input: GuideSynthesisInput): Promise<GuideSynthesisResult>;
 }
 
 export interface KnowledgeProvider {

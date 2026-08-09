@@ -2,6 +2,8 @@ import { ServiceUnavailableError, ValidationError } from '../domain/errors.js';
 import type { QuestionIntent, SourceRef } from '../domain/models.js';
 import type {
   IntentClassification,
+  GuideSynthesisInput,
+  GuideSynthesisResult,
   KnowledgeSynthesisInput,
   ModelAnswer,
   ModelProvider,
@@ -87,6 +89,46 @@ function classificationFromContent(
     confidence: parsed.confidence,
     reason: parsed.reason,
   };
+}
+
+function guideSynthesisFromContent(
+  content: string,
+  allowedIds: Set<string>,
+): GuideSynthesisResult | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    return null;
+  }
+  if (
+    typeof parsed !== 'object'
+    || parsed === null
+    || !('answer' in parsed)
+    || !('selectedChunkIds' in parsed)
+    || typeof parsed.answer !== 'string'
+    || !Array.isArray(parsed.selectedChunkIds)
+    || !parsed.selectedChunkIds.every((id) => typeof id === 'string')
+  ) {
+    return null;
+  }
+  const text = parsed.answer.trim();
+  if (text.length === 0) {
+    return null;
+  }
+  const selectedChunkIds: string[] = [];
+  for (const id of parsed.selectedChunkIds) {
+    if (allowedIds.has(id) && !selectedChunkIds.includes(id)) {
+      selectedChunkIds.push(id);
+      if (selectedChunkIds.length === 3) {
+        break;
+      }
+    }
+  }
+  if (selectedChunkIds.length === 0) {
+    return null;
+  }
+  return { text, selectedChunkIds };
 }
 
 export class TokenDanceProvider implements ModelProvider {
@@ -281,5 +323,37 @@ export class TokenDanceProvider implements ModelProvider {
       throw new ServiceUnavailableError('TokenDance returned an empty answer');
     }
     return { text, sources: [] };
+  }
+
+  async synthesizeGuide(input: GuideSynthesisInput): Promise<GuideSynthesisResult> {
+    const result = guideSynthesisFromContent(
+      await this.complete([
+        {
+          role: 'system',
+          content: [
+            '你是杭州电子科技大学新生答疑助手。',
+            '只能使用输入片段，不得补充其他学校或未给出的杭电事实。',
+            '不得输出 URL。',
+            '必须返回单个 JSON 对象：{"answer":"简洁中文回答","selectedChunkIds":["candidate-id"]}。',
+          ].join(''),
+        },
+        {
+          role: 'user',
+          content: JSON.stringify({
+            question: input.question,
+            candidates: input.hits.map(({ chunkId, title, content }) => ({
+              id: chunkId,
+              title,
+              content,
+            })),
+          }),
+        },
+      ], 900),
+      new Set(input.hits.map((hit) => hit.chunkId)),
+    );
+    if (result === null) {
+      throw new ServiceUnavailableError('TokenDance returned an invalid guide synthesis');
+    }
+    return result;
   }
 }
