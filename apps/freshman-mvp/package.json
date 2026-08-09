@@ -14,7 +14,8 @@
     "start:trial": "node --preserve-symlinks --preserve-symlinks-main dist/public-trial/index.js",
     "test": "tsx --test test/*.test.ts",
     "test:web": "vitest run test/web",
-    "test:all": "npm test && npm run test:web"
+    "test:all": "npm test && npm run test:web",
+    "verify:guide": "tsx scripts/verify-freshman-guide.mts"
   },
   "dependencies": {
     "@fastify/static": "^8",
