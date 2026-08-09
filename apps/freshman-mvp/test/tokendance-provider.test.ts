@@ -323,6 +323,50 @@ test('TokenDance guide synthesis rejects a blank answer', async () => {
   );
 });
 
+test('TokenDance guide synthesis rejects answers containing HTTP URLs case-insensitively', async (t) => {
+  for (const url of ['HTTP://example.test/guide', 'HTTPS://example.test/guide']) {
+    await t.test(url, async () => {
+      const provider = new TokenDanceProvider({
+        apiKey: 'test-key',
+        fetch: async () => response({
+          choices: [{ message: { content: JSON.stringify({ answer: `请访问 ${url}。`, selectedChunkIds: ['known'] }) } }],
+        }),
+      });
+
+      await assert.rejects(
+        provider.synthesizeGuide({
+          question: '问题',
+          hits: [{
+            content: '片段内容。', score: 0.8, knowledgeId: 'secret', chunkId: 'known', title: '已知片段', sourceType: 'official', sequence: 1,
+            source: { type: 'official', title: '来源', url: 'https://example.test/known', updatedAt: null },
+          }],
+        }),
+        ServiceUnavailableError,
+      );
+    });
+  }
+});
+
+test('TokenDance guide synthesis rejects malformed JSON responses', async () => {
+  const provider = new TokenDanceProvider({
+    apiKey: 'test-key',
+    fetch: async () => response({
+      choices: [{ message: { content: 'not JSON' } }],
+    }),
+  });
+
+  await assert.rejects(
+    provider.synthesizeGuide({
+      question: '问题',
+      hits: [{
+        content: '片段内容。', score: 0.8, knowledgeId: 'secret', chunkId: 'known', title: '已知片段', sourceType: 'official', sequence: 1,
+        source: { type: 'official', title: '来源', url: 'https://example.test/known', updatedAt: null },
+      }],
+    }),
+    ServiceUnavailableError,
+  );
+});
+
 test('TokenDance guide synthesis sends the model only candidate IDs, titles, and content', async () => {
   let requestBody: Record<string, unknown> | undefined;
   const provider = new TokenDanceProvider({

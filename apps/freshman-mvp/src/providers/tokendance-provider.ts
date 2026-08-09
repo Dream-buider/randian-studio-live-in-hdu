@@ -113,7 +113,7 @@ function guideSynthesisFromContent(
     return null;
   }
   const text = parsed.answer.trim();
-  if (text.length === 0) {
+  if (text.length === 0 || /https?:\/\//i.test(text)) {
     return null;
   }
   const selectedChunkIds: string[] = [];
