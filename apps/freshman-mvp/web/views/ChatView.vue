@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   askQuestion,
   type AnswerResult,
+  type SourceRef,
 } from '../api.js';
 import {
   readChatSessionRequest,
@@ -22,6 +23,29 @@ const loading = ref(true);
 const failed = ref(false);
 const requiresExplicitRetry = ref(false);
 let mounted = false;
+
+function isGuideSource(source: SourceRef): boolean {
+  return source.type === 'community' && source.title.includes('新生指北');
+}
+
+function dedupeSources(sources: SourceRef[]): SourceRef[] {
+  const unique = new Map<string, SourceRef>();
+  for (const source of sources) {
+    const key = JSON.stringify([source.type, source.title, source.url]);
+    if (!unique.has(key)) {
+      unique.set(key, source);
+    }
+  }
+  return [...unique.values()];
+}
+
+const guideSources = computed(() => dedupeSources(
+  result.value?.sources.filter(isGuideSource) ?? [],
+).slice(0, 3));
+
+const otherSources = computed(() => dedupeSources(
+  result.value?.sources.filter((source) => !isGuideSource(source)) ?? [],
+));
 
 async function loadAnswer(): Promise<void> {
   if (!pending.value) {
@@ -165,7 +189,8 @@ function returnToDeck(): void {
         <SourceBadge :status="result.trustStatus" />
         <p>{{ result.answer }}</p>
         <p v-if="result.route === 'web'" class="disclaimer">{{ result.disclaimer }}</p>
-        <SourceList :sources="result.sources" heading="参考资料" />
+        <SourceList :sources="guideSources" heading="继续阅读《杭电新生指北》" />
+        <SourceList :sources="otherSources" heading="参考资料" />
       </section>
     </section>
     <section v-else class="empty-chat">
