@@ -30,7 +30,7 @@ test('freshman guide sources use a section deep link, root fallback, or no match
     resolveFreshmanGuideSource('杭电新生指北', '国家助学金申请以学校当年通知为准。'),
     {
       type: 'community',
-      title: '杭电新生指北',
+      title: '杭电新生指北 · 助学政策',
       url: FRESHMAN_GUIDE_URL,
       updatedAt: '2026-07-30',
     },
