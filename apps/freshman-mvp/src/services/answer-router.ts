@@ -1,5 +1,5 @@
 import { ServiceUnavailableError } from '../domain/errors.js';
-import type { AnswerResult } from '../domain/models.js';
+import type { AnswerResult, SourceRef } from '../domain/models.js';
 import type {
   KnowledgeProviderResult,
   KnowledgeHit,
@@ -95,6 +95,88 @@ function normalizedKnowledge(
   return { answer, sources, hits };
 }
 
+interface GuideAnswer {
+  text: string;
+  sources: SourceRef[];
+}
+
+function normalizedGuideHits(value: KnowledgeProviderResult): KnowledgeHit[] {
+  if (!isKnowledgeSearchResult(value) || value.status !== 'available') {
+    return [];
+  }
+  return value.hits
+    .map((hit) => ({
+      ...hit,
+      chunkId: hit.chunkId.trim(),
+      content: hit.content.trim(),
+      title: hit.title.trim(),
+    }))
+    .filter((hit) => hit.chunkId.length > 0 && hit.content.length > 0);
+}
+
+function guideSources(hits: readonly KnowledgeHit[]): SourceRef[] {
+  const seen = new Set<string>();
+  const sources: SourceRef[] = [];
+  for (const hit of hits) {
+    const key = `${hit.source.title}\0${hit.source.url}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    sources.push(hit.source);
+    if (sources.length === 3) {
+      break;
+    }
+  }
+  return sources;
+}
+
+function firstSentenceUnits(content: string): string {
+  return (content.match(/[^。！？；]+[。！？；]?/gu) ?? [])
+    .map((unit) => unit.trim())
+    .filter((unit) => unit.length > 0)
+    .slice(0, 2)
+    .join('');
+}
+
+function deterministicGuideAnswer(hits: readonly KnowledgeHit[]): GuideAnswer | null {
+  const selected: KnowledgeHit[] = [];
+  const excerpts: string[] = [];
+  for (const hit of hits.slice(0, 3)) {
+    const excerpt = firstSentenceUnits(hit.content);
+    if (excerpt.length === 0) {
+      continue;
+    }
+    selected.push(hit);
+    excerpts.push(excerpt);
+  }
+  const text = Array.from(excerpts.join('\n\n')).slice(0, 700).join('').trim();
+  if (text.length === 0) {
+    return null;
+  }
+  return { text, sources: guideSources(selected) };
+}
+
+function mergePresetAndGuideSources(
+  presetSources: readonly SourceRef[],
+  guideAnswerSources: readonly SourceRef[],
+): SourceRef[] {
+  const seen = new Set(presetSources.map((source) => `${source.title}\0${source.url}`));
+  const additions: SourceRef[] = [];
+  for (const source of guideAnswerSources) {
+    const key = `${source.title}\0${source.url}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    additions.push(source);
+    if (additions.length === 3) {
+      break;
+    }
+  }
+  return [...presetSources, ...additions];
+}
+
 function deterministicFallback(search: WebSearchResult): ModelAnswer {
   const items = usableSearchItems(search);
   if (items.length > 0) {
@@ -150,6 +232,7 @@ interface AnswerRouterDependencies {
   content: ContentRepository;
   reviews: ReviewRepository;
   intentMatcher: IntentMatcher;
+  guideKnowledge?: KnowledgeProvider;
   knowledge: KnowledgeProvider;
   search: SearchProvider;
   model: ModelProvider;
@@ -163,6 +246,51 @@ export class AnswerRouter {
     this.deps = deps;
   }
 
+  private async resolveGuideAnswer(question: string): Promise<GuideAnswer | null> {
+    if (!this.deps.guideKnowledge) {
+      return null;
+    }
+    let result: KnowledgeProviderResult;
+    try {
+      result = await this.deps.guideKnowledge.search(question);
+    } catch {
+      return null;
+    }
+    const hits = normalizedGuideHits(result);
+    if (hits.length === 0) {
+      return null;
+    }
+
+    if (this.deps.model.synthesizeGuide) {
+      try {
+        const synthesized = await this.deps.model.synthesizeGuide({ question, hits });
+        if (
+          typeof synthesized.text === 'string'
+          && isUsableAnswer(synthesized.text)
+          && !/https?:\/\//iu.test(synthesized.text)
+          && Array.isArray(synthesized.selectedChunkIds)
+        ) {
+          const knownIds = new Set(hits.map((hit) => hit.chunkId));
+          const selectedIds = new Set(
+            synthesized.selectedChunkIds.filter((id): id is string => (
+              typeof id === 'string' && knownIds.has(id)
+            )),
+          );
+          const selectedHits = hits.filter((hit) => selectedIds.has(hit.chunkId));
+          if (selectedHits.length > 0) {
+            return {
+              text: synthesized.text.trim(),
+              sources: guideSources(selectedHits),
+            };
+          }
+        }
+      } catch {
+        // Approved guide excerpts remain available when synthesis fails.
+      }
+    }
+    return deterministicGuideAnswer(hits);
+  }
+
   async answer(rawQuestion: string): Promise<AnswerResult> {
     const question = rawQuestion.trim();
     const [intents, published] = await Promise.all([
@@ -171,12 +299,25 @@ export class AnswerRouter {
     ]);
     const preset = await this.deps.intentMatcher.match(question, intents, published);
     if (preset) {
+      const guide = await this.resolveGuideAnswer(question);
       return {
         route: 'preset',
         trustStatus: 'approved',
-        answer: preset.fullAnswer,
-        sources: preset.sources,
+        answer: guide
+          ? `${preset.fullAnswer}\n\n《杭电新生指北》补充：${guide.text}`
+          : preset.fullAnswer,
+        sources: mergePresetAndGuideSources(preset.sources, guide?.sources ?? []),
         intentId: preset.id,
+      };
+    }
+
+    const guide = await this.resolveGuideAnswer(question);
+    if (guide) {
+      return {
+        route: 'knowledge',
+        trustStatus: 'knowledge',
+        answer: guide.text,
+        sources: guide.sources,
       };
     }
 
