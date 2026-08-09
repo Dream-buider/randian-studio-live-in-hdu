@@ -11,6 +11,7 @@ export type AppConfig = Readonly<{
   modelEnabled: boolean;
   requestTimeoutMs: number;
   knowledgeProvider: 'local' | 'weknora';
+  freshmanGuidePath: string | null;
   weknoraBaseUrl: string;
   weknoraApiKey: string;
   weknoraDocumentKbId: string;
@@ -53,6 +54,9 @@ export function loadConfig(env: NodeJS.ProcessEnv, appRoot: string): AppConfig {
     knowledgeProvider: env.KNOWLEDGE_PROVIDER?.trim().toLowerCase() === 'weknora'
       ? 'weknora'
       : 'local',
+    freshmanGuidePath: env.FRESHMAN_GUIDE_PATH?.trim()
+      ? path.resolve(appRoot, env.FRESHMAN_GUIDE_PATH.trim())
+      : null,
     weknoraBaseUrl: env.WEKNORA_BASE_URL?.trim() ?? 'http://127.0.0.1:8080/api/v1',
     weknoraApiKey: env.WEKNORA_API_KEY?.trim() ?? '',
     weknoraDocumentKbId: env.WEKNORA_DOCUMENT_KB_ID?.trim() ?? '',

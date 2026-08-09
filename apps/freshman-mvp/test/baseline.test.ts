@@ -9,12 +9,24 @@ test('requires Node 24 and defaults to a local SQLite runtime', () => {
   assert.match(config.databasePath, /runtime[\\/]live-in-hdu\.db$/);
   assert.equal(config.modelEnabled, false);
   assert.equal(config.knowledgeProvider, 'local');
+  assert.equal(config.freshmanGuidePath, null);
   assert.equal(config.weknoraScoreThreshold, 0.55);
   assert.equal('modelBaseUrl' in config, false);
   assert.equal('modelId' in config, false);
   assert.equal(config.searchProvider, 'unavailable');
   assert.equal(config.searxngBaseUrl, 'http://127.0.0.1:8888');
   assert.equal(config.searchMaxResults, 6);
+});
+
+test('resolves an explicit private freshman guide path without enabling WeKnora', () => {
+  const config = loadConfig({
+    FRESHMAN_GUIDE_PATH: '../../approved-knowledge/hdu-freshman-guide-2026.md',
+  }, 'C:/project/apps/freshman-mvp');
+  assert.match(
+    config.freshmanGuidePath ?? '',
+    /project[\\/]approved-knowledge[\\/]hdu-freshman-guide-2026\.md$/,
+  );
+  assert.equal(config.knowledgeProvider, 'local');
 });
 
 test('enables WeKnora only explicitly and trims its server-only configuration', () => {
