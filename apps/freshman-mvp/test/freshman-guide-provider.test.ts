@@ -53,6 +53,42 @@ test('guide aliases retrieve their intended chunks and map the knowledge hit fie
   assert.equal((await provider.search('寝室多大，是几人间？')).hits[0]?.chunkId, 'dorm-type');
 });
 
+test('guide aliases retrieve a real child heading through its canonical parent heading', async () => {
+  const realGuideProvider = new FreshmanGuideProvider({
+    chunks: [{
+      id: 'real-dingtalk-platform',
+      titlePath: [
+        '入学指南篇',
+        '1.3钉钉杭州电子科技大学认证',
+        '什么是杭州电子科技大学钉钉平台？',
+      ],
+      displayTitle: '什么是杭州电子科技大学钉钉平台？',
+      content: '这相当于加入钉钉中的杭电团队，并获得一个与个人学号对应的平台账号。',
+      sectionId: 'preparation',
+      sequence: 0,
+      source: {
+        type: 'community',
+        title: '杭电新生指北 · 什么是杭州电子科技大学钉钉平台？',
+        url: 'https://example.test/real-dingtalk-platform',
+        updatedAt: '2026-07-30',
+      },
+    }],
+  });
+
+  const result = await realGuideProvider.search('航电钉怎么注册？');
+
+  assert.equal(result.hits[0]?.chunkId, 'real-dingtalk-platform');
+});
+
+test('guide alias expansion does not turn an unrelated repair question into a hit', async () => {
+  const provider = new FreshmanGuideProvider({ chunks: guideChunks });
+
+  assert.deepEqual(await provider.search('校内哪里可以修理天文望远镜？'), {
+    status: 'available',
+    hits: [],
+  });
+});
+
 test('guide retrieval returns an available miss for a generic-only question', async () => {
   const provider = new FreshmanGuideProvider({ chunks: guideChunks });
 

@@ -145,7 +145,11 @@ export class FreshmanGuideProvider implements KnowledgeProvider {
         const displayTitle = normalize(chunk.displayTitle);
         const titlePath = chunk.titlePath.map(normalize);
         const content = normalize(chunk.content);
-        let score = aliasTitles.has(displayTitle) ? 1 : 0;
+        const aliasTitleMatch = aliasTitles.has(displayTitle)
+          || titlePath.some((heading) => (
+            [...aliasTitles].some((aliasTitle) => heading.includes(aliasTitle))
+          ));
+        let score = aliasTitleMatch ? 1 : 0;
 
         for (const token of tokens) {
           if (includesAny(displayTitle, token)) {
