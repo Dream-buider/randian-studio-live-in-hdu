@@ -38,7 +38,7 @@ describe('GuideView signal stations', () => {
     expect(route.attributes('aria-label')).toBe('新生指北信号站');
     expect(route.attributes('data-energy')).toBe('dawn');
     const directChildren = Array.from(route.element.children);
-    expect(directChildren).toHaveLength(4);
+    expect(directChildren).toHaveLength(FRESHMAN_GUIDE_SECTIONS.length);
     expect(directChildren.every((child) => child.tagName === 'LI')).toBe(true);
 
     const pulse = wrapper.get('.signal-energy-pulse');
@@ -67,7 +67,7 @@ describe('GuideView signal stations', () => {
     wrapper.unmount();
   });
 
-  it('uses accessible dawn semantics and phases all four station list items', () => {
+  it('uses accessible dawn semantics and valid station selectors', () => {
     expect(TOKENS_CSS).toContain(
       '.guide-page[data-theme="randian-dawn"] .signal-kicker {\n  color: var(--student-trust);',
     );
