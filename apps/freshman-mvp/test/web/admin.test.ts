@@ -133,37 +133,44 @@ const reviews = [
   },
 ];
 
+const systemHealthFixture = {
+  status: 'ok',
+  components: {
+    gateway: { status: 'healthy' },
+    businessDatabase: { status: 'healthy', mode: 'sqlite' },
+    tokenDance: {
+      status: 'disabled',
+      lastCallStatus: 'never',
+      lastCallAt: null,
+    },
+    freshmanGuide: {
+      status: 'available',
+      mode: 'private-markdown',
+      chunks: 2,
+    },
+    weknora: { status: 'not-configured' },
+    embedding: { status: 'not-configured', mode: 'ollama' },
+    search: {
+      status: 'unavailable',
+      mode: 'phase-a-disabled',
+      lastSearchStatus: 'never',
+      lastSearchAt: null,
+    },
+    reviewQueue: { status: 'ok', pending: 2 },
+    integrationOutbox: {
+      status: 'not-configured',
+      pending: 3,
+      failed: 1,
+    },
+  },
+};
+
 function adminFetch(records: Array<{ url: string; init?: RequestInit }> = []) {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     records.push({ url, init });
     if (url === '/api/health') {
-      return jsonResponse({
-        status: 'ok',
-        components: {
-          gateway: { status: 'healthy' },
-          businessDatabase: { status: 'healthy', mode: 'sqlite' },
-          tokenDance: {
-            status: 'disabled',
-            lastCallStatus: 'never',
-            lastCallAt: null,
-          },
-          weknora: { status: 'not-configured' },
-          embedding: { status: 'not-configured', mode: 'ollama' },
-          search: {
-            status: 'unavailable',
-            mode: 'phase-a-disabled',
-            lastSearchStatus: 'never',
-            lastSearchAt: null,
-          },
-          reviewQueue: { status: 'ok', pending: 2 },
-          integrationOutbox: {
-            status: 'not-configured',
-            pending: 3,
-            failed: 1,
-          },
-        },
-      });
+      return jsonResponse(systemHealthFixture);
     }
     if (url === '/api/admin/intents') {
       return jsonResponse({ items: intents });
@@ -302,6 +309,47 @@ describe('operations console', () => {
     expect(health.text()).toContain('同步待处理 3');
     expect(health.text()).toContain('同步失败 1');
     expect(health.text()).not.toContain('API Key');
+  });
+
+  it('keeps an older health payload without freshmanGuide readable', async () => {
+    const { freshmanGuide: _freshmanGuide, ...legacyComponents } = systemHealthFixture.components;
+    const fallback = adminFetch();
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === '/api/health') {
+        return jsonResponse({ status: 'ok', components: legacyComponents });
+      }
+      return fallback(input, init);
+    }));
+    const wrapper = await mountAdmin();
+
+    expect(wrapper.get('[data-role="service-health"]').text()).toContain('服务状态');
+    expect(wrapper.get('[data-role="service-health"]').text()).toContain('正常');
+  });
+
+  it('rejects a present freshmanGuide health component with invalid fields', async () => {
+    const fallback = adminFetch();
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === '/api/health') {
+        return jsonResponse({
+          ...systemHealthFixture,
+          components: {
+            ...systemHealthFixture.components,
+            freshmanGuide: {
+              status: 'available',
+              mode: 'private-markdown',
+              chunks: -1,
+            },
+          },
+        });
+      }
+      return fallback(input, init);
+    }));
+    const wrapper = await mountAdmin();
+
+    expect(wrapper.get('[data-role="service-health"]').text()).toContain(
+      '服务状态暂时无法读取',
+    );
+    expect(wrapper.text()).toContain('共 3 个问题意图');
   });
 
   it('keeps content operations usable when only the health endpoint fails', async () => {

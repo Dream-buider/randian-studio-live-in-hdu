@@ -7,6 +7,7 @@ import { migrateDatabase } from '../db/migrations.js';
 import { openDatabase, type SqliteDatabase } from '../db/sqlite.js';
 import type { SourceRef } from '../domain/models.js';
 import { resolveFreshmanGuideSource } from '../content/freshman-guide.js';
+import { parseFreshmanGuideMarkdown } from '../content/freshman-guide-document.js';
 import type {
   IntentClassification,
   KnowledgeProvider,
@@ -19,6 +20,7 @@ import {
   type LocalKnowledgeRecord,
 } from '../providers/local-knowledge-provider.js';
 import { HduFirstSearchProvider } from '../providers/hdu-search-provider.js';
+import { FreshmanGuideProvider } from '../providers/freshman-guide-provider.js';
 import { TokenDanceProvider } from '../providers/tokendance-provider.js';
 import { SearxngProvider } from '../providers/searxng-provider.js';
 import { WeKnoraProvider } from '../providers/weknora-provider.js';
@@ -151,6 +153,36 @@ async function loadLocalKnowledge(appRoot: string): Promise<LocalKnowledgeRecord
     });
 }
 
+async function loadFreshmanGuide(pathname: string | null): Promise<{
+  provider: FreshmanGuideProvider;
+  status: 'available' | 'not-configured' | 'configuration-error';
+}> {
+  if (pathname === null) {
+    return {
+      provider: new FreshmanGuideProvider({ chunks: [] }),
+      status: 'not-configured',
+    };
+  }
+  try {
+    const chunks = parseFreshmanGuideMarkdown(await readFile(pathname, 'utf8'));
+    if (chunks.length === 0) {
+      return {
+        provider: new FreshmanGuideProvider({ chunks: [] }),
+        status: 'configuration-error',
+      };
+    }
+    return {
+      provider: new FreshmanGuideProvider({ chunks }),
+      status: 'available',
+    };
+  } catch {
+    return {
+      provider: new FreshmanGuideProvider({ chunks: [] }),
+      status: 'configuration-error',
+    };
+  }
+}
+
 export async function createProductionRuntime(
   options: ProductionRuntimeOptions = {},
 ): Promise<ProductionRuntime> {
@@ -220,6 +252,7 @@ export async function createProductionRuntime(
         })
       : null;
     const model: ModelProvider = tokenDance ?? new DisabledModelProvider();
+    const freshmanGuide = await loadFreshmanGuide(config.freshmanGuidePath);
     const weknora = config.knowledgeProvider === 'weknora'
       ? new WeKnoraProvider({
           baseUrl: config.weknoraBaseUrl,
@@ -310,6 +343,7 @@ export async function createProductionRuntime(
       content,
       reviews,
       intentMatcher: new IntentMatcher(model),
+      guideKnowledge: freshmanGuide.provider,
       knowledge,
       search,
       model,
@@ -350,6 +384,11 @@ export async function createProductionRuntime(
             knowledge: weknora
               ? { status: weknoraStatus, mode: 'weknora' }
               : { status: 'ok', mode: 'local-json' },
+            freshmanGuide: {
+              status: freshmanGuide.status,
+              mode: 'private-markdown',
+              chunks: freshmanGuide.provider.status().chunks,
+            },
             weknora: { status: weknoraStatus },
             embedding: {
               status: weknora ? 'configured' : 'not-configured',

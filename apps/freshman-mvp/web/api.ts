@@ -103,6 +103,11 @@ export interface SystemHealth {
       lastCallStatus: string;
       lastCallAt: string | null;
     };
+    freshmanGuide?: {
+      status: 'available' | 'not-configured' | 'configuration-error';
+      mode: 'private-markdown';
+      chunks: number;
+    };
     weknora: { status: string };
     embedding: { status: string; mode: string };
     search: {
@@ -293,6 +298,7 @@ function isSystemHealth(value: unknown): value is SystemHealth {
     gateway,
     businessDatabase,
     tokenDance,
+    freshmanGuide,
     weknora,
     embedding,
     search,
@@ -308,6 +314,14 @@ function isSystemHealth(value: unknown): value is SystemHealth {
     && typeof tokenDance.status === 'string'
     && typeof tokenDance.lastCallStatus === 'string'
     && (tokenDance.lastCallAt === null || typeof tokenDance.lastCallAt === 'string')
+    && (freshmanGuide === undefined || (
+      isRecord(freshmanGuide)
+      && ['available', 'not-configured', 'configuration-error']
+        .includes(String(freshmanGuide.status))
+      && freshmanGuide.mode === 'private-markdown'
+      && Number.isSafeInteger(freshmanGuide.chunks)
+      && Number(freshmanGuide.chunks) >= 0
+    ))
     && isRecord(weknora)
     && typeof weknora.status === 'string'
     && isRecord(embedding)

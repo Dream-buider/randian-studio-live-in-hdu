@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -78,6 +78,11 @@ test('full local flow reports honest health, serves SPA routes, and persists rev
           lastCallAt: null,
         },
         knowledge: { status: 'ok', mode: 'local-json' },
+        freshmanGuide: {
+          status: 'not-configured',
+          mode: 'private-markdown',
+          chunks: 0,
+        },
         weknora: { status: 'not-configured' },
         embedding: { status: 'not-configured', mode: 'ollama' },
         search: {
@@ -184,6 +189,100 @@ test('full local flow reports honest health, serves SPA routes, and persists rev
     );
   } finally {
     await closeQuietly(runtime);
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('production composition loads the configured private guide for health and answers', async () => {
+  await mkdir(TEST_TEMP, { recursive: true });
+  const directory = await mkdtemp(path.join(TEST_TEMP, 'live-in-hdu-guide-'));
+  const databasePath = path.join(directory, 'guide.db');
+  const guidePath = path.join(directory, 'approved-guide.md');
+  let runtime: ProductionRuntime | null = null;
+
+  try {
+    await writeFile(guidePath, [
+      '## 开学准备篇',
+      '### 1. 校园卡',
+      '校园卡在新生报到点领取，领取后请及时修改密码。',
+      '### 2. 报到材料',
+      '报到时请携带录取通知书和身份证。',
+    ].join('\n'), 'utf8');
+    runtime = await createProductionRuntime({
+      appRoot: APP_ROOT,
+      env: {
+        HOST: '127.0.0.1',
+        DATABASE_PATH: databasePath,
+        FRESHMAN_GUIDE_PATH: guidePath,
+        TOKENDANCE_API_KEY: '',
+      },
+      runtimePlatform: 'linux',
+    });
+
+    const health = await runtime.app.inject({ method: 'GET', url: '/api/health' });
+    assert.deepEqual(health.json().components.freshmanGuide, {
+      status: 'available',
+      mode: 'private-markdown',
+      chunks: 2,
+    });
+    const answer = await runtime.app.inject({
+      method: 'POST',
+      url: '/api/ask',
+      payload: { question: '校园卡在哪里领取？' },
+    });
+    assert.equal(answer.statusCode, 200);
+    assert.equal(answer.json().route, 'knowledge');
+    assert.match(answer.json().answer, /新生报到点/);
+    assert.match(answer.json().sources[0].title, /^杭电新生指北/);
+  } finally {
+    await closeQuietly(runtime);
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('bad private guide inputs never block startup and report a configuration error', async () => {
+  await mkdir(TEST_TEMP, { recursive: true });
+  const directory = await mkdtemp(path.join(TEST_TEMP, 'live-in-hdu-bad-guide-'));
+  const unreadablePath = path.join(directory, 'guide-directory');
+  const malformedPath = path.join(directory, 'malformed-guide.md');
+  await mkdir(unreadablePath);
+  await writeFile(malformedPath, 'This file has no supported guide sections.', 'utf8');
+
+  try {
+    for (const [caseName, guidePath] of [
+      ['missing', path.join(directory, 'missing-guide.md')],
+      ['unreadable', unreadablePath],
+      ['malformed', malformedPath],
+    ] as const) {
+      let runtime: ProductionRuntime | null = null;
+      try {
+        runtime = await createProductionRuntime({
+          appRoot: APP_ROOT,
+          env: {
+            HOST: '127.0.0.1',
+            DATABASE_PATH: path.join(directory, `${caseName}.db`),
+            FRESHMAN_GUIDE_PATH: guidePath,
+            TOKENDANCE_API_KEY: '',
+          },
+          runtimePlatform: 'linux',
+        });
+        const health = await runtime.app.inject({ method: 'GET', url: '/api/health' });
+        assert.deepEqual(health.json().components.freshmanGuide, {
+          status: 'configuration-error',
+          mode: 'private-markdown',
+          chunks: 0,
+        }, caseName);
+        const answer = await runtime.app.inject({
+          method: 'POST',
+          url: '/api/ask',
+          payload: { question: '校园卡在哪里领取？' },
+        });
+        assert.equal(answer.statusCode, 200, caseName);
+      } finally {
+        await closeQuietly(runtime);
+      }
+    }
+  } finally {
     await rm(directory, { recursive: true, force: true });
   }
 });
