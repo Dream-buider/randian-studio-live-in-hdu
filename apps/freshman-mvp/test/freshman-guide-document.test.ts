@@ -3,10 +3,7 @@ import test from 'node:test';
 import { FRESHMAN_GUIDE_URL } from '../src/content/freshman-guide.js';
 import { parseFreshmanGuideMarkdown } from '../src/content/freshman-guide-document.js';
 
-const longPreparationContent = [
-  '第一段长内容'.repeat(130),
-  '第二段长内容'.repeat(130),
-].join('\n\n');
+const longPreparationContent = '单段长内容'.repeat(241);
 
 const markdown = `
 审批元数据不应成为可检索内容。
@@ -66,12 +63,13 @@ test('parser drops image-only paragraphs and gives aid subsections a specific ro
   assert.equal(chunks.at(-1)?.source.title, '杭电新生指北 · 助学政策');
 });
 
-test('parser splits long content at paragraph boundaries and promotes life facilities to campus', () => {
+test('parser slices an indivisible overlong paragraph and promotes life facilities to campus', () => {
   const chunks = parseFreshmanGuideMarkdown(markdown);
 
   const longChunks = chunks.filter((chunk) => chunk.displayTitle.includes('长段'));
   assert.equal(longChunks.length, 2);
   assert.ok(longChunks.every((chunk) => [...chunk.content].length <= 1_200));
+  assert.equal(longChunks.map((chunk) => chunk.content).join(''), longPreparationContent);
   assert.match(longChunks[0].id, /-part-1-[a-f0-9]{16}$/);
   assert.match(longChunks[1].id, /-part-2-[a-f0-9]{16}$/);
 
