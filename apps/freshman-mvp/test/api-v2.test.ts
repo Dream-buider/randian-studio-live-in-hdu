@@ -6,6 +6,7 @@ import test from 'node:test';
 import { migrateDatabase } from '../src/db/migrations.js';
 import { openDatabase } from '../src/db/sqlite.js';
 import type { QuestionIntent, SourceRef } from '../src/domain/models.js';
+import { SqliteApprovedReviewPublisher } from '../src/repositories/sqlite-approved-review-publisher.js';
 import { SqliteContentRepository } from '../src/repositories/sqlite-content-repository.js';
 import { SqliteReviewRepository } from '../src/repositories/sqlite-review-repository.js';
 import type { AppConfig } from '../src/server/config.js';
@@ -65,10 +66,12 @@ async function withApp(
   migrateDatabase(database);
   const content = new SqliteContentRepository(database);
   const reviews = new SqliteReviewRepository(database);
+  const approvedReviewPublisher = new SqliteApprovedReviewPublisher(database);
   const app = createApp({
     config: CONFIG,
     content,
     reviews,
+    approvedReviewPublisher,
     router: {
       async answer(question: string) {
         return { route: 'knowledge', trustStatus: 'knowledge', answer: question, sources: [] };
@@ -418,6 +421,11 @@ test('review decision API persists a structured approved decision and rejects a 
         reviewedAnswer: '图书馆开放时间会按假期安排调整，请查看当天公告。',
         feedbackTarget: 'community-knowledge',
       },
+      publication: {
+        intentId: `review-${review.id}`,
+        version: 1,
+        createdIntent: true,
+      },
     });
     assert.match(response.json().item.decidedAt, /^\d{4}-\d{2}-\d{2}T/);
 
@@ -425,6 +433,11 @@ test('review decision API persists a structured approved decision and rejects a 
     assert.equal(listed.length, 1);
     assert.equal(listed[0].reviewedAnswer, '图书馆开放时间会按假期安排调整，请查看当天公告。');
     assert.equal(listed[0].feedbackTarget, 'community-knowledge');
+
+    const publicQuestions = await app.inject({ method: 'GET', url: '/api/questions' });
+    assert.equal(publicQuestions.statusCode, 200);
+    assert.equal(publicQuestions.json().items.length, 1);
+    assert.equal(publicQuestions.json().items[0].question, '图书馆暑假开放到几点？');
 
     const duplicate = await app.inject({
       method: 'POST',

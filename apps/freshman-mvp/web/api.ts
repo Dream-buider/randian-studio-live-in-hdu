@@ -135,6 +135,17 @@ export interface ReviewDecisionInput {
   feedbackTarget: string;
 }
 
+export interface ReviewPublication {
+  intentId: string;
+  version: number;
+  createdIntent: boolean;
+}
+
+export interface ReviewDecisionResult {
+  item: ReviewTask;
+  publication: ReviewPublication | null;
+}
+
 export type AnswerResult =
   | {
     route: 'preset';
@@ -501,15 +512,31 @@ export async function publishAnswer(
 export async function decideReview(
   reviewId: string,
   input: ReviewDecisionInput,
-): Promise<ReviewTask> {
+): Promise<ReviewDecisionResult> {
   const response = await fetch(`/api/reviews/${encodeURIComponent(reviewId)}/decision`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(input),
   });
   const body = await readJson(response);
-  if (!isRecord(body) || !isReviewTask(body.item)) {
+  const publication = isRecord(body) ? body.publication : undefined;
+  const validPublication = isRecord(publication)
+    && typeof publication.intentId === 'string'
+    && typeof publication.version === 'number'
+    && typeof publication.createdIntent === 'boolean';
+  if (
+    !isRecord(body)
+    || !isReviewTask(body.item)
+    || (input.status === 'approved' && !validPublication)
+  ) {
     throw new ApiResponseError(response.status);
   }
-  return body.item;
+  return {
+    item: body.item,
+    publication: validPublication ? {
+      intentId: publication.intentId as string,
+      version: publication.version as number,
+      createdIntent: publication.createdIntent as boolean,
+    } : null,
+  };
 }

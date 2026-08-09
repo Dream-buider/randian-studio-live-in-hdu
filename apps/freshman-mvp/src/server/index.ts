@@ -24,8 +24,10 @@ import { SearxngProvider } from '../providers/searxng-provider.js';
 import { WeKnoraProvider } from '../providers/weknora-provider.js';
 import { UnavailableSearchProvider } from '../providers/unavailable-search-provider.js';
 import { SqliteContentRepository } from '../repositories/sqlite-content-repository.js';
+import { SqliteApprovedReviewPublisher } from '../repositories/sqlite-approved-review-publisher.js';
 import { SqliteReviewRepository } from '../repositories/sqlite-review-repository.js';
 import type {
+  ApprovedReviewPublisher,
   ContentRepository,
   ReviewRepository,
 } from '../repositories/contracts.js';
@@ -48,6 +50,7 @@ export interface ProductionRuntimeOptions {
   appRoot?: string;
   env?: NodeJS.ProcessEnv;
   fetch?: typeof globalThis.fetch;
+  runtimePlatform?: NodeJS.Platform;
 }
 
 export interface ProductionRuntime {
@@ -74,8 +77,15 @@ function defaultAppRoot(): string {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 }
 
-async function ensureDDriveRuntimePath(databasePath: string): Promise<void> {
+async function ensureDDriveRuntimePath(
+  databasePath: string,
+  runtimePlatform: NodeJS.Platform = process.platform,
+): Promise<void> {
   const parent = path.dirname(databasePath);
+  if (runtimePlatform !== 'win32') {
+    await mkdir(parent, { recursive: true });
+    return;
+  }
   const lexicalRoot = path.parse(parent).root.toUpperCase();
   if (lexicalRoot === 'D:\\') {
     await mkdir(parent, { recursive: true });
@@ -149,6 +159,7 @@ export async function createProductionRuntime(
   let database: SqliteDatabase | null = null;
   let content: ContentRepository;
   let reviews: ReviewRepository;
+  let approvedReviewPublisher: ApprovedReviewPublisher | undefined;
   let closeStorage: () => Promise<void> = async () => { database?.close(); };
   let postgresPool: import('../db/postgres.js').PostgresPool | null = null;
   let faqSync: FaqSyncService | null = null;
@@ -165,11 +176,15 @@ export async function createProductionRuntime(
   let closed = false;
   try {
     if (config.databaseProvider === 'sqlite') {
-      await ensureDDriveRuntimePath(config.databasePath);
+      await ensureDDriveRuntimePath(
+        config.databasePath,
+        options.runtimePlatform,
+      );
       database = openDatabase(config.databasePath);
       migrateDatabase(database);
       content = new SqliteContentRepository(database);
       reviews = new SqliteReviewRepository(database);
+      approvedReviewPublisher = new SqliteApprovedReviewPublisher(database);
       closeStorage = async () => { database?.close(); };
     } else {
       if (!config.postgresUrl) {
@@ -304,6 +319,7 @@ export async function createProductionRuntime(
       config,
       content,
       reviews,
+      approvedReviewPublisher,
       router,
       publicDir: config.publicDir,
       faqSync: faqSync ?? undefined,

@@ -34,6 +34,20 @@ export interface ReviewDecision {
   feedbackTarget: string | null;
 }
 
+export interface ApprovedReviewPublicationResult {
+  review: ReviewTask;
+  intentId: string;
+  version: number;
+  createdIntent: boolean;
+}
+
+export interface ApprovedReviewPublisher {
+  publish(
+    reviewId: string,
+    decision: ReviewDecision,
+  ): Promise<ApprovedReviewPublicationResult>;
+}
+
 export interface ContentRepository {
   createIntent(input: QuestionIntent): Promise<void>;
   upsertRawAnswers(items: RawAnswer[]): Promise<number>;

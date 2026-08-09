@@ -17,7 +17,7 @@ import type {
 
 type Row = Record<string, unknown>;
 
-function asReviewTask(row: Row): ReviewTask {
+export function sqliteRowToReviewTask(row: Row): ReviewTask {
   return {
     id: String(row.id),
     question: String(row.question),
@@ -104,7 +104,7 @@ export class SqliteReviewRepository implements ReviewRepository {
       : this.database.prepare(`
           SELECT * FROM review_tasks WHERE status = ? ORDER BY created_at ASC, ordinal ASC
         `).all(status) as Row[];
-    return rows.map(asReviewTask);
+    return rows.map(sqliteRowToReviewTask);
   }
 
   async decide(id: string, decision: ReviewDecision): Promise<ReviewTask> {
@@ -132,6 +132,6 @@ export class SqliteReviewRepository implements ReviewRepository {
       throw new ConflictError('Review task has already been decided');
     }
     const row = this.database.prepare('SELECT * FROM review_tasks WHERE id = ?').get(id) as Row;
-    return asReviewTask(row);
+    return sqliteRowToReviewTask(row);
   }
 }

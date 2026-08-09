@@ -335,3 +335,31 @@ test('production runtime refuses a missing C runtime junction without creating a
     await rm(appRoot, { recursive: true, force: true });
   }
 });
+
+test('production runtime permits a local SQLite path on Linux hosts', async () => {
+  const directory = path.join(
+    APP_ROOT,
+    `.linux-runtime-${process.pid}-${Date.now()}`,
+  );
+  const databasePath = path.join(directory, 'live-in-hdu.db');
+  const options = {
+    appRoot: APP_ROOT,
+    env: {
+      HOST: '127.0.0.1',
+      PORT: '3210',
+      DATABASE_PATH: databasePath,
+      TOKENDANCE_API_KEY: '',
+    },
+    runtimePlatform: 'linux' as const,
+  };
+  let runtime: ProductionRuntime | null = null;
+
+  try {
+    runtime = await createProductionRuntime(options);
+    const database = await stat(databasePath);
+    assert.equal(database.isFile(), true);
+  } finally {
+    await closeQuietly(runtime);
+    await rm(directory, { recursive: true, force: true });
+  }
+});

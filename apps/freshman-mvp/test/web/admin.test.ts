@@ -226,7 +226,17 @@ function adminFetch(records: Array<{ url: string; init?: RequestInit }> = []) {
       });
     }
     if (url.includes('/decision')) {
-      return jsonResponse({ item: { ...reviews[0], status: 'approved' } });
+      const status = JSON.parse(String(init?.body)).status;
+      return jsonResponse({
+        item: { ...reviews[0], status },
+        ...(status === 'approved' ? {
+          publication: {
+            intentId: `review-${reviews[0].id}`,
+            version: 1,
+            createdIntent: true,
+          },
+        } : {}),
+      });
     }
     return jsonResponse({ error: { code: 'NOT_FOUND' } }, { status: 404 });
   });
@@ -584,7 +594,7 @@ describe('operations console', () => {
   });
 
   it.each([
-    ['approved', '通过'],
+    ['approved', '通过并发布'],
     ['rejected', '驳回'],
     ['needs_more', '需补充'],
   ] as const)('keeps FIFO server order and sends exact %s decision payload', async (status, actionLabel) => {
@@ -645,15 +655,44 @@ describe('operations console', () => {
     await first.get('input[aria-label="回流目标"]').setValue('community-knowledge');
     await first.get('input[aria-label="审核说明"]').setValue('已人工检查');
     await first.get('input[aria-label="审核人"]').setValue('local-admin');
-    await first.get('button[aria-label="通过第 7 个未收录问题"]').trigger('click');
+    await first.get('button[aria-label="通过并发布第 7 个未收录问题"]').trigger('click');
     await flushPromises();
 
     expect(wrapper.findAll('[data-role="review-row"]')).toHaveLength(1);
     expect(wrapper.text()).toContain('1 条待处理');
     expect(wrapper.text()).not.toContain('第一个未收录问题');
+    expect(wrapper.get('[data-role="review-feedback"]').text()).toContain(
+      '第 7 个未收录问题已发布为第 1 版',
+    );
     expect(
       records.filter(({ url }) => url.endsWith('/old-low-risk/decision')),
     ).toHaveLength(1);
+  });
+
+  it('shows a failed approval on its own card and keeps the entered draft', async () => {
+    const fallback = adminFetch();
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith('/old-low-risk/decision')) {
+        return jsonResponse(
+          { error: { code: 'INTERNAL_ERROR', message: 'publish failed' } },
+          { status: 500 },
+        );
+      }
+      return fallback(input, init);
+    }));
+    const wrapper = await mountAdmin();
+    const first = wrapper.findAll('[data-role="review-row"]')[0];
+    await first.get('textarea[aria-label="审核后答案"]').setValue('不能丢失的审核答案');
+    await first.get('input[aria-label="回流目标"]').setValue('community-knowledge');
+    await first.get('input[aria-label="审核说明"]').setValue('已人工检查');
+    await first.get('input[aria-label="审核人"]').setValue('local-admin');
+    await first.get('button[aria-label="通过并发布第 7 个未收录问题"]').trigger('click');
+    await flushPromises();
+
+    expect(first.get('[data-role="review-error"]').text()).toContain('发布失败');
+    expect((first.get('textarea[aria-label="审核后答案"]').element as HTMLTextAreaElement).value)
+      .toBe('不能丢失的审核答案');
+    expect(wrapper.findAll('[data-role="review-row"]')).toHaveLength(2);
   });
 
   it('opens an accessible publish confirmation and restores focus after Escape', async () => {

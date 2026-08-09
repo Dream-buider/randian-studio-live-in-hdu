@@ -26,6 +26,7 @@ interface DecisionDraft {
 const drafts = reactive<Record<string, DecisionDraft>>({});
 const busyId = ref<string | null>(null);
 const message = ref('');
+const cardErrors = reactive<Record<string, string>>({});
 
 watch(
   () => props.reviews,
@@ -43,7 +44,7 @@ watch(
 );
 
 function actionLabel(status: Exclude<ReviewStatus, 'pending'>): string {
-  return status === 'approved' ? '通过' : status === 'rejected' ? '驳回' : '需补充';
+  return status === 'approved' ? '通过并发布' : status === 'rejected' ? '驳回' : '需补充';
 }
 
 function lacksHduEvidence(review: ReviewTask): boolean {
@@ -81,12 +82,17 @@ async function decide(
   };
   busyId.value = review.id;
   message.value = '';
+  delete cardErrors[review.id];
   try {
-    await decideReview(review.id, payload);
-    message.value = `第 ${review.ordinal} 个未收录问题已记录“${actionLabel(status)}”决策。`;
+    const result = await decideReview(review.id, payload);
+    message.value = result.publication
+      ? `第 ${review.ordinal} 个未收录问题已发布为第 ${result.publication.version} 版，客户端已可读取。`
+      : `第 ${review.ordinal} 个未收录问题已记录“${actionLabel(status)}”决策。`;
     emit('decided', review.id);
   } catch {
-    message.value = `第 ${review.ordinal} 个未收录问题处理失败，请重试。`;
+    cardErrors[review.id] = status === 'approved'
+      ? '发布失败，审核状态和客户端内容均未修改，请重试。'
+      : `“${actionLabel(status)}”处理失败，请重试。`;
   } finally {
     busyId.value = null;
   }
@@ -102,6 +108,7 @@ async function decide(
       </div>
       <span>{{ reviews.length }} 条待处理</span>
     </header>
+    <p v-if="message" role="status" data-role="review-feedback">{{ message }}</p>
     <p v-if="reviews.length === 0">当前没有待审核问题。</p>
     <article
       v-for="review in reviews"
@@ -158,7 +165,9 @@ async function decide(
           {{ actionLabel(status) }}
         </button>
       </div>
+      <p v-if="cardErrors[review.id]" role="alert" data-role="review-error">
+        {{ cardErrors[review.id] }}
+      </p>
     </article>
-    <p v-if="message" role="status">{{ message }}</p>
   </section>
 </template>

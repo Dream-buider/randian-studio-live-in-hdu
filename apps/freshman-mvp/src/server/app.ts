@@ -9,6 +9,7 @@ import {
   ValidationError,
 } from '../domain/errors.js';
 import type {
+  ApprovedReviewPublisher,
   ContentRepository,
   ReviewDecision,
   ReviewRepository,
@@ -26,6 +27,7 @@ export interface AppDependencies {
   config: AppConfig;
   content: ContentRepository;
   reviews: ReviewRepository;
+  approvedReviewPublisher?: ApprovedReviewPublisher;
   router: AnswerRouterContract;
   health?: () => Promise<unknown>;
   publicDir?: string;
@@ -254,12 +256,26 @@ export function createApp(deps: AppDependencies): FastifyInstance {
   app.post<{
     Params: { id: string };
     Body: unknown;
-  }>('/api/reviews/:id/decision', async (request) => ({
-    item: await deps.reviews.decide(
-      request.params.id,
-      parseReviewDecision(request.body),
-    ),
-  }));
+  }>('/api/reviews/:id/decision', async (request) => {
+    const decision = parseReviewDecision(request.body);
+    if (decision.status === 'approved') {
+      if (!deps.approvedReviewPublisher) {
+        throw new ServiceUnavailableError('Approved review publication is not configured');
+      }
+      const result = await deps.approvedReviewPublisher.publish(request.params.id, decision);
+      return {
+        item: result.review,
+        publication: {
+          intentId: result.intentId,
+          version: result.version,
+          createdIntent: result.createdIntent,
+        },
+      };
+    }
+    return {
+      item: await deps.reviews.decide(request.params.id, decision),
+    };
+  });
 
   app.post<{
     Params: { id: string };
