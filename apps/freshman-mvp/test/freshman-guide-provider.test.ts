@@ -138,6 +138,29 @@ test('approved guide terms and aliases still retrieve genuine parcel, stadium, d
   assert.equal((await provider.search('航电钉如何认证？')).hits[0]?.chunkId, 'dingtalk');
 });
 
+test('controlled arrival-material aliases retrieve the canonical guide arrival chunk', async () => {
+  const provider = new FreshmanGuideProvider({
+    chunks: [
+      {
+        ...chunk('earlier-registration', '新生报到流程', '新生报到前需要准备相关材料。', 0),
+        titlePath: ['开学准备篇', '新生报到流程'],
+      },
+      {
+        ...chunk('arrival-materials', '杭电到达篇', '入学准备清单。', 1),
+        titlePath: ['开学准备篇', '4.杭电到达篇'],
+      },
+    ],
+  });
+
+  for (const question of [
+    '报到要带什么？',
+    '新生报到要准备哪些材料',
+    '去学校要带什么东西？',
+  ]) {
+    assert.equal((await provider.search(question)).hits[0]?.chunkId, 'arrival-materials');
+  }
+});
+
 test('guide retrieval returns an available miss for a generic-only question', async () => {
   const provider = new FreshmanGuideProvider({ chunks: guideChunks });
 

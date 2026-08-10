@@ -116,7 +116,9 @@ function guideSynthesisFromContent(
   const containsLink = /https?:\/\//i.test(text)
     || /\bwww\./i.test(text)
     || /\[[^\]]+\]\(\s*[^)]+\)/u.test(text)
-    || /\b(?:[a-z0-9-]+\.)+(?:com|cn|net|org|edu|gov|io|ai|dev|app|co|me|xyz|top|site|online)(?:\b|\/)/i.test(text);
+    || /(?:^|[^\p{L}\p{N}_])\/\/[^\s/]+/u.test(text)
+    || /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)(?::\d{1,5})?(?:\b|\/)/u.test(text)
+    || /\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}(?:\b|\/)/i.test(text);
   if (text.length === 0 || containsLink) {
     return null;
   }

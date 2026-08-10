@@ -20,6 +20,7 @@ export const FRESHMAN_GUIDE_ALIASES: Readonly<Record<string, readonly string[]>>
   '学号班级号获取': ['学号怎么查', '学号在哪看', '班级号在哪看'],
   '钉钉杭州电子科技大学认证': ['航电钉', '杭电钉', '学校钉钉', '钉钉认证'],
   '宿舍类型': ['宿舍大小', '寝室多大', '几人间'],
+  '杭电到达篇': ['报到要带什么', '报到要准备哪些材料', '去学校要带什么东西'],
 };
 
 export const FRESHMAN_GUIDE_SECTIONS: readonly FreshmanGuideSection[] = [

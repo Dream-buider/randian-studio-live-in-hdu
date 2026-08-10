@@ -218,7 +218,7 @@ export class FreshmanGuideProvider implements KnowledgeProvider {
               : 0.08;
           score += bestFieldScore;
         }
-        score = Math.min(score, 1);
+        score = Math.min(score, 0.99);
         if (score < this.minimumScore) {
           return null;
         }

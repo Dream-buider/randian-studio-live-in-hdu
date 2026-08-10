@@ -48,6 +48,9 @@ test('guide verifier reports safe hit summaries without printing private content
 ### 钉钉杭州电子科技大学认证
 取得学号后完成航电钉和学校钉钉认证。
 
+### 杭电到达篇
+入学准备清单。
+
 ## 宿舍篇
 ### 宿舍类型
 宿舍大小和几人间以实际分配为准。
@@ -63,6 +66,9 @@ test('guide verifier reports safe hit summaries without printing private content
     const result = await runVerifier(markdownPath);
     assert.equal(result.code, 0, result.stderr);
     assert.match(result.stdout, /航电钉怎么注册？ \| 1 \|/u);
+    assert.match(result.stdout, /报到要带什么？ \| 1 \| 杭电到达篇 \|/u);
+    assert.match(result.stdout, /新生报到要准备哪些材料 \| 1 \| 杭电到达篇 \|/u);
+    assert.match(result.stdout, /去学校要带什么东西？ \| 1 \| 杭电到达篇 \|/u);
     assert.match(result.stdout, /校内哪里可以修理天文望远镜？ \| 0 \| - \| -/u);
     assert.match(result.stdout, /学校体育比赛怎么报名？ \| 0 \| - \| -/u);
     assert.match(result.stdout, /快递员怎么应聘？ \| 0 \| - \| -/u);

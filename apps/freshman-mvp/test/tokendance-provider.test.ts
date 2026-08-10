@@ -352,6 +352,10 @@ test('TokenDance guide synthesis rejects non-HTTP URL and Markdown link forms', 
     '请访问 www.example.com 查看。',
     '请访问 feishu.cn/wiki/guide 查看。',
     '请访问 example.com 查看。',
+    '请访问 example.info 查看。',
+    '请访问 example.tech/guide 查看。',
+    '请访问 192.0.2.10/guide 查看。',
+    '请访问 //example.com/guide 查看。',
     '请点击[查看指南](guide)。',
   ]) {
     await t.test(unsafeAnswer, async () => {
