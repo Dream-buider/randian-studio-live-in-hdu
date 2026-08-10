@@ -15,9 +15,17 @@ const DEFAULT_MAX_HITS = 8;
 const DEFAULT_MINIMUM_SCORE = 0.42;
 const GENERIC_TOKENS = [
   '杭州电子科技大学',
+  '在哪里',
+  '怎么走',
+  '如何去',
+  '如何到',
+  '有多大',
   '学校',
   '大学',
   '杭电',
+  '在哪',
+  '哪里',
+  '位置',
   '怎么办',
   '怎么',
   '什么',
@@ -40,7 +48,7 @@ function normalize(value: string): string {
 
 function nonGenericQuestion(question: string): string {
   let cleaned = normalize(question);
-  for (const token of GENERIC_TOKENS) {
+  for (const token of [...GENERIC_TOKENS].sort((left, right) => right.length - left.length)) {
     cleaned = cleaned.replaceAll(token, '');
   }
   return cleaned;
@@ -60,7 +68,11 @@ const APPROVED_TERMS = new Set([
   ...Object.values(FRESHMAN_GUIDE_ALIASES).flat(),
 ].map(normalize).filter((term) => term.length >= 2));
 
-function tokensFor(question: string): { tokens: readonly string[]; aliasTitles: ReadonlySet<string> } {
+function tokensFor(question: string): {
+  tokens: readonly string[];
+  aliasTitles: ReadonlySet<string>;
+  meaningful: string;
+} {
   const normalizedQuestion = normalize(question);
   const aliasTitles = new Set<string>();
   for (const [title, aliases] of Object.entries(FRESHMAN_GUIDE_ALIASES)) {
@@ -71,7 +83,7 @@ function tokensFor(question: string): { tokens: readonly string[]; aliasTitles: 
 
   const meaningful = nonGenericQuestion(question);
   if (!meaningful && aliasTitles.size === 0) {
-    return { tokens: [], aliasTitles };
+    return { tokens: [], aliasTitles, meaningful };
   }
 
   const tokens = new Set<string>();
@@ -90,11 +102,34 @@ function tokensFor(question: string): { tokens: readonly string[]; aliasTitles: 
     tokens.add(title);
   }
 
-  return { tokens: [...tokens], aliasTitles };
+  return { tokens: [...tokens], aliasTitles, meaningful };
 }
 
 function includesAny(text: string, token: string): boolean {
   return token.length >= 2 && text.includes(token);
+}
+
+function maximalTokens(tokens: readonly string[]): readonly string[] {
+  return tokens.filter((token) => (
+    !tokens.some((candidate) => candidate !== token && candidate.includes(token))
+  ));
+}
+
+function queryCoverage(question: string, tokens: readonly string[]): number {
+  if (question.length === 0) {
+    return 0;
+  }
+  const covered = new Set<number>();
+  for (const token of tokens) {
+    let offset = question.indexOf(token);
+    while (offset >= 0) {
+      for (let index = offset; index < offset + token.length; index += 1) {
+        covered.add(index);
+      }
+      offset = question.indexOf(token, offset + 1);
+    }
+  }
+  return covered.size / question.length;
 }
 
 function configuredLimit(value: number | undefined): number {
@@ -135,7 +170,7 @@ export class FreshmanGuideProvider implements KnowledgeProvider {
       return { status: providerStatus, hits: [] };
     }
 
-    const { tokens, aliasTitles } = tokensFor(question);
+    const { tokens, aliasTitles, meaningful } = tokensFor(question);
     if (tokens.length === 0) {
       return { status: 'available', hits: [] };
     }
@@ -149,18 +184,39 @@ export class FreshmanGuideProvider implements KnowledgeProvider {
           || titlePath.some((heading) => (
             [...aliasTitles].some((aliasTitle) => heading.includes(aliasTitle))
           ));
-        let score = aliasTitleMatch ? 1 : 0;
+        if (aliasTitleMatch) {
+          return {
+            content: chunk.content,
+            score: 1,
+            knowledgeId: KNOWLEDGE_ID,
+            chunkId: chunk.id,
+            title: GUIDE_TITLE,
+            sourceType: 'community',
+            sequence: chunk.sequence,
+            source: chunk.source,
+          };
+        }
 
-        for (const token of tokens) {
-          if (includesAny(displayTitle, token)) {
-            score += 0.45;
-          }
-          if (titlePath.some((heading) => includesAny(heading, token))) {
-            score += 0.30;
-          }
-          if (includesAny(content, token)) {
-            score += 0.08;
-          }
+        const matchedTokens = maximalTokens(tokens.filter((token) => (
+          includesAny(displayTitle, token)
+          || titlePath.some((heading) => includesAny(heading, token))
+          || includesAny(content, token)
+        )));
+        const coverage = queryCoverage(meaningful, matchedTokens);
+        const hasEnoughIndependentEvidence = matchedTokens.length >= 2 && coverage >= 0.45;
+        const hasSufficientSingleCoverage = matchedTokens.length === 1 && coverage >= 0.60;
+        if (!hasEnoughIndependentEvidence && !hasSufficientSingleCoverage) {
+          return null;
+        }
+
+        let score = coverage * 0.5;
+        for (const token of matchedTokens) {
+          const bestFieldScore = includesAny(displayTitle, token)
+            ? 0.45
+            : titlePath.some((heading) => includesAny(heading, token))
+              ? 0.30
+              : 0.08;
+          score += bestFieldScore;
         }
         score = Math.min(score, 1);
         if (score < this.minimumScore) {

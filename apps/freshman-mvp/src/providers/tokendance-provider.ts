@@ -113,7 +113,11 @@ function guideSynthesisFromContent(
     return null;
   }
   const text = parsed.answer.trim();
-  if (text.length === 0 || /https?:\/\//i.test(text)) {
+  const containsLink = /https?:\/\//i.test(text)
+    || /\bwww\./i.test(text)
+    || /\[[^\]]+\]\(\s*[^)]+\)/u.test(text)
+    || /\b(?:[a-z0-9-]+\.)+(?:com|cn|net|org|edu|gov|io|ai|dev|app|co|me|xyz|top|site|online)(?:\b|\/)/i.test(text);
+  if (text.length === 0 || containsLink) {
     return null;
   }
   const selectedChunkIds: string[] = [];

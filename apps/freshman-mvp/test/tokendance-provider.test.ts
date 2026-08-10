@@ -347,6 +347,54 @@ test('TokenDance guide synthesis rejects answers containing HTTP URLs case-insen
   }
 });
 
+test('TokenDance guide synthesis rejects non-HTTP URL and Markdown link forms', async (t) => {
+  for (const unsafeAnswer of [
+    '请访问 www.example.com 查看。',
+    '请访问 feishu.cn/wiki/guide 查看。',
+    '请访问 example.com 查看。',
+    '请点击[查看指南](guide)。',
+  ]) {
+    await t.test(unsafeAnswer, async () => {
+      const provider = new TokenDanceProvider({
+        apiKey: 'test-key',
+        fetch: async () => response({
+          choices: [{ message: { content: JSON.stringify({ answer: unsafeAnswer, selectedChunkIds: ['known'] }) } }],
+        }),
+      });
+
+      await assert.rejects(
+        provider.synthesizeGuide({
+          question: '问题',
+          hits: [{
+            content: '片段内容。', score: 0.8, knowledgeId: 'secret', chunkId: 'known', title: '已知片段', sourceType: 'official', sequence: 1,
+            source: { type: 'official', title: '来源', url: 'https://example.test/known', updatedAt: null },
+          }],
+        }),
+        ServiceUnavailableError,
+      );
+    });
+  }
+});
+
+test('TokenDance guide synthesis accepts ordinary Chinese punctuation without a link', async () => {
+  const provider = new TokenDanceProvider({
+    apiKey: 'test-key',
+    fetch: async () => response({
+      choices: [{ message: { content: '{"answer":"请按指南办理，具体以通知为准。","selectedChunkIds":["known"]}' } }],
+    }),
+  });
+
+  const result = await provider.synthesizeGuide({
+    question: '问题',
+    hits: [{
+      content: '片段内容。', score: 0.8, knowledgeId: 'secret', chunkId: 'known', title: '已知片段', sourceType: 'official', sequence: 1,
+      source: { type: 'official', title: '来源', url: 'https://example.test/known', updatedAt: null },
+    }],
+  });
+
+  assert.equal(result.text, '请按指南办理，具体以通知为准。');
+});
+
 test('TokenDance guide synthesis rejects malformed JSON responses', async () => {
   const provider = new TokenDanceProvider({
     apiKey: 'test-key',

@@ -51,11 +51,21 @@ test('guide verifier reports safe hit summaries without printing private content
 ## 宿舍篇
 ### 宿舍类型
 宿舍大小和几人间以实际分配为准。
+
+## 生活篇
+### 快递收发
+快递站支持收件和寄件，位于生活区北门外。
+
+### 活力体育场
+体育场包括田径场、体育馆和篮球场等运动地点。
 `, 'utf8');
 
     const result = await runVerifier(markdownPath);
     assert.equal(result.code, 0, result.stderr);
     assert.match(result.stdout, /航电钉怎么注册？ \| 1 \|/u);
+    assert.match(result.stdout, /校内哪里可以修理天文望远镜？ \| 0 \| - \| -/u);
+    assert.match(result.stdout, /学校体育比赛怎么报名？ \| 0 \| - \| -/u);
+    assert.match(result.stdout, /快递员怎么应聘？ \| 0 \| - \| -/u);
     assert.doesNotMatch(result.stdout, new RegExp(PRIVATE_BODY, 'u'));
     assert.doesNotMatch(result.stderr, new RegExp(PRIVATE_BODY, 'u'));
   } finally {

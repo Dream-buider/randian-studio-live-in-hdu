@@ -12,7 +12,11 @@ const related = [
   '宿舍是几人间？',
   '学号查到以后怎么注册杭电钉？',
 ] as const;
-const unrelated = '校内哪里可以修理天文望远镜？';
+const unrelated = [
+  '校内哪里可以修理天文望远镜？',
+  '学校体育比赛怎么报名？',
+  '快递员怎么应聘？',
+] as const;
 
 function fileArgument(args: readonly string[]): string | null {
   const index = args.indexOf('--file');
@@ -67,8 +71,10 @@ for (const question of related) {
   process.stdout.write(`${question} | ${result.hits.length} | ${titles.join('；')} | ${urls.join('；')}\n`);
 }
 
-const unrelatedResult = await provider.search(unrelated);
-if (unrelatedResult.hits.length > 0) {
-  fail('GUIDE_UNRELATED_HIT', unrelated);
+for (const question of unrelated) {
+  const unrelatedResult = await provider.search(question);
+  if (unrelatedResult.hits.length > 0) {
+    fail('GUIDE_UNRELATED_HIT', question);
+  }
+  process.stdout.write(`${question} | 0 | - | -\n`);
 }
-process.stdout.write(`${unrelated} | 0 | - | -\n`);

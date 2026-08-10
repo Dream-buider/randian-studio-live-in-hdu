@@ -5,6 +5,7 @@
 - 服务器：`124.222.171.40`
 - 应用目录：`/srv/live-in-hdu/apps/freshman-mvp`
 - systemd 服务：`live-in-hdu`
+- 初始部署源码 SHA：`99e5282`（记录当时实际上传构建，不表示后续 hotfix 已部署）
 - 发布前数据库：`published=24`，`pending=17`
 - 第 24 个已发布问题经只读核对为此前人工审核发布的“宿舍晚上几点熄灯？”，不是异常数据。
 

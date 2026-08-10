@@ -89,6 +89,55 @@ test('guide alias expansion does not turn an unrelated repair question into a hi
   });
 });
 
+test('a repeated weak token across guide fields does not turn unrelated intents into hits', async () => {
+  const provider = new FreshmanGuideProvider({
+    chunks: [
+      {
+        ...chunk(
+          'parcel',
+          '快递收发',
+          '快递站支持收件和寄件，菜鸟驿站位于生活区北门外。',
+          0,
+        ),
+        titlePath: ['生活篇', '生活区篇', '快递收发'],
+      },
+      {
+        ...chunk(
+          'stadium',
+          '活力体育场',
+          '体育场包括田径场、体育馆和篮球场等运动地点。',
+          1,
+        ),
+        titlePath: ['生活篇', '教学区篇', '活力体育场'],
+      },
+    ],
+  });
+
+  assert.deepEqual((await provider.search('学校体育比赛怎么报名？')).hits, []);
+  assert.deepEqual((await provider.search('快递员怎么应聘？')).hits, []);
+});
+
+test('approved guide terms and aliases still retrieve genuine parcel, stadium, dormitory, and DingTalk questions', async () => {
+  const provider = new FreshmanGuideProvider({
+    chunks: [
+      {
+        ...chunk('parcel', '快递收发', '快递站位于生活区北门外，可以收件和寄件。', 0),
+        titlePath: ['生活篇', '生活区篇', '快递收发'],
+      },
+      {
+        ...chunk('stadium', '活力体育场', '体育场包括田径场和体育馆。', 1),
+        titlePath: ['生活篇', '教学区篇', '活力体育场'],
+      },
+      ...guideChunks,
+    ],
+  });
+
+  assert.equal((await provider.search('学校快递在哪里取？')).hits[0]?.chunkId, 'parcel');
+  assert.equal((await provider.search('体育场在哪里？')).hits[0]?.chunkId, 'stadium');
+  assert.equal((await provider.search('寝室是几人间？')).hits[0]?.chunkId, 'dorm-type');
+  assert.equal((await provider.search('航电钉如何认证？')).hits[0]?.chunkId, 'dingtalk');
+});
+
 test('guide retrieval returns an available miss for a generic-only question', async () => {
   const provider = new FreshmanGuideProvider({ chunks: guideChunks });
 
