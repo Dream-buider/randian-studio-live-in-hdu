@@ -51,6 +51,9 @@ test('guide verifier reports safe hit summaries without printing private content
 ### 杭电到达篇
 入学准备清单。
 
+#### 地铁优惠
+到校交通说明。
+
 ## 宿舍篇
 ### 宿舍类型
 宿舍大小和几人间以实际分配为准。
@@ -74,6 +77,36 @@ test('guide verifier reports safe hit summaries without printing private content
     assert.match(result.stdout, /快递员怎么应聘？ \| 0 \| - \| -/u);
     assert.doesNotMatch(result.stdout, new RegExp(PRIVATE_BODY, 'u'));
     assert.doesNotMatch(result.stderr, new RegExp(PRIVATE_BODY, 'u'));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('guide verifier rejects an arrival alias that resolves only to a descendant chunk', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'freshman-guide-verifier-descendant-'));
+  const markdownPath = path.join(root, 'approved-guide.md');
+  try {
+    await writeFile(markdownPath, `
+## 开学准备篇
+### 学号班级号获取
+新生可在指定入口查询学号。
+
+### 钉钉杭州电子科技大学认证
+取得学号后完成航电钉和学校钉钉认证。
+
+### 杭电到达篇
+#### 地铁优惠
+到校交通说明。
+
+## 宿舍篇
+### 宿舍类型
+宿舍大小和几人间以实际分配为准。
+`, 'utf8');
+
+    const result = await runVerifier(markdownPath);
+    assert.equal(result.code, 1);
+    assert.match(result.stderr, /GUIDE_RELATED_WRONG_CHUNK \| 报到要带什么？/u);
+    assert.doesNotMatch(result.stderr, new RegExp(SECRET_API_KEY, 'u'));
   } finally {
     await rm(root, { recursive: true, force: true });
   }

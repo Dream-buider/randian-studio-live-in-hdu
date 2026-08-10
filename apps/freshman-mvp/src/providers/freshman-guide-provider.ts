@@ -175,7 +175,28 @@ export class FreshmanGuideProvider implements KnowledgeProvider {
       return { status: 'available', hits: [] };
     }
 
-    const hits = this.chunks
+    const aliasCandidateIds = new Set<string>();
+    for (const aliasTitle of aliasTitles) {
+      const exactChunks = this.chunks.filter((chunk) => (
+        normalize(chunk.displayTitle) === aliasTitle
+      ));
+      if (exactChunks.length > 0) {
+        for (const chunk of exactChunks) {
+          aliasCandidateIds.add(chunk.id);
+        }
+        continue;
+      }
+      for (const chunk of this.chunks) {
+        if (chunk.titlePath.map(normalize).some((heading) => heading.includes(aliasTitle))) {
+          aliasCandidateIds.add(chunk.id);
+        }
+      }
+    }
+    const candidateChunks = aliasTitles.size > 0
+      ? this.chunks.filter((chunk) => aliasCandidateIds.has(chunk.id))
+      : this.chunks;
+
+    const hits = candidateChunks
       .map((chunk): KnowledgeHit | null => {
         const displayTitle = normalize(chunk.displayTitle);
         const titlePath = chunk.titlePath.map(normalize);

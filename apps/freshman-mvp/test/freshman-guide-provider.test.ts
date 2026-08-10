@@ -149,6 +149,10 @@ test('controlled arrival-material aliases retrieve the canonical guide arrival c
         ...chunk('arrival-materials', '杭电到达篇', '入学准备清单。', 1),
         titlePath: ['开学准备篇', '4.杭电到达篇'],
       },
+      {
+        ...chunk('metro-discount', '地铁优惠', '到校交通说明。', 2),
+        titlePath: ['开学准备篇', '4.杭电到达篇', '地铁优惠'],
+      },
     ],
   });
 
@@ -157,7 +161,10 @@ test('controlled arrival-material aliases retrieve the canonical guide arrival c
     '新生报到要准备哪些材料',
     '去学校要带什么东西？',
   ]) {
-    assert.equal((await provider.search(question)).hits[0]?.chunkId, 'arrival-materials');
+    assert.deepEqual(
+      (await provider.search(question)).hits.map((hit) => hit.chunkId),
+      ['arrival-materials'],
+    );
   }
 });
 

@@ -20,6 +20,11 @@ const unrelated = [
   '学校体育比赛怎么报名？',
   '快递员怎么应聘？',
 ] as const;
+const arrivalMaterialQuestions = new Set([
+  '报到要带什么？',
+  '新生报到要准备哪些材料',
+  '去学校要带什么东西？',
+]);
 
 function fileArgument(args: readonly string[]): string | null {
   const index = args.indexOf('--file');
@@ -69,6 +74,12 @@ for (const question of related) {
     }
     titles.push(title);
     urls.push(url);
+  }
+  if (
+    arrivalMaterialQuestions.has(question)
+    && (titles.length !== 1 || titles[0] !== '杭电到达篇')
+  ) {
+    fail('GUIDE_RELATED_WRONG_CHUNK', question);
   }
 
   process.stdout.write(`${question} | ${result.hits.length} | ${titles.join('；')} | ${urls.join('；')}\n`);
