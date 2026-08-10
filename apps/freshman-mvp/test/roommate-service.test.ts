@@ -1,0 +1,400 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { migrateDatabase } from '../src/db/migrations.js';
+import { openDatabase } from '../src/db/sqlite.js';
+import { SqliteRoommateRepository } from '../src/repositories/sqlite-roommate-repository.js';
+import { RoommateCrypto } from '../src/roommates/crypto.js';
+import {
+  ROOMMATE_RATE_POLICIES,
+  SlidingWindowRateLimiter,
+} from '../src/roommates/rate-limit.js';
+import {
+  RoommateService,
+  type RoommateCreateInput,
+  type RoommateRequestContext,
+} from '../src/roommates/service.js';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function xiashaInput(
+  building: string,
+  orientation: 'south' | 'north',
+  room: string,
+  nickname: string,
+  contactType: 'wechat' | 'qq' | 'phone' | 'other' | null,
+  contactValue: string | null,
+): RoommateCreateInput {
+  return {
+    address: { campus: 'xiasha', building, orientation, room },
+    nickname,
+    contactType,
+    contactValue,
+    consent: contactValue !== null,
+  };
+}
+
+function setup() {
+  const database = openDatabase(':memory:');
+  migrateDatabase(database);
+  let nowMs = Date.parse('2026-08-11T00:00:00.000Z');
+  let sequence = 0;
+  const crypto = new RoommateCrypto({
+    encryptionKey: Buffer.alloc(32, 7),
+    hmacKey: Buffer.alloc(32, 9),
+  });
+  const repository = new SqliteRoommateRepository(database);
+  const limiter = new SlidingWindowRateLimiter(Buffer.alloc(32, 11), { maxBuckets: 256 });
+  const service = new RoommateService(repository, crypto, {
+    limiter,
+    now: () => new Date(nowMs),
+    id: (prefix) => `${prefix}-${++sequence}`,
+  });
+  return {
+    database,
+    repository,
+    service,
+    setNow: (value: string) => { nowMs = Date.parse(value); },
+    advance: (milliseconds: number) => { nowMs += milliseconds; },
+  };
+}
+
+const ctxA: RoommateRequestContext = { ip: '203.0.113.1' };
+const ctxB: RoommateRequestContext = { ip: '203.0.113.2' };
+const ctxC: RoommateRequestContext = { ip: '203.0.113.3' };
+
+test('only an active same-room registration can read member contacts', async () => {
+  const { database, service } = setup();
+  try {
+    const first = await service.create(xiashaInput('11', 'south', '207', '小燃', 'wechat', 'wx-a'), ctxA);
+    const second = await service.create(xiashaInput('11', 'south', '207', '小点', null, null), ctxB);
+    await service.create(xiashaInput('11', 'north', '207', '隔壁', 'qq', '12345'), ctxC);
+    const members = await service.listMembers(first.sessionToken, ctxA);
+    assert.deepEqual(members.map((item) => item.nickname), ['小燃', '小点']);
+    assert.equal(members[0]?.contact?.value, 'wx-a');
+    await assert.rejects(() => service.listMembers('invalid', ctxA), /session/i);
+    assert.equal(second.managementCode.length > 30, true);
+  } finally {
+    database.close();
+  }
+});
+
+test('requires consent for contact and accepts a registration without contact', async () => {
+  const { database, service } = setup();
+  try {
+    await assert.rejects(
+      () => service.create({ ...xiashaInput('11', 'south', '207', '小燃', 'wechat', 'wx-a'), consent: false }, ctxA),
+      /consent/i,
+    );
+    const created = await service.create(xiashaInput('11', 'south', '207', '小点', null, null), ctxB);
+    assert.equal(created.own.contact, null);
+  } finally {
+    database.close();
+  }
+});
+
+test('valid same-session create returns the existing active registration', async () => {
+  const { database, service } = setup();
+  try {
+    const first = await service.create(xiashaInput('11', 'south', '207', '小燃', null, null), ctxA);
+    const again = await service.create(
+      xiashaInput('12', 'north', '301', '不应覆盖', null, null),
+      { ...ctxA, sessionToken: first.sessionToken },
+    );
+    assert.equal(again.registrationId, first.registrationId);
+    assert.equal(again.sessionToken, first.sessionToken);
+    assert.equal(again.managementCode, null);
+    assert.equal(again.own.nickname, '小燃');
+    assert.equal(again.own.address.room, '207');
+  } finally {
+    database.close();
+  }
+});
+
+test('rejects duplicate active contact and permits reuse after deletion', async () => {
+  const { database, service } = setup();
+  try {
+    const first = await service.create(xiashaInput('11', 'south', '207', '小燃', 'wechat', ' WX-A '), ctxA);
+    await assert.rejects(
+      () => service.create(xiashaInput('12', 'south', '301', '重复', 'wechat', 'wx-a'), ctxB),
+      /contact.*active|active.*contact/i,
+    );
+    await service.deleteMine(first.sessionToken, ctxA);
+    const reused = await service.create(xiashaInput('12', 'south', '301', '可复用', 'wechat', 'wx-a'), ctxB);
+    assert.equal(reused.own.contact?.value, 'wx-a');
+  } finally {
+    database.close();
+  }
+});
+
+test('room change revokes access to the old room while preserving identity and creation time', async () => {
+  const { database, service } = setup();
+  try {
+    const owner = await service.create(xiashaInput('11', 'south', '207', '搬家者', null, null), ctxA);
+    const oldRoom = await service.create(xiashaInput('11', 'south', '207', '老室友', 'qq', '111'), ctxB);
+    const before = await service.getMine(owner.sessionToken, ctxA);
+    const updated = await service.updateMine(
+      owner.sessionToken,
+      xiashaInput('11', 'north', '207', '搬家者', null, null),
+      ctxA,
+    );
+    assert.equal(updated.id, owner.registrationId);
+    assert.equal(updated.createdAt, before.createdAt);
+    assert.deepEqual((await service.listMembers(owner.sessionToken, ctxA)).map((item) => item.nickname), ['搬家者']);
+    assert.deepEqual((await service.listMembers(oldRoom.sessionToken, ctxB)).map((item) => item.nickname), ['老室友']);
+  } finally {
+    database.close();
+  }
+});
+
+test('hidden, deleted, expired, and session-expired registrations cannot list members', async () => {
+  const { database, repository, service, advance, setNow } = setup();
+  try {
+    const hidden = await service.create(xiashaInput('11', 'south', '201', '隐藏', null, null), ctxA);
+    await service.moderate(hidden.registrationId, { action: 'hide', actorId: 'local-admin', reason: 'privacy request' });
+    await assert.rejects(() => service.listMembers(hidden.sessionToken, ctxA), /session/i);
+
+    const deleted = await service.create(xiashaInput('11', 'south', '202', '删除', 'qq', '222'), ctxB);
+    await service.deleteMine(deleted.sessionToken, ctxB);
+    await assert.rejects(() => service.listMembers(deleted.sessionToken, ctxB), /session/i);
+
+    const expired = await service.create(xiashaInput('11', 'south', '203', '过期', 'qq', '333'), ctxC);
+    advance(90 * DAY_MS);
+    await service.runRetention();
+    await assert.rejects(() => service.listMembers(expired.sessionToken, ctxC), /session/i);
+    const expiredRecord = await repository.getRegistration(expired.registrationId);
+    assert.equal(expiredRecord?.status, 'expired');
+    assert.equal(expiredRecord?.contactCiphertext, null);
+
+    setNow('2026-08-11T00:00:00.000Z');
+    const sessionExpired = await service.create(xiashaInput('11', 'south', '204', '会话过期', null, null), { ip: '203.0.113.4' });
+    database.prepare('UPDATE roommate_sessions SET expires_at = ? WHERE registration_id = ?')
+      .run('2026-08-10T23:59:59.999Z', sessionExpired.registrationId);
+    await assert.rejects(() => service.listMembers(sessionExpired.sessionToken, { ip: '203.0.113.4' }), /session/i);
+  } finally {
+    database.close();
+  }
+});
+
+test('recovery succeeds and missing ID and wrong management code share one public error', async () => {
+  const { database, service } = setup();
+  try {
+    const created = await service.create(xiashaInput('11', 'south', '207', '找回', null, null), ctxA);
+    const recovered = await service.recover(created.registrationId, created.managementCode!, ctxB);
+    assert.equal(recovered.registrationId, created.registrationId);
+    assert.notEqual(recovered.sessionToken, created.sessionToken);
+    assert.equal((await service.getMine(recovered.sessionToken, ctxB)).nickname, '找回');
+
+    let missingMessage = '';
+    let wrongMessage = '';
+    try {
+      await service.recover('missing', 'wrong-code', ctxC);
+    } catch (error) {
+      missingMessage = (error as Error).message;
+    }
+    try {
+      await service.recover(created.registrationId, 'wrong-code', { ip: '203.0.113.4' });
+    } catch (error) {
+      wrongMessage = (error as Error).message;
+    }
+    assert.notEqual(missingMessage, '');
+    assert.equal(missingMessage, wrongMessage);
+  } finally {
+    database.close();
+  }
+});
+
+test('does not impose a fixed room member cap', async () => {
+  const { database, service } = setup();
+  try {
+    const registrations = [];
+    for (let index = 0; index < 35; index += 1) {
+      registrations.push(await service.create(
+        xiashaInput('11', 'south', '207', `室友${index}`, null, null),
+        { ip: `198.51.100.${index + 1}` },
+      ));
+    }
+    assert.equal((await service.listMembers(registrations[0]!.sessionToken, ctxA)).length, 35);
+  } finally {
+    database.close();
+  }
+});
+
+test('validates nickname code-point length, controls, and contact pairs', async () => {
+  const { database, service } = setup();
+  try {
+    const invalid = [
+      { input: xiashaInput('11', 'south', '207', '', null, null), pattern: /nickname/i },
+      { input: xiashaInput('11', 'south', '207', '好'.repeat(31), null, null), pattern: /nickname/i },
+      { input: xiashaInput('11', 'south', '207', '好\u0000', null, null), pattern: /nickname/i },
+      { input: xiashaInput('11', 'south', '207', '好\u0085', null, null), pattern: /nickname/i },
+      { input: { ...xiashaInput('11', 'south', '207', '😀'.repeat(30), null, null) }, pattern: null },
+      { input: { ...xiashaInput('11', 'south', '207', '小燃', null, null), contactValue: 'wx' }, pattern: /contact/i },
+      { input: { ...xiashaInput('11', 'south', '207', '小燃', 'wechat', 'wx'), contactValue: null }, pattern: /contact/i },
+    ];
+    for (const [index, item] of invalid.entries()) {
+      const context = { ip: `192.0.2.${index + 1}` };
+      if (item.pattern === null) {
+        assert.equal((await service.create(item.input, context)).own.nickname, '😀'.repeat(30));
+      } else {
+        await assert.rejects(() => service.create(item.input, context), item.pattern);
+      }
+    }
+  } finally {
+    database.close();
+  }
+});
+
+test('persists 90-day registration and session expiry', async () => {
+  const { database, service } = setup();
+  try {
+    const created = await service.create(xiashaInput('11', 'south', '207', '九十天', null, null), ctxA);
+    assert.equal(created.own.expiresAt, '2026-11-09T00:00:00.000Z');
+    const session = database.prepare('SELECT expires_at FROM roommate_sessions WHERE registration_id = ?')
+      .get(created.registrationId) as { expires_at: string };
+    assert.equal(session.expires_at, '2026-11-09T00:00:00.000Z');
+  } finally {
+    database.close();
+  }
+});
+
+test('admin lists masked records and audits contact reveal plus atomic moderation', async () => {
+  const { database, service } = setup();
+  try {
+    const created = await service.create(xiashaInput('11', 'south', '207', '审核', 'wechat', 'private-wx'), ctxA);
+    await assert.rejects(() => service.listAdmin('someone-else', 'review'), /admin/i);
+    await assert.rejects(() => service.listAdmin('local-admin', '   '), /reason/i);
+    const listed = await service.listAdmin('local-admin', 'daily review');
+    assert.equal(listed[0]?.contact?.value, undefined);
+    assert.equal(listed[0]?.contact?.masked, true);
+
+    await assert.rejects(() => service.revealAdminContact(created.registrationId, 'local-admin', ''), /reason/i);
+    assert.deepEqual(
+      await service.revealAdminContact(created.registrationId, 'local-admin', 'investigate report'),
+      { type: 'wechat', value: 'private-wx' },
+    );
+    await service.moderate(created.registrationId, {
+      action: 'hide', actorId: 'local-admin', reason: 'privacy report',
+    });
+    await service.moderate(created.registrationId, {
+      action: 'restore', actorId: 'local-admin', reason: 'appeal accepted',
+    });
+    await service.moderate(created.registrationId, {
+      action: 'delete', actorId: 'local-admin', reason: 'owner request',
+    });
+    const deleted = (await service.listAdmin('local-admin', 'verify deletion', 'deleted'))[0];
+    assert.equal(deleted?.contact, null);
+    assert.equal(deleted?.status, 'deleted');
+    assert.equal(deleted?.deletedAt, '2026-08-11T00:00:00.000Z');
+
+    const audits = (database.prepare(
+      'SELECT action, actor_id, reason FROM roommate_admin_audit ORDER BY rowid',
+    ).all() as Array<{ action: string; actor_id: string; reason: string }>).map((row) => ({ ...row }));
+    assert.deepEqual(audits, [
+      { action: 'view_contact', actor_id: 'local-admin', reason: 'investigate report' },
+      { action: 'hide', actor_id: 'local-admin', reason: 'privacy report' },
+      { action: 'restore', actor_id: 'local-admin', reason: 'appeal accepted' },
+      { action: 'delete', actor_id: 'local-admin', reason: 'owner request' },
+    ]);
+  } finally {
+    database.close();
+  }
+});
+
+test('masked admin listing never decrypts contact ciphertext', async () => {
+  const { database, service } = setup();
+  try {
+    const created = await service.create(xiashaInput('11', 'south', '207', '遮罩', 'wechat', 'private-wx'), ctxA);
+    database.prepare('UPDATE roommate_registrations SET contact_ciphertext = ? WHERE id = ?')
+      .run('intentionally-not-valid-ciphertext', created.registrationId);
+    const listed = await service.listAdmin('local-admin', 'masked review');
+    assert.deepEqual(listed[0]?.contact, { type: 'wechat', masked: true });
+  } finally {
+    database.close();
+  }
+});
+
+test('restore only accepts hidden unexpired records and delete revokes sessions', async () => {
+  const { database, service, advance } = setup();
+  try {
+    const active = await service.create(xiashaInput('11', 'south', '207', '活动', null, null), ctxA);
+    await assert.rejects(
+      () => service.moderate(active.registrationId, { action: 'restore', actorId: 'local-admin', reason: 'invalid state' }),
+      /hidden/i,
+    );
+    await service.moderate(active.registrationId, { action: 'hide', actorId: 'local-admin', reason: 'review' });
+    advance(90 * DAY_MS);
+    await assert.rejects(
+      () => service.moderate(active.registrationId, { action: 'restore', actorId: 'local-admin', reason: 'too late' }),
+      /expired/i,
+    );
+  } finally {
+    database.close();
+  }
+});
+
+test('bounded sliding-window policies enforce limits without storing raw IPs', () => {
+  assert.deepEqual(ROOMMATE_RATE_POLICIES, {
+    create: { limit: 5, windowMs: 60 * 60 * 1000 },
+    recover: { limit: 10, windowMs: 15 * 60 * 1000 },
+    members: { limit: 120, windowMs: 60 * 1000 },
+  });
+  const limiter = new SlidingWindowRateLimiter(Buffer.alloc(32, 4), { maxBuckets: 2 });
+  for (let index = 0; index < 5; index += 1) {
+    limiter.consume('create', '203.0.113.99', index);
+  }
+  assert.throws(() => limiter.consume('create', '203.0.113.99', 5), /rate/i);
+  limiter.consume('create', '203.0.113.99', ROOMMATE_RATE_POLICIES.create.windowMs + 1);
+  limiter.consume('create', '198.51.100.1', ROOMMATE_RATE_POLICIES.create.windowMs + 1);
+  limiter.consume('create', '198.51.100.2', ROOMMATE_RATE_POLICIES.create.windowMs + 1);
+  assert.equal(limiter.size <= 2, true);
+  assert.equal(JSON.stringify(limiter).includes('203.0.113.99'), false);
+});
+
+test('service enforces create, recovery, and member-list rate policies', async () => {
+  const createCase = setup();
+  try {
+    for (let index = 0; index < 5; index += 1) {
+      await createCase.service.create(
+        xiashaInput('11', 'south', `${200 + index}`, `创建${index}`, null, null),
+        { ip: '192.0.2.100' },
+      );
+    }
+    await assert.rejects(
+      () => createCase.service.create(xiashaInput('11', 'south', '299', '超限', null, null), { ip: '192.0.2.100' }),
+      /rate/i,
+    );
+  } finally {
+    createCase.database.close();
+  }
+
+  const recoveryCase = setup();
+  try {
+    const created = await recoveryCase.service.create(xiashaInput('11', 'south', '207', '找回限流', null, null), ctxA);
+    for (let index = 0; index < 10; index += 1) {
+      await assert.rejects(
+        () => recoveryCase.service.recover('missing', 'wrong', { ip: '192.0.2.101' }),
+        /registration/i,
+      );
+    }
+    await assert.rejects(
+      () => recoveryCase.service.recover(created.registrationId, created.managementCode!, { ip: '192.0.2.101' }),
+      /rate/i,
+    );
+  } finally {
+    recoveryCase.database.close();
+  }
+
+  const membersCase = setup();
+  try {
+    const created = await membersCase.service.create(xiashaInput('11', 'south', '207', '列表限流', null, null), ctxA);
+    for (let index = 0; index < 120; index += 1) {
+      await membersCase.service.listMembers(created.sessionToken, { ip: '192.0.2.102' });
+    }
+    await assert.rejects(
+      () => membersCase.service.listMembers(created.sessionToken, { ip: '192.0.2.102' }),
+      /rate/i,
+    );
+  } finally {
+    membersCase.database.close();
+  }
+});

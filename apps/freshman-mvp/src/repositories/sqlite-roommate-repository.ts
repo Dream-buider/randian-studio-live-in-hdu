@@ -39,13 +39,26 @@ export class SqliteRoommateRepository implements RoommateRepository {
     return row ? this.toRegistration(row) : null;
   }
 
-  async getRegistrationBySessionDigest(sessionDigest: string): Promise<RoommateRegistrationRecord | null> {
+  async getRegistrationBySessionDigest(
+    sessionDigest: string,
+    now: string,
+  ): Promise<RoommateRegistrationRecord | null> {
     const row = this.database.prepare(`
       SELECT registrations.*
       FROM roommate_sessions AS sessions
       JOIN roommate_registrations AS registrations ON registrations.id = sessions.registration_id
-      WHERE sessions.session_digest = ?
-    `).get(sessionDigest) as Row | undefined;
+      WHERE sessions.session_digest = ? AND sessions.expires_at > ?
+    `).get(sessionDigest, now) as Row | undefined;
+    return row ? this.toRegistration(row) : null;
+  }
+
+  async getActiveRegistrationByContactDigest(
+    contactDigest: string,
+  ): Promise<RoommateRegistrationRecord | null> {
+    const row = this.database.prepare(`
+      SELECT * FROM roommate_registrations
+      WHERE contact_digest = ? AND status = 'active'
+    `).get(contactDigest) as Row | undefined;
     return row ? this.toRegistration(row) : null;
   }
 
@@ -148,6 +161,9 @@ export class SqliteRoommateRepository implements RoommateRepository {
       }
       if (audit) {
         this.insertAudit(audit);
+      }
+      if (record.status === 'deleted') {
+        this.database.prepare('DELETE FROM roommate_sessions WHERE registration_id = ?').run(record.id);
       }
       return record;
     });

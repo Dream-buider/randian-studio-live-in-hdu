@@ -55,7 +55,8 @@ export interface RoommateAdminAuditRecord {
 export interface RoommateRepository {
   createRegistration(record: RoommateRegistrationRecord): Promise<RoommateRegistrationRecord>;
   getRegistration(id: string): Promise<RoommateRegistrationRecord | null>;
-  getRegistrationBySessionDigest(sessionDigest: string): Promise<RoommateRegistrationRecord | null>;
+  getRegistrationBySessionDigest(sessionDigest: string, now: string): Promise<RoommateRegistrationRecord | null>;
+  getActiveRegistrationByContactDigest(contactDigest: string): Promise<RoommateRegistrationRecord | null>;
   listActiveMembers(roomKey: string, now: string): Promise<RoommateRegistrationRecord[]>;
   updateRegistration(record: RoommateRegistrationRecord): Promise<RoommateRegistrationRecord>;
   createSession(record: RoommateSessionRecord): Promise<RoommateSessionRecord>;

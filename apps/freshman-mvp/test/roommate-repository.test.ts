@@ -163,7 +163,7 @@ test('repository preserves Q&A and roommate records across a database reopen', a
     migrateDatabase(reopened);
     const persisted = new SqliteRoommateRepository(reopened);
     assert.deepEqual(await persisted.getRegistration('registration-1'), registration());
-    assert.deepEqual(await persisted.getRegistrationBySessionDigest('session-digest-1'), registration());
+    assert.deepEqual(await persisted.getRegistrationBySessionDigest('session-digest-1', createdAt), registration());
     assert.equal(
       Number((reopened.prepare('SELECT COUNT(*) AS count FROM question_intents').get() as { count: number }).count),
       1,
@@ -171,6 +171,30 @@ test('repository preserves Q&A and roommate records across a database reopen', a
     reopened.close();
   } finally {
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('repository rejects expired sessions and finds only active duplicate contacts', async () => {
+  const db = openDatabase(':memory:');
+  try {
+    migrateDatabase(db);
+    const repository = new SqliteRoommateRepository(db);
+    const active = registration();
+    const deleted = registration({
+      id: 'registration-deleted',
+      managementDigest: 'management-deleted',
+      contactDigest: 'deleted-contact-digest',
+      status: 'deleted',
+    });
+    await repository.createRegistration(active);
+    await repository.createRegistration(deleted);
+    await repository.createSession(session({ expiresAt: '2026-08-10T23:59:59.999Z' }));
+
+    assert.equal(await repository.getRegistrationBySessionDigest('session-digest-1', createdAt), null);
+    assert.deepEqual(await repository.getActiveRegistrationByContactDigest('contact-digest'), active);
+    assert.equal(await repository.getActiveRegistrationByContactDigest('deleted-contact-digest'), null);
+  } finally {
+    db.close();
   }
 });
 
@@ -205,8 +229,8 @@ test('repository scopes active members and atomically expires personal contact a
     await repository.expireDue(createdAt);
 
     assert.deepEqual(await repository.listActiveMembers(due.roomKey, createdAt), [future]);
-    assert.deepEqual(await repository.getRegistrationBySessionDigest('session-digest-1'), null);
-    assert.deepEqual(await repository.getRegistrationBySessionDigest('session-hidden'), null);
+    assert.deepEqual(await repository.getRegistrationBySessionDigest('session-digest-1', createdAt), null);
+    assert.deepEqual(await repository.getRegistrationBySessionDigest('session-hidden', createdAt), null);
     assert.deepEqual(await repository.getRegistration('registration-1'), registration({
       expiresAt: due.expiresAt,
       status: 'expired', contactType: null, contactCiphertext: null, contactDigest: null, updatedAt: createdAt,
@@ -238,7 +262,7 @@ test('repository updates, moderates, revokes sessions, and records audit entries
     await repository.appendAudit(audit());
     await repository.revokeSessions(updated.id);
 
-    assert.deepEqual(await repository.getRegistrationBySessionDigest(session().sessionDigest), null);
+    assert.deepEqual(await repository.getRegistrationBySessionDigest(session().sessionDigest, createdAt), null);
     assert.deepEqual(await repository.listAdmin(), [hidden]);
     assert.deepEqual(
       db.prepare('SELECT id, registration_id, actor_id, action, reason, created_at FROM roommate_admin_audit').all()
