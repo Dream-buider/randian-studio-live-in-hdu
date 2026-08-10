@@ -34,6 +34,7 @@ describe('GuideView signal stations', () => {
     const wrapper = await mountGuide();
 
     expect(wrapper.get('main').attributes('data-theme')).toBe('randian-dawn');
+    expect(wrapper.text()).toContain(`${FRESHMAN_GUIDE_SECTIONS.length}座信号站`);
     const route = wrapper.get('[data-role="signal-route"]');
     expect(route.attributes('aria-label')).toBe('新生指北信号站');
     expect(route.attributes('data-energy')).toBe('dawn');
@@ -78,6 +79,7 @@ describe('GuideView signal stations', () => {
       '.guide-page[data-theme="randian-dawn"] .signal-status {\n  color: var(--student-trust);',
     );
     expect(TOKENS_CSS).toContain('.guide-signal-station:nth-of-type(4) .signal-node::after');
+    expect(TOKENS_CSS).toContain('.guide-signal-station:nth-of-type(5) .signal-node::after');
     expect(TOKENS_CSS).not.toContain('.guide-signal-station:nth-child(');
   });
 });

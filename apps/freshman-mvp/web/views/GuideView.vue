@@ -17,7 +17,7 @@ import {
             校园信号已接通
           </p>
           <h1>沿着信号，找到入学答案</h1>
-          <p>四座信号站依次带你完成入学准备、安顿宿舍，再熟悉校园生活。</p>
+          <p>{{ FRESHMAN_GUIDE_SECTIONS.length }}座信号站依次带你完成入学准备、安顿宿舍，再熟悉校园生活。</p>
         </div>
         <div class="signal-receiver" aria-hidden="true">
           <span class="receiver-ring receiver-ring-outer"></span>

@@ -2093,6 +2093,7 @@ button:disabled {
   .guide-signal-station:nth-of-type(2) .signal-node::after { animation-delay: -0.7s; }
   .guide-signal-station:nth-of-type(3) .signal-node::after { animation-delay: -1.4s; }
   .guide-signal-station:nth-of-type(4) .signal-node::after { animation-delay: -2.1s; }
+  .guide-signal-station:nth-of-type(5) .signal-node::after { animation-delay: -2.8s; }
 
   .signal-status i {
     animation: signal-status-pulse 2.2s ease-in-out infinite;
