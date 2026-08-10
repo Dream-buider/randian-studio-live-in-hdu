@@ -116,7 +116,7 @@ export class RoommateService {
     this.limiter.consume('create', this.requireIp(context), Date.parse(now));
     if (context.sessionToken !== undefined) {
       const existing = await this.authenticate(context.sessionToken, now);
-      const members = await this.membersFor(existing, now);
+      const members = await this.membersForSession(context.sessionToken, now);
       return {
         registrationId: existing.id,
         managementCode: null,
@@ -155,26 +155,26 @@ export class RoommateService {
       expiresAt,
       deletedAt: null,
     };
+    const session = {
+      sessionDigest: this.crypto.sessionDigest(sessionToken),
+      registrationId: record.id,
+      createdAt: now,
+      expiresAt,
+    };
     try {
-      await this.repository.createRegistration(record);
+      await this.repository.createRegistrationWithSession(record, session);
     } catch (error) {
       if (contactDigest && await this.repository.getActiveRegistrationByContactDigest(contactDigest)) {
         throw new Error('Contact already has an active registration');
       }
       throw error;
     }
-    await this.repository.createSession({
-      sessionDigest: this.crypto.sessionDigest(sessionToken),
-      registrationId: record.id,
-      createdAt: now,
-      expiresAt,
-    });
     return {
       registrationId: record.id,
       managementCode,
       sessionToken,
       own: this.toOwn(record),
-      members: await this.membersFor(record, now),
+      members: await this.membersForSession(sessionToken, now),
     };
   }
 
@@ -211,15 +211,25 @@ export class RoommateService {
       contactCiphertext: validated.contactValue === null ? null : this.crypto.encrypt(validated.contactValue),
       contactDigest,
       consentAt: validated.consent ? now : null,
-      updatedAt: now,
+      updatedAt: this.nextVersion(current.updatedAt, now),
     };
-    return this.toOwn(await this.repository.updateRegistration(updated));
+    const persisted = await this.repository.updateActiveRegistration(updated, current.updatedAt);
+    if (!persisted) {
+      throw new Error('Concurrent registration change');
+    }
+    return this.toOwn(persisted);
   }
 
   async deleteMine(sessionToken: string, _context: RoommateRequestContext): Promise<void> {
     const now = this.timestamp();
     const current = await this.authenticate(sessionToken, now);
-    await this.repository.moderate(this.deletedRecord(current, now));
+    const deleted = await this.repository.moderate(
+      this.deletedRecord(current, now),
+      { status: current.status, updatedAt: current.updatedAt },
+    );
+    if (!deleted) {
+      throw new Error(INVALID_SESSION);
+    }
   }
 
   async recover(
@@ -249,7 +259,7 @@ export class RoommateService {
   async listMembers(sessionToken: string, context: RoommateRequestContext): Promise<RoommateMemberView[]> {
     const now = this.timestamp();
     this.limiter.consume('members', this.requireIp(context), Date.parse(now));
-    return this.membersFor(await this.authenticate(sessionToken, now), now);
+    return this.membersForSession(sessionToken, now);
   }
 
   async listAdmin(actorId: string, reason: string, status?: RoommateStatus): Promise<RoommateAdminView[]> {
@@ -283,7 +293,7 @@ export class RoommateService {
       if (current.status !== 'active') {
         throw new Error('Only active registrations can be hidden');
       }
-      updated = { ...current, status: 'hidden', updatedAt: now };
+      updated = { ...current, status: 'hidden', updatedAt: this.nextVersion(current.updatedAt, now) };
     } else if (input.action === 'restore') {
       if (current.status !== 'hidden') {
         throw new Error('Only hidden registrations can be restored');
@@ -291,15 +301,25 @@ export class RoommateService {
       if (current.expiresAt <= now) {
         throw new Error('Expired registrations cannot be restored');
       }
-      updated = { ...current, status: 'active', updatedAt: now };
-    } else {
+      updated = { ...current, status: 'active', updatedAt: this.nextVersion(current.updatedAt, now) };
+    } else if (input.action === 'delete') {
       if (current.status === 'deleted' || current.status === 'expired') {
         throw new Error('Registration cannot be deleted');
       }
       updated = this.deletedRecord(current, now);
+    } else {
+      throw new Error('Invalid moderation action');
     }
     const audit = this.audit(current.id, input.actorId, input.action, input.reason);
-    return this.toAdmin(await this.repository.moderate(updated, audit));
+    const persisted = await this.repository.moderate(
+      updated,
+      { status: current.status, updatedAt: current.updatedAt },
+      audit,
+    );
+    if (!persisted) {
+      throw new Error('Concurrent registration change');
+    }
+    return this.toAdmin(persisted);
   }
 
   async runRetention(): Promise<void> {
@@ -317,8 +337,15 @@ export class RoommateService {
     return record;
   }
 
-  private async membersFor(record: RoommateRegistrationRecord, now: string): Promise<RoommateMemberView[]> {
-    return (await this.repository.listActiveMembers(record.roomKey, now)).map((member) => ({
+  private async membersForSession(sessionToken: string, now: string): Promise<RoommateMemberView[]> {
+    const members = await this.repository.listActiveMembersForSession(
+      this.crypto.sessionDigest(sessionToken),
+      now,
+    );
+    if (!members) {
+      throw new Error(INVALID_SESSION);
+    }
+    return members.map((member) => ({
       id: member.id,
       nickname: this.crypto.decrypt(member.nicknameCiphertext),
       contact: member.contactType && member.contactCiphertext
@@ -398,7 +425,7 @@ export class RoommateService {
       contactDigest: null,
       consentAt: null,
       status: 'deleted',
-      updatedAt: now,
+      updatedAt: this.nextVersion(record.updatedAt, now),
       deletedAt: now,
     };
   }
@@ -432,6 +459,10 @@ export class RoommateService {
 
   private timestamp(): string {
     return this.now().toISOString();
+  }
+
+  private nextVersion(current: string, now: string): string {
+    return new Date(Math.max(Date.parse(now), Date.parse(current) + 1)).toISOString();
   }
 
   private constantTimeEqual(left: string, right: string): boolean {

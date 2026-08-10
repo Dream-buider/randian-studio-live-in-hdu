@@ -54,18 +54,31 @@ export interface RoommateAdminAuditRecord {
 
 export interface RoommateRepository {
   createRegistration(record: RoommateRegistrationRecord): Promise<RoommateRegistrationRecord>;
+  createRegistrationWithSession(
+    registration: RoommateRegistrationRecord,
+    session: RoommateSessionRecord,
+  ): Promise<RoommateRegistrationRecord>;
   getRegistration(id: string): Promise<RoommateRegistrationRecord | null>;
   getRegistrationBySessionDigest(sessionDigest: string, now: string): Promise<RoommateRegistrationRecord | null>;
+  listActiveMembersForSession(
+    sessionDigest: string,
+    now: string,
+  ): Promise<RoommateRegistrationRecord[] | null>;
   getActiveRegistrationByContactDigest(contactDigest: string): Promise<RoommateRegistrationRecord | null>;
   listActiveMembers(roomKey: string, now: string): Promise<RoommateRegistrationRecord[]>;
   updateRegistration(record: RoommateRegistrationRecord): Promise<RoommateRegistrationRecord>;
+  updateActiveRegistration(
+    record: RoommateRegistrationRecord,
+    expectedUpdatedAt: string,
+  ): Promise<RoommateRegistrationRecord | null>;
   createSession(record: RoommateSessionRecord): Promise<RoommateSessionRecord>;
   revokeSessions(registrationId: string): Promise<void>;
   expireDue(now: string): Promise<void>;
   listAdmin(status?: RoommateStatus): Promise<RoommateRegistrationRecord[]>;
   moderate(
     record: RoommateRegistrationRecord,
+    expected: { status: RoommateStatus; updatedAt: string },
     audit?: RoommateAdminAuditRecord,
-  ): Promise<RoommateRegistrationRecord>;
+  ): Promise<RoommateRegistrationRecord | null>;
   appendAudit(record: RoommateAdminAuditRecord): Promise<RoommateAdminAuditRecord>;
 }

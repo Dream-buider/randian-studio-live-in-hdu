@@ -258,7 +258,10 @@ test('repository updates, moderates, revokes sessions, and records audit entries
     const updated = registration({ nicknameCiphertext: 'new-encrypted-nickname', updatedAt: '2026-08-12T00:00:00.000Z' });
     assert.deepEqual(await repository.updateRegistration(updated), updated);
     const hidden = { ...updated, status: 'hidden' as const, updatedAt: '2026-08-12T01:00:00.000Z' };
-    assert.deepEqual(await repository.moderate(hidden), hidden);
+    assert.deepEqual(
+      await repository.moderate(hidden, { status: updated.status, updatedAt: updated.updatedAt }),
+      hidden,
+    );
     await repository.appendAudit(audit());
     await repository.revokeSessions(updated.id);
 

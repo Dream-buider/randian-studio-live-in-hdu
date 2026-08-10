@@ -13,6 +13,7 @@ import {
   type RoommateCreateInput,
   type RoommateRequestContext,
 } from '../src/roommates/service.js';
+import type { RoommateRepository } from '../src/roommates/models.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -33,7 +34,9 @@ function xiashaInput(
   };
 }
 
-function setup() {
+function setup(options: {
+  wrapRepository?: (repository: SqliteRoommateRepository) => RoommateRepository;
+} = {}) {
   const database = openDatabase(':memory:');
   migrateDatabase(database);
   let nowMs = Date.parse('2026-08-11T00:00:00.000Z');
@@ -43,8 +46,9 @@ function setup() {
     hmacKey: Buffer.alloc(32, 9),
   });
   const repository = new SqliteRoommateRepository(database);
+  const serviceRepository = options.wrapRepository?.(repository) ?? repository;
   const limiter = new SlidingWindowRateLimiter(Buffer.alloc(32, 11), { maxBuckets: 256 });
-  const service = new RoommateService(repository, crypto, {
+  const service = new RoommateService(serviceRepository, crypto, {
     limiter,
     now: () => new Date(nowMs),
     id: (prefix) => `${prefix}-${++sequence}`,
@@ -73,6 +77,208 @@ test('only an active same-room registration can read member contacts', async () 
     assert.equal(members[0]?.contact?.value, 'wx-a');
     await assert.rejects(() => service.listMembers('invalid', ctxA), /session/i);
     assert.equal(second.managementCode.length > 30, true);
+  } finally {
+    database.close();
+  }
+});
+
+test('member listing revalidates the current room atomically across a room-change interleave', async () => {
+  let armed = false;
+  let interleaved = false;
+  let movingRegistrationId = '';
+  const { database, repository, service } = setup({
+    wrapRepository: (target) => new Proxy(target, {
+      get(current, property) {
+        if (property === 'getRegistrationBySessionDigest') {
+          return async (sessionDigest: string, now: string) => {
+            const stale = await current.getRegistrationBySessionDigest(sessionDigest, now);
+            if (armed && !interleaved && stale?.id === movingRegistrationId) {
+              interleaved = true;
+              await current.updateRegistration({
+                ...stale,
+                roomKey: 'interleaved-new-room-key',
+                updatedAt: '2026-08-11T00:00:01.000Z',
+              });
+            }
+            return stale;
+          };
+        }
+        if (property === 'listActiveMembersForSession') {
+          return async (sessionDigest: string, now: string) => {
+            if (armed && !interleaved) {
+              interleaved = true;
+              const currentRecord = await current.getRegistration(movingRegistrationId);
+              assert.ok(currentRecord);
+              await current.updateRegistration({
+                ...currentRecord,
+                roomKey: 'interleaved-new-room-key',
+                updatedAt: '2026-08-11T00:00:01.000Z',
+              });
+            }
+            return current.listActiveMembersForSession(sessionDigest, now);
+          };
+        }
+        const value = Reflect.get(current, property, current) as unknown;
+        return typeof value === 'function' ? value.bind(current) : value;
+      },
+    }) as RoommateRepository,
+  });
+  try {
+    const moving = await service.create(xiashaInput('11', 'south', '207', '换房者', null, null), ctxA);
+    movingRegistrationId = moving.registrationId;
+    await service.create(xiashaInput('11', 'south', '207', '旧室友', 'wechat', 'old-room-secret'), ctxB);
+    armed = true;
+
+    const members = await service.listMembers(moving.sessionToken, ctxA);
+
+    assert.equal(interleaved, true);
+    assert.deepEqual(members.map((member) => member.nickname), ['换房者']);
+    assert.equal(members.some((member) => member.contact?.value === 'old-room-secret'), false);
+    assert.equal((await repository.getRegistration(moving.registrationId))?.roomKey, 'interleaved-new-room-key');
+  } finally {
+    database.close();
+  }
+});
+
+test('stale hide cannot resurrect a concurrently deleted registration or append its audit', async () => {
+  let armed = false;
+  let interleaved = false;
+  const { database, repository, service } = setup({
+    wrapRepository: (target) => new Proxy(target, {
+      get(current, property) {
+        if (property === 'getRegistration') {
+          return async (id: string) => {
+            const stale = await current.getRegistration(id);
+            if (armed && !interleaved && stale) {
+              interleaved = true;
+              const deletedAt = '2026-08-11T00:00:01.000Z';
+              await current.moderate({
+                ...stale,
+                contactType: null,
+                contactCiphertext: null,
+                contactDigest: null,
+                consentAt: null,
+                status: 'deleted',
+                updatedAt: deletedAt,
+                deletedAt,
+              }, { status: stale.status, updatedAt: stale.updatedAt }, {
+                id: 'interleaved-delete-audit',
+                registrationId: stale.id,
+                actorId: 'local-admin',
+                action: 'delete',
+                reason: 'concurrent delete',
+                createdAt: deletedAt,
+              });
+            }
+            return stale;
+          };
+        }
+        const value = Reflect.get(current, property, current) as unknown;
+        return typeof value === 'function' ? value.bind(current) : value;
+      },
+    }) as RoommateRepository,
+  });
+  try {
+    const created = await service.create(xiashaInput('11', 'south', '207', '并发审核', 'wechat', 'never-restore'), ctxA);
+    armed = true;
+
+    await assert.rejects(
+      () => service.moderate(created.registrationId, {
+        action: 'hide', actorId: 'local-admin', reason: 'stale hide',
+      }),
+      /concurrent|registration/i,
+    );
+
+    assert.equal(interleaved, true);
+    const persisted = await repository.getRegistration(created.registrationId);
+    assert.equal(persisted?.status, 'deleted');
+    assert.equal(persisted?.contactCiphertext, null);
+    assert.deepEqual(
+      database.prepare('SELECT action, reason FROM roommate_admin_audit ORDER BY rowid').all()
+        .map((row) => ({ ...(row as Record<string, unknown>) })),
+      [{ action: 'delete', reason: 'concurrent delete' }],
+    );
+  } finally {
+    database.close();
+  }
+});
+
+test('stale user update cannot resurrect contact after a concurrent delete', async () => {
+  let armed = false;
+  let interleaved = false;
+  const { database, repository, service } = setup({
+    wrapRepository: (target) => new Proxy(target, {
+      get(current, property) {
+        if (property === 'getRegistrationBySessionDigest') {
+          return async (sessionDigest: string, now: string) => {
+            const stale = await current.getRegistrationBySessionDigest(sessionDigest, now);
+            if (armed && !interleaved && stale) {
+              interleaved = true;
+              const deletedAt = '2026-08-11T00:00:01.000Z';
+              await current.moderate({
+                ...stale,
+                contactType: null,
+                contactCiphertext: null,
+                contactDigest: null,
+                consentAt: null,
+                status: 'deleted',
+                updatedAt: deletedAt,
+                deletedAt,
+              }, { status: stale.status, updatedAt: stale.updatedAt });
+            }
+            return stale;
+          };
+        }
+        const value = Reflect.get(current, property, current) as unknown;
+        return typeof value === 'function' ? value.bind(current) : value;
+      },
+    }) as RoommateRepository,
+  });
+  try {
+    const created = await service.create(xiashaInput('11', 'south', '207', '并发更新', 'wechat', 'erase-me'), ctxA);
+    armed = true;
+
+    await assert.rejects(
+      () => service.updateMine(
+        created.sessionToken,
+        xiashaInput('11', 'north', '301', '陈旧更新', 'wechat', 'resurrected'),
+        ctxA,
+      ),
+      /concurrent|session/i,
+    );
+
+    assert.equal(interleaved, true);
+    const persisted = await repository.getRegistration(created.registrationId);
+    assert.equal(persisted?.status, 'deleted');
+    assert.equal(persisted?.contactType, null);
+    assert.equal(persisted?.contactCiphertext, null);
+    assert.equal(persisted?.contactDigest, null);
+    assert.equal(persisted?.consentAt, null);
+    assert.equal(
+      database.prepare('SELECT COUNT(*) AS count FROM roommate_sessions WHERE registration_id = ?')
+        .get(created.registrationId)?.count,
+      0,
+    );
+  } finally {
+    database.close();
+  }
+});
+
+test('service mutations advance the optimistic version even when the clock is frozen', async () => {
+  const { database, service } = setup();
+  try {
+    const created = await service.create(xiashaInput('11', 'south', '207', '版本一', null, null), ctxA);
+    const updated = await service.updateMine(
+      created.sessionToken,
+      xiashaInput('11', 'south', '207', '版本二', null, null),
+      ctxA,
+    );
+    const hidden = await service.moderate(created.registrationId, {
+      action: 'hide', actorId: 'local-admin', reason: 'version check',
+    });
+
+    assert.equal(updated.updatedAt > created.own.updatedAt, true);
+    assert.equal(hidden.updatedAt > updated.updatedAt, true);
   } finally {
     database.close();
   }
@@ -257,6 +463,44 @@ test('persists 90-day registration and session expiry', async () => {
   }
 });
 
+test('registration and initial session creation roll back together and retry succeeds', async () => {
+  const { database, service } = setup();
+  try {
+    database.exec(`
+      CREATE TRIGGER fail_initial_roommate_session
+      BEFORE INSERT ON roommate_sessions
+      BEGIN
+        SELECT RAISE(ABORT, 'injected session failure');
+      END;
+    `);
+    await assert.rejects(
+      () => service.create(xiashaInput('11', 'south', '207', '原子创建', 'wechat', 'atomic-create'), ctxA),
+      /injected session failure/i,
+    );
+    assert.equal(
+      (database.prepare('SELECT COUNT(*) AS count FROM roommate_registrations').get() as { count: number }).count,
+      0,
+    );
+
+    database.exec('DROP TRIGGER fail_initial_roommate_session');
+    const retry = await service.create(
+      xiashaInput('11', 'south', '207', '原子创建', 'wechat', 'atomic-create'),
+      ctxA,
+    );
+    assert.equal(retry.own.contact?.value, 'atomic-create');
+    assert.equal(
+      (database.prepare('SELECT COUNT(*) AS count FROM roommate_registrations').get() as { count: number }).count,
+      1,
+    );
+    assert.equal(
+      (database.prepare('SELECT COUNT(*) AS count FROM roommate_sessions').get() as { count: number }).count,
+      1,
+    );
+  } finally {
+    database.close();
+  }
+});
+
 test('admin lists masked records and audits contact reveal plus atomic moderation', async () => {
   const { database, service } = setup();
   try {
@@ -332,6 +576,30 @@ test('restore only accepts hidden unexpired records and delete revokes sessions'
   }
 });
 
+test('moderation rejects an unknown runtime action without changing state or audit', async () => {
+  const { database, repository, service } = setup();
+  try {
+    const created = await service.create(xiashaInput('11', 'south', '207', '未知动作', 'wechat', 'keep-me'), ctxA);
+    await assert.rejects(
+      () => service.moderate(created.registrationId, {
+        action: 'ban' as never,
+        actorId: 'local-admin',
+        reason: 'invalid action test',
+      }),
+      /action/i,
+    );
+    const persisted = await repository.getRegistration(created.registrationId);
+    assert.equal(persisted?.status, 'active');
+    assert.notEqual(persisted?.contactCiphertext, null);
+    assert.equal(
+      (database.prepare('SELECT COUNT(*) AS count FROM roommate_admin_audit').get() as { count: number }).count,
+      0,
+    );
+  } finally {
+    database.close();
+  }
+});
+
 test('bounded sliding-window policies enforce limits without storing raw IPs', () => {
   assert.deepEqual(ROOMMATE_RATE_POLICIES, {
     create: { limit: 5, windowMs: 60 * 60 * 1000 },
@@ -343,11 +611,25 @@ test('bounded sliding-window policies enforce limits without storing raw IPs', (
     limiter.consume('create', '203.0.113.99', index);
   }
   assert.throws(() => limiter.consume('create', '203.0.113.99', 5), /rate/i);
-  limiter.consume('create', '203.0.113.99', ROOMMATE_RATE_POLICIES.create.windowMs + 1);
-  limiter.consume('create', '198.51.100.1', ROOMMATE_RATE_POLICIES.create.windowMs + 1);
-  limiter.consume('create', '198.51.100.2', ROOMMATE_RATE_POLICIES.create.windowMs + 1);
-  assert.equal(limiter.size <= 2, true);
+  limiter.consume('create', '198.51.100.1', 6);
+  assert.throws(() => limiter.consume('create', '198.51.100.2', 7), /rate/i);
+  assert.throws(() => limiter.consume('create', '203.0.113.99', 8), /rate/i);
+  assert.equal(limiter.size, 2);
   assert.equal(JSON.stringify(limiter).includes('203.0.113.99'), false);
+});
+
+test('limiter prunes members and recover buckets on their own policy windows', () => {
+  const limiter = new SlidingWindowRateLimiter(Buffer.alloc(32, 5), { maxBuckets: 2 });
+  limiter.consume('create', '203.0.113.1', 0);
+  limiter.consume('members', '203.0.113.2', 0);
+
+  const afterMembersExpiry = ROOMMATE_RATE_POLICIES.members.windowMs + 1;
+  limiter.consume('recover', '203.0.113.3', afterMembersExpiry);
+  assert.equal(limiter.size, 2);
+
+  const afterRecoverExpiry = afterMembersExpiry + ROOMMATE_RATE_POLICIES.recover.windowMs + 1;
+  limiter.consume('members', '203.0.113.4', afterRecoverExpiry);
+  assert.equal(limiter.size, 2);
 });
 
 test('service enforces create, recovery, and member-list rate policies', async () => {

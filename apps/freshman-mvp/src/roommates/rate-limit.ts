@@ -12,10 +12,15 @@ export interface SlidingWindowRateLimiterOptions {
   maxBuckets?: number;
 }
 
+interface RateBucket {
+  timestamps: number[];
+  expiresAt: number;
+}
+
 export class SlidingWindowRateLimiter {
   private readonly secret: Buffer;
   private readonly maxBuckets: number;
-  private readonly buckets = new Map<string, number[]>();
+  private readonly buckets = new Map<string, RateBucket>();
 
   constructor(secret: Buffer, options: SlidingWindowRateLimiterOptions = {}) {
     if (secret.length < 32) {
@@ -40,30 +45,27 @@ export class SlidingWindowRateLimiter {
       .update(`roommate-rate\0${action}\0${ip}`, 'utf8')
       .digest('base64url');
     const cutoff = nowMs - policy.windowMs;
-    const timestamps = (this.buckets.get(key) ?? []).filter((timestamp) => timestamp > cutoff);
+    const timestamps = (this.buckets.get(key)?.timestamps ?? [])
+      .filter((timestamp) => timestamp > cutoff);
     if (timestamps.length >= policy.limit) {
-      this.buckets.set(key, timestamps);
+      this.buckets.set(key, {
+        timestamps,
+        expiresAt: timestamps[timestamps.length - 1]! + policy.windowMs,
+      });
       throw new Error('Rate limit exceeded');
     }
     if (!this.buckets.has(key) && this.buckets.size >= this.maxBuckets) {
-      const oldestKey = this.buckets.keys().next().value as string | undefined;
-      if (oldestKey !== undefined) {
-        this.buckets.delete(oldestKey);
-      }
+      throw new Error('Rate limit capacity exceeded');
     }
     timestamps.push(nowMs);
     this.buckets.delete(key);
-    this.buckets.set(key, timestamps);
+    this.buckets.set(key, { timestamps, expiresAt: nowMs + policy.windowMs });
   }
 
   private prune(nowMs: number): void {
-    const longestWindow = Math.max(...Object.values(ROOMMATE_RATE_POLICIES).map(({ windowMs }) => windowMs));
-    for (const [key, timestamps] of this.buckets) {
-      const fresh = timestamps.filter((timestamp) => timestamp > nowMs - longestWindow);
-      if (fresh.length === 0) {
+    for (const [key, bucket] of this.buckets) {
+      if (bucket.expiresAt <= nowMs) {
         this.buckets.delete(key);
-      } else if (fresh.length !== timestamps.length) {
-        this.buckets.set(key, fresh);
       }
     }
   }

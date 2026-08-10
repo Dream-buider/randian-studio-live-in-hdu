@@ -18,19 +18,19 @@ export class SqliteRoommateRepository implements RoommateRepository {
 
   async createRegistration(record: RoommateRegistrationRecord): Promise<RoommateRegistrationRecord> {
     return this.inTransaction(() => {
-      this.database.prepare(`
-        INSERT INTO roommate_registrations (
-          id, campus_code, template_version, room_key, building_key, address_ciphertext,
-          nickname_ciphertext, contact_type, contact_ciphertext, contact_digest,
-          management_digest, consent_at, status, created_at, updated_at, expires_at, deleted_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        record.id, record.campusCode, record.templateVersion, record.roomKey, record.buildingKey,
-        record.addressCiphertext, record.nicknameCiphertext, record.contactType,
-        record.contactCiphertext, record.contactDigest, record.managementDigest, record.consentAt,
-        record.status, record.createdAt, record.updatedAt, record.expiresAt, record.deletedAt,
-      );
+      this.insertRegistration(record);
       return record;
+    });
+  }
+
+  async createRegistrationWithSession(
+    registration: RoommateRegistrationRecord,
+    session: RoommateSessionRecord,
+  ): Promise<RoommateRegistrationRecord> {
+    return this.inTransaction(() => {
+      this.insertRegistration(registration);
+      this.insertSession(session);
+      return registration;
     });
   }
 
@@ -60,6 +60,30 @@ export class SqliteRoommateRepository implements RoommateRepository {
       WHERE contact_digest = ? AND status = 'active'
     `).get(contactDigest) as Row | undefined;
     return row ? this.toRegistration(row) : null;
+  }
+
+  async listActiveMembersForSession(
+    sessionDigest: string,
+    now: string,
+  ): Promise<RoommateRegistrationRecord[] | null> {
+    const rows = this.database.prepare(`
+      WITH requester AS (
+        SELECT registrations.room_key
+        FROM roommate_sessions AS sessions
+        JOIN roommate_registrations AS registrations
+          ON registrations.id = sessions.registration_id
+        WHERE sessions.session_digest = ?
+          AND sessions.expires_at > ?
+          AND registrations.status = 'active'
+          AND registrations.expires_at > ?
+      )
+      SELECT members.*
+      FROM roommate_registrations AS members
+      JOIN requester ON requester.room_key = members.room_key
+      WHERE members.status = 'active' AND members.expires_at > ?
+      ORDER BY members.created_at ASC, members.id ASC
+    `).all(sessionDigest, now, now, now) as Row[];
+    return rows.length === 0 ? null : rows.map((row) => this.toRegistration(row));
   }
 
   async listActiveMembers(roomKey: string, now: string): Promise<RoommateRegistrationRecord[]> {
@@ -93,12 +117,33 @@ export class SqliteRoommateRepository implements RoommateRepository {
     });
   }
 
+  async updateActiveRegistration(
+    record: RoommateRegistrationRecord,
+    expectedUpdatedAt: string,
+  ): Promise<RoommateRegistrationRecord | null> {
+    if (record.updatedAt <= expectedUpdatedAt) {
+      throw new Error('Updated version must advance');
+    }
+    return this.inTransaction(() => {
+      const result = this.database.prepare(`
+        UPDATE roommate_registrations
+        SET campus_code = ?, template_version = ?, room_key = ?, building_key = ?,
+            address_ciphertext = ?, nickname_ciphertext = ?, contact_type = ?,
+            contact_ciphertext = ?, contact_digest = ?, consent_at = ?, updated_at = ?
+        WHERE id = ? AND status = 'active' AND updated_at = ?
+      `).run(
+        record.campusCode, record.templateVersion, record.roomKey, record.buildingKey,
+        record.addressCiphertext, record.nicknameCiphertext, record.contactType,
+        record.contactCiphertext, record.contactDigest, record.consentAt, record.updatedAt,
+        record.id, expectedUpdatedAt,
+      );
+      return Number(result.changes) === 1 ? { ...record, status: 'active' } : null;
+    });
+  }
+
   async createSession(record: RoommateSessionRecord): Promise<RoommateSessionRecord> {
     return this.inTransaction(() => {
-      this.database.prepare(`
-        INSERT INTO roommate_sessions (session_digest, registration_id, created_at, expires_at)
-        VALUES (?, ?, ?, ?)
-      `).run(record.sessionDigest, record.registrationId, record.createdAt, record.expiresAt);
+      this.insertSession(record);
       return record;
     });
   }
@@ -144,20 +189,24 @@ export class SqliteRoommateRepository implements RoommateRepository {
 
   async moderate(
     record: RoommateRegistrationRecord,
+    expected: { status: RoommateStatus; updatedAt: string },
     audit?: RoommateAdminAuditRecord,
-  ): Promise<RoommateRegistrationRecord> {
+  ): Promise<RoommateRegistrationRecord | null> {
+    if (record.updatedAt <= expected.updatedAt) {
+      throw new Error('Updated version must advance');
+    }
     return this.inTransaction(() => {
       const result = this.database.prepare(`
         UPDATE roommate_registrations
         SET status = ?, contact_type = ?, contact_ciphertext = ?, contact_digest = ?,
-            updated_at = ?, deleted_at = ?
-        WHERE id = ?
+            consent_at = ?, updated_at = ?, deleted_at = ?
+        WHERE id = ? AND status = ? AND updated_at = ?
       `).run(
         record.status, record.contactType, record.contactCiphertext, record.contactDigest,
-        record.updatedAt, record.deletedAt, record.id,
+        record.consentAt, record.updatedAt, record.deletedAt, record.id, expected.status, expected.updatedAt,
       );
       if (Number(result.changes) !== 1) {
-        throw new Error('Roommate registration not found');
+        return null;
       }
       if (audit) {
         this.insertAudit(audit);
@@ -181,6 +230,28 @@ export class SqliteRoommateRepository implements RoommateRepository {
       INSERT INTO roommate_admin_audit (id, registration_id, actor_id, action, reason, created_at)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(record.id, record.registrationId, record.actorId, record.action, record.reason, record.createdAt);
+  }
+
+  private insertRegistration(record: RoommateRegistrationRecord): void {
+    this.database.prepare(`
+      INSERT INTO roommate_registrations (
+        id, campus_code, template_version, room_key, building_key, address_ciphertext,
+        nickname_ciphertext, contact_type, contact_ciphertext, contact_digest,
+        management_digest, consent_at, status, created_at, updated_at, expires_at, deleted_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      record.id, record.campusCode, record.templateVersion, record.roomKey, record.buildingKey,
+      record.addressCiphertext, record.nicknameCiphertext, record.contactType,
+      record.contactCiphertext, record.contactDigest, record.managementDigest, record.consentAt,
+      record.status, record.createdAt, record.updatedAt, record.expiresAt, record.deletedAt,
+    );
+  }
+
+  private insertSession(record: RoommateSessionRecord): void {
+    this.database.prepare(`
+      INSERT INTO roommate_sessions (session_digest, registration_id, created_at, expires_at)
+      VALUES (?, ?, ?, ?)
+    `).run(record.sessionDigest, record.registrationId, record.createdAt, record.expiresAt);
   }
 
   private toRegistration(row: Row): RoommateRegistrationRecord {
