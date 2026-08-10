@@ -24,8 +24,8 @@ export class RoommateCrypto {
     if (options.encryptionKey.length !== 32) {
       throw new Error('encryptionKey must be exactly 32 bytes');
     }
-    if (options.hmacKey.length === 0) {
-      throw new Error('hmacKey must not be empty');
+    if (options.hmacKey.length < 32) {
+      throw new Error('hmacKey must be at least 32 bytes');
     }
     this.encryptionKey = Buffer.from(options.encryptionKey);
     this.hmacKey = Buffer.from(options.hmacKey);
@@ -47,17 +47,17 @@ export class RoommateCrypto {
       if (
         version !== VERSION
         || extra.length !== 0
-        || !encodedIv || !encodedTag || !encodedCiphertext
+        || !encodedIv || !encodedTag || encodedCiphertext === undefined
         || !BASE64URL.test(encodedIv)
         || !BASE64URL.test(encodedTag)
-        || !BASE64URL.test(encodedCiphertext)
+        || (encodedCiphertext.length > 0 && !BASE64URL.test(encodedCiphertext))
       ) {
         throw new Error('malformed');
       }
       const iv = Buffer.from(encodedIv, 'base64url');
       const tag = Buffer.from(encodedTag, 'base64url');
       const ciphertext = Buffer.from(encodedCiphertext, 'base64url');
-      if (iv.length !== IV_BYTES || tag.length !== TAG_BYTES || ciphertext.length === 0) {
+      if (iv.length !== IV_BYTES || tag.length !== TAG_BYTES) {
         throw new Error('malformed');
       }
       const decipher = createDecipheriv('aes-256-gcm', this.encryptionKey, iv);

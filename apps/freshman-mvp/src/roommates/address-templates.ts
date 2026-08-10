@@ -1,20 +1,37 @@
 import type {
-  CampusCode,
   NormalizedRoomAddress,
   RoomAddressInput,
   RoomOrientation,
 } from './models.js';
 
-export interface CampusTemplateSummary {
-  code: CampusCode;
+export interface EnabledCampusTemplateSummary {
+  code: 'xiasha';
   name: string;
   templateVersion: 'xiasha-v1';
-  enabled: boolean;
+  enabled: true;
 }
+
+export interface DisabledCampusTemplateSummary {
+  code: 'shaoxing';
+  name: string;
+  templateVersion: null;
+  enabled: false;
+  unavailableReason: string;
+}
+
+export type CampusTemplateSummary = EnabledCampusTemplateSummary | DisabledCampusTemplateSummary;
+
+const SHAOXING_UNAVAILABLE_REASON = '寝室分配规则确认中，暂未开放匹配';
 
 const CAMPUS_TEMPLATES: readonly CampusTemplateSummary[] = [
   { code: 'xiasha', name: '下沙校区', templateVersion: 'xiasha-v1', enabled: true },
-  { code: 'shaoxing', name: '绍兴校区', templateVersion: 'xiasha-v1', enabled: false },
+  {
+    code: 'shaoxing',
+    name: '绍兴校区',
+    templateVersion: null,
+    enabled: false,
+    unavailableReason: SHAOXING_UNAVAILABLE_REASON,
+  },
 ];
 
 function containsControlCharacter(value: string): boolean {
@@ -47,7 +64,7 @@ export function listCampusTemplates(): CampusTemplateSummary[] {
 
 export function normalizeRoomAddress(input: RoomAddressInput): NormalizedRoomAddress {
   if (input.campus === 'shaoxing') {
-    throw new Error('绍兴校区暂未开放');
+    throw new Error(SHAOXING_UNAVAILABLE_REASON);
   }
   if (input.campus !== 'xiasha') {
     throw new Error('校区不支持');
