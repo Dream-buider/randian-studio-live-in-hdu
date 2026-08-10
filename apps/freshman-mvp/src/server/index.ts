@@ -28,6 +28,7 @@ import { UnavailableSearchProvider } from '../providers/unavailable-search-provi
 import { SqliteContentRepository } from '../repositories/sqlite-content-repository.js';
 import { SqliteApprovedReviewPublisher } from '../repositories/sqlite-approved-review-publisher.js';
 import { SqliteReviewRepository } from '../repositories/sqlite-review-repository.js';
+import { SqliteRoommateRepository } from '../repositories/sqlite-roommate-repository.js';
 import type {
   ApprovedReviewPublisher,
   ContentRepository,
@@ -36,6 +37,9 @@ import type {
 import { AnswerRouter } from '../services/answer-router.js';
 import { FaqSyncService, WeKnoraFaqClient } from '../services/faq-sync-service.js';
 import { IntentMatcher } from '../services/intent-matcher.js';
+import { RoommateCrypto } from '../roommates/crypto.js';
+import { SlidingWindowRateLimiter } from '../roommates/rate-limit.js';
+import { RoommateService } from '../roommates/service.js';
 import { createApp } from './app.js';
 import { loadConfig, type AppConfig } from './config.js';
 
@@ -205,6 +209,14 @@ export async function createProductionRuntime(
   let knowledgeImportRetry: {
     retry(id: string): Promise<unknown>;
   } | null = null;
+  let roommates: RoommateService | null = null;
+  let roommateTimer: NodeJS.Timeout | null = null;
+  let roommateMatchingStatus: 'disabled' | 'configuration-error' | 'available' = config.roommate?.requested
+    ? 'configuration-error'
+    : 'disabled';
+  if (config.roommate?.secure && config.databaseProvider === 'postgres') {
+    roommateMatchingStatus = 'disabled';
+  }
   let closed = false;
   try {
     if (config.databaseProvider === 'sqlite') {
@@ -218,6 +230,31 @@ export async function createProductionRuntime(
       reviews = new SqliteReviewRepository(database);
       approvedReviewPublisher = new SqliteApprovedReviewPublisher(database);
       closeStorage = async () => { database?.close(); };
+      const roommate = config.roommate;
+      if (
+        roommate?.secure
+        && roommate.encryptionKey !== null
+        && roommate.hmacKey !== null
+      ) {
+        roommates = new RoommateService(
+          new SqliteRoommateRepository(database),
+          new RoommateCrypto({
+            encryptionKey: roommate.encryptionKey,
+            hmacKey: roommate.hmacKey,
+          }),
+          { limiter: new SlidingWindowRateLimiter(roommate.hmacKey) },
+        );
+        const runRetention = async () => {
+          try {
+            await roommates?.runRetention();
+          } catch {
+            // Retention failures are retried on the next hourly pass.
+          }
+        };
+        roommateTimer = setInterval(() => void runRetention(), 60 * 60 * 1000);
+        roommateTimer.unref();
+        roommateMatchingStatus = 'available';
+      }
     } else {
       if (!config.postgresUrl) {
         throw new Error('POSTGRES_URL is required when DATABASE_PROVIDER=postgres');
@@ -359,6 +396,7 @@ export async function createProductionRuntime(
       faqSync: faqSync ?? undefined,
       knowledgeImports: knowledgeImports ?? undefined,
       knowledgeImportRetry: knowledgeImportRetry ?? undefined,
+      roommates: roommates ?? undefined,
       health: async () => {
         const outboxCounts = faqStore
           ? await faqStore.counts()
@@ -410,6 +448,7 @@ export async function createProductionRuntime(
               status: faqStore ? 'ok' : 'not-configured',
               ...outboxCounts,
             },
+            roommateMatching: { status: roommateMatchingStatus },
           },
         };
       },
@@ -436,6 +475,10 @@ export async function createProductionRuntime(
           clearInterval(faqTimer);
           faqTimer = null;
         }
+        if (roommateTimer) {
+          clearInterval(roommateTimer);
+          roommateTimer = null;
+        }
         await app.close();
         await closeStorage();
       },
@@ -444,6 +487,10 @@ export async function createProductionRuntime(
     if (faqTimer) {
       clearInterval(faqTimer);
       faqTimer = null;
+    }
+    if (roommateTimer) {
+      clearInterval(roommateTimer);
+      roommateTimer = null;
     }
     await closeStorage?.();
     throw error;

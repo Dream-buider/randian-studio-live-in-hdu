@@ -18,6 +18,7 @@ import type { ReviewStatus } from '../domain/models.js';
 import { ContentReviewService } from '../services/content-review-service.js';
 import type { FaqSyncService } from '../services/faq-sync-service.js';
 import type { KnowledgeImportStore } from '../services/knowledge-import-service.js';
+import type { RoommateService } from '../roommates/service.js';
 
 export interface AnswerRouterContract {
   answer(question: string): Promise<unknown>;
@@ -36,6 +37,7 @@ export interface AppDependencies {
   knowledgeImportRetry?: {
     retry(id: string): Promise<unknown>;
   };
+  roommates?: RoommateService;
 }
 
 const LOOPBACK_ADDRESSES = new BlockList();
