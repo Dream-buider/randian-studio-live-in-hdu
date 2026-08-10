@@ -79,7 +79,9 @@ describe('GuideView signal stations', () => {
       '.guide-page[data-theme="randian-dawn"] .signal-status {\n  color: var(--student-trust);',
     );
     expect(TOKENS_CSS).toContain('.guide-signal-station:nth-of-type(4) .signal-node::after');
-    expect(TOKENS_CSS).toContain('.guide-signal-station:nth-of-type(5) .signal-node::after');
+    expect(TOKENS_CSS).toContain(
+      '.guide-signal-station:nth-of-type(5) .signal-node::after { animation-delay: -2.24s; }',
+    );
     expect(TOKENS_CSS).not.toContain('.guide-signal-station:nth-child(');
   });
 });
