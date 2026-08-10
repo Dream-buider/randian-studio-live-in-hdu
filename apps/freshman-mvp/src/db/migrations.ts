@@ -101,6 +101,47 @@ CREATE TABLE IF NOT EXISTS app_settings (
   value TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS roommate_registrations (
+  id TEXT PRIMARY KEY,
+  campus_code TEXT NOT NULL,
+  template_version TEXT NOT NULL,
+  room_key TEXT NOT NULL,
+  building_key TEXT NOT NULL,
+  address_ciphertext TEXT NOT NULL,
+  nickname_ciphertext TEXT NOT NULL,
+  contact_type TEXT,
+  contact_ciphertext TEXT,
+  contact_digest TEXT,
+  management_digest TEXT NOT NULL UNIQUE,
+  consent_at TEXT,
+  status TEXT NOT NULL CHECK (status IN ('active','hidden','deleted','expired')),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  deleted_at TEXT
+);
+CREATE INDEX IF NOT EXISTS roommate_registrations_room_status
+  ON roommate_registrations(room_key, status, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS roommate_registrations_active_contact
+  ON roommate_registrations(contact_digest)
+  WHERE contact_digest IS NOT NULL AND status = 'active';
+
+CREATE TABLE IF NOT EXISTS roommate_sessions (
+  session_digest TEXT PRIMARY KEY,
+  registration_id TEXT NOT NULL REFERENCES roommate_registrations(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS roommate_admin_audit (
+  id TEXT PRIMARY KEY,
+  registration_id TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
 `;
 
 function addColumnIfMissing(database: SqliteDatabase, table: string, column: string, definition: string): void {
@@ -141,6 +182,9 @@ export function migrateDatabase(database: SqliteDatabase): void {
     database.prepare(
       'INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)',
     ).run(3, new Date().toISOString());
+    database.prepare(
+      'INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)',
+    ).run(4, new Date().toISOString());
     database.exec('COMMIT');
   } catch (error) {
     database.exec('ROLLBACK');
