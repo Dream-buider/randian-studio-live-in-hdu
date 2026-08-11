@@ -81,6 +81,7 @@ type FixtureOptions = {
   enabled?: boolean;
   includeSecurityHeaders?: boolean;
   adminStatus?: number;
+  campuses?: unknown[];
 };
 
 async function runVerifier(baseUrl: string, expectSuccess: boolean) {
@@ -110,7 +111,11 @@ async function withHttpsFixture(options: FixtureOptions, run: (baseUrl: string, 
     const headers = options.includeSecurityHeaders === false ? {} : SECURITY_HEADERS;
     if (request.url === '/api/roommates/config') {
       response.writeHead(200, { ...headers, 'content-type': 'application/json' });
-      response.end(JSON.stringify({ ...CONFIG, enabled: options.enabled ?? true }));
+      response.end(JSON.stringify({
+        ...CONFIG,
+        enabled: options.enabled ?? true,
+        campuses: options.campuses ?? CONFIG.campuses,
+      }));
       return;
     }
     if (request.url === '/api/health') {
@@ -178,6 +183,40 @@ test('rejects a publicly readable roommate admin endpoint', async () => {
     const result = await runVerifier(baseUrl, false);
     assert.match(`${result.stdout ?? ''}${result.stderr ?? ''}`, /admin.*protected/i);
   });
+});
+
+test('rejects campus templates that do not exactly match the public contract', async () => {
+  const xiasha = CONFIG.campuses[0];
+  const shaoxing = CONFIG.campuses[1];
+  const invalidCases: Array<{ name: string; campuses: unknown[] }> = [
+    {
+      name: 'extra campus',
+      campuses: [...CONFIG.campuses, { code: 'future', name: '未知', enabled: false }],
+    },
+    {
+      name: 'duplicate code',
+      campuses: [xiasha, { ...xiasha }],
+    },
+    {
+      name: 'wrong name',
+      campuses: [{ ...xiasha, name: '下沙' }, shaoxing],
+    },
+    {
+      name: 'wrong Shaoxing reason',
+      campuses: [xiasha, { ...shaoxing, unavailableReason: '即将开放' }],
+    },
+  ];
+
+  for (const invalidCase of invalidCases) {
+    await withHttpsFixture({ campuses: invalidCase.campuses }, async (baseUrl) => {
+      const result = await runVerifier(baseUrl, false);
+      assert.match(
+        `${result.stdout ?? ''}${result.stderr ?? ''}`,
+        /campus templates are invalid/i,
+        invalidCase.name,
+      );
+    });
+  }
 });
 
 test('passes only enabled HTTPS templates, health, unauthenticated member denial, and admin denial', async () => {

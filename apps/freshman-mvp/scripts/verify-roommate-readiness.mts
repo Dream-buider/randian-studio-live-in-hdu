@@ -63,29 +63,36 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function hasExactEntries(value: unknown, expected: Record<string, unknown>): boolean {
+  if (!isRecord(value)) return false;
+  const actualKeys = Object.keys(value).sort();
+  const expectedKeys = Object.keys(expected).sort();
+  return actualKeys.length === expectedKeys.length
+    && actualKeys.every((key, index) => key === expectedKeys[index])
+    && expectedKeys.every((key) => value[key] === expected[key]);
+}
+
 function verifyConfig(value: unknown): void {
   if (!isRecord(value)) throw new Error('Roommate config response is invalid.');
   if (value.enabled !== true) throw new Error('Roommate matching is disabled.');
   if (value.retentionDays !== 90 || !Array.isArray(value.campuses)) {
     throw new Error('Roommate config retention or campus templates are invalid.');
   }
-  const xiasha = value.campuses.find((item) => isRecord(item) && item.code === 'xiasha');
-  const shaoxing = value.campuses.find((item) => isRecord(item) && item.code === 'shaoxing');
+  const exactCampuses = [
+    { code: 'xiasha', name: '下沙校区', templateVersion: 'xiasha-v1', enabled: true },
+    {
+      code: 'shaoxing',
+      name: '绍兴校区',
+      templateVersion: null,
+      enabled: false,
+      unavailableReason: '寝室分配规则确认中，暂未开放匹配',
+    },
+  ] as const;
   if (
-    !isRecord(xiasha)
-    || xiasha.enabled !== true
-    || xiasha.templateVersion !== 'xiasha-v1'
+    value.campuses.length !== exactCampuses.length
+    || !value.campuses.every((campus, index) => hasExactEntries(campus, exactCampuses[index]))
   ) {
-    throw new Error('Expected enabled XiaSha xiasha-v1 template.');
-  }
-  if (
-    !isRecord(shaoxing)
-    || shaoxing.enabled !== false
-    || shaoxing.templateVersion !== null
-    || typeof shaoxing.unavailableReason !== 'string'
-    || !shaoxing.unavailableReason.includes('暂未开放匹配')
-  ) {
-    throw new Error('Expected disabled Shaoxing pending template.');
+    throw new Error('Roommate campus templates are invalid.');
   }
 }
 

@@ -23,7 +23,39 @@ git rev-parse HEAD
 
 记录当前 commit、已发布答案数和审核任务数。如果生产目录没有 Git 元数据，记录发布包 SHA-256，不要猜测版本。
 
-## 3. SQLite 在线备份
+## 3. 覆盖前创建可回滚代码包
+
+无论生产目录是否有 Git 元数据，覆盖任何文件前都创建代码归档。归档放在项目目录外的 `/srv/live-in-hdu/releases/rollback`，避免归档递归收录自身。归档明确排除环境文件、运行数据库、数据备份、依赖目录和各类密钥文件：
+
+```bash
+app=/srv/live-in-hdu/apps/freshman-mvp
+rollback_dir=/srv/live-in-hdu/releases/rollback
+stamp="$(date +%Y%m%d-%H%M%S)"
+archive="$rollback_dir/freshman-mvp-predeploy-$stamp.tar.gz"
+
+sudo install -d -m 700 "$rollback_dir"
+cd /srv/live-in-hdu/apps
+sudo tar --one-file-system -czf "$archive" \
+  --exclude='freshman-mvp/.env*' \
+  --exclude='freshman-mvp/runtime' \
+  --exclude='freshman-mvp/backups' \
+  --exclude='freshman-mvp/node_modules' \
+  --exclude='freshman-mvp/secrets' \
+  --exclude='freshman-mvp/.git' \
+  --exclude='*.pem' \
+  --exclude='*.key' \
+  --exclude='*.crt' \
+  freshman-mvp
+sudo chmod 600 "$archive"
+sudo sha256sum "$archive" | sudo tee "$archive.sha256" >/dev/null
+sudo chmod 600 "$archive.sha256"
+printf 'CODE_ARCHIVE=%s\n' "$archive"
+sudo cat "$archive.sha256"
+```
+
+把 `CODE_ARCHIVE` 绝对路径和输出的 SHA-256 一起写入发布记录。归档中包含当前源码、锁文件和已构建的 `dist`，但不包含任何生产密钥或数据库。
+
+## 4. SQLite 在线备份
 
 使用 SQLite 的 `.backup` 在线备份，不在服务运行时直接 `cp` 数据库：
 
@@ -52,7 +84,7 @@ find /srv/live-in-hdu/apps/freshman-mvp/backups -maxdepth 1 -type f \
   -name 'live-in-hdu-*.db' -mtime +30 -delete
 ```
 
-## 4. 先关闭功能配置三个独立密钥
+## 5. 先关闭功能配置三个独立密钥
 
 先备份环境文件。下面三个 `openssl rand -base64 32` 是三次独立的 32 字节随机生成，直接写入文件，不会把已有密钥显示在终端。本命令只执行一次；重跑前先停止并核对，避免无意轮换后无法解密旧数据。
 
@@ -82,7 +114,7 @@ sudo sed -n 's/^\(ROOMMATE_[A-Z_]*\)=.*/\1=[configured]/p' .env.local
 
 最后一条只显示变量名和 `[configured]`，不显示值。不要运行 `cat .env.local`。
 
-## 5. 先以 disabled 部署应用
+## 6. 先以 disabled 部署应用
 
 ```bash
 cd /srv/live-in-hdu/apps/freshman-mvp
@@ -96,7 +128,7 @@ curl -fsS http://127.0.0.1:3210/api/health
 
 这一阶段必须保持 `ROOMMATE_MATCHING_ENABLED=false`。先核对既有问答、审核数量和客户端，再处理 Nginx。
 
-## 6. Nginx、回环绑定和 HTTPS
+## 7. Nginx、回环绑定和 HTTPS
 
 1. 把 `deploy/nginx/liveinhdu.cn.conf.example` 复制到 `/etc/nginx/sites-available/liveinhdu.cn`。
 2. 安装有效证书并替换示例证书路径；不得把证书私钥放进项目目录。
@@ -112,7 +144,7 @@ ss -lntp | grep ':3210'
 
 `3210` 必须只显示 `127.0.0.1:3210`，不能是 `0.0.0.0:3210` 或 `[::]:3210`。安全组和主机防火墙不再向公网开放 3210；SearXNG 8888 继续只监听回环。
 
-## 7. disabled 健康检查与开启
+## 8. disabled 健康检查与开启
 
 先检查 HTTPS 和安全边界：
 
@@ -137,7 +169,7 @@ npm run verify:roommates -- --base-url https://liveinhdu.cn
 
 开启后探针必须返回 `Roommate readiness passed`。探针只使用 GET，不登记寝室、不生成会话，输出只含状态码。实际 Cookie 标志由自动化 API 测试和下面的一次性验收共同确认。
 
-## 8. 手机一次性验收
+## 9. 手机一次性验收
 
 使用一组可删除的测试数据，不填真实学生联系方式：
 
@@ -149,7 +181,7 @@ npm run verify:roommates -- --base-url https://liveinhdu.cn
 6. 删除测试登记，确认它不再出现，然后在安全管理通道中核对审计状态。
 7. 复查原有问题卡、新生指北、聊天问答、TokenDance、联网检索和审核队列。
 
-## 9. 回滚
+## 10. 回滚
 
 任一门禁失败时，首先关闭室友功能，不要首先恢复数据库：
 
@@ -161,7 +193,37 @@ sudo systemctl restart live-in-hdu
 sudo systemctl is-active live-in-hdu
 ```
 
-然后恢复发布前已记录的代码 commit/发布包，重新构建并重启。新增的 roommate 表可以保留但不对外使用。
+然后使用第 3 节记录的 `CODE_ARCHIVE` 恢复代码。下面的恢复先校验 SHA，再解压到独立临时目录，最后用 `rsync` 覆盖代码；它不覆盖 `.env.local`、`runtime`、`backups`、`node_modules` 或服务器密钥：
+
+```bash
+archive=/srv/live-in-hdu/releases/rollback/freshman-mvp-predeploy-YYYYMMDD-HHMMSS.tar.gz
+app=/srv/live-in-hdu/apps/freshman-mvp
+restore_dir="$(mktemp -d "$HOME/live-in-hdu-restore.XXXXXX")"
+
+sudo systemctl stop live-in-hdu
+sudo sha256sum --check "$archive.sha256"
+sudo tar -xzf "$archive" -C "$restore_dir" --no-same-owner
+sudo chown -R "$(id -u):$(id -g)" "$restore_dir"
+case "$restore_dir" in "$HOME"/live-in-hdu-restore.*) ;; *) exit 1 ;; esac
+test -f "$restore_dir/freshman-mvp/package-lock.json" || exit 1
+sudo rsync -a --delete \
+  --exclude='.env*' \
+  --exclude='runtime/' \
+  --exclude='backups/' \
+  --exclude='node_modules/' \
+  --exclude='secrets/' \
+  --exclude='.git/' \
+  "$restore_dir/freshman-mvp/" "$app/"
+cd "$app"
+npm ci
+npm run build
+sudo systemctl start live-in-hdu
+sudo systemctl is-active live-in-hdu
+curl -fsS http://127.0.0.1:3210/api/health
+sudo rm -rf -- "$restore_dir"
+```
+
+`restore_dir` 由固定父目录下的 `mktemp -d` 生成；只有上述命令全部成功后才删除它。新增的 roommate 表可以保留但不对外使用。
 
 **只有** `PRAGMA integrity_check` 不再是 `ok`，或已发布答案/审核任务基线计数发生非预期变化时，才停止服务并恢复数据库备份：
 
