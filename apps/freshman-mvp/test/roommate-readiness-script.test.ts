@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
 import { createServer as createHttpServer } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import path from 'node:path';
@@ -9,6 +10,7 @@ import { promisify } from 'node:util';
 const execFileAsync = promisify(execFile);
 const appRoot = path.resolve(import.meta.dirname, '..');
 const verifier = path.join(appRoot, 'scripts', 'verify-roommate-readiness.mts');
+const operationsGuide = path.join(appRoot, 'docs', 'ROOMMATE_OPERATIONS.md');
 
 const TEST_KEY = `-----BEGIN PRIVATE KEY-----
 MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCyR3eJfuwONVJg
@@ -234,4 +236,30 @@ test('passes only enabled HTTPS templates, health, unauthenticated member denial
     ]);
     assert.equal(requests.some((item) => !item.startsWith('GET ')), false);
   });
+});
+
+test('operations archive excludes every database extension and verifies archive contents and permissions', async () => {
+  const guide = await readFile(operationsGuide, 'utf8');
+  for (const required of [
+    "--exclude='*.db'",
+    "--exclude='*.sqlite'",
+    "--exclude='*.sqlite3'",
+    'tar -tzf "$archive"',
+    "\\.(db|sqlite|sqlite3|pem|key|crt)",
+    "stat -c '%a %n' \"$archive\" \"$archive.sha256\"",
+  ]) {
+    assert.ok(guide.includes(required), `missing archive contract: ${required}`);
+  }
+  assert.match(guide, /test "\$\(sudo stat -c '%a' "\$archive"\)" = '600'/);
+  assert.match(guide, /test "\$\(sudo stat -c '%a' "\$archive\.sha256"\)" = '600'/);
+});
+
+test('rollback is fail-fast, disables roommates on failure, and preserves diagnostics until success', async () => {
+  const guide = await readFile(operationsGuide, 'utf8');
+  assert.match(guide, /set -euo pipefail/);
+  assert.match(guide, /success=0/);
+  assert.match(guide, /trap [A-Za-z_][A-Za-z0-9_]* EXIT/);
+  assert.match(guide, /ROOMMATE_MATCHING_ENABLED=false/);
+  assert.match(guide, /if \[ "\$success" -eq 1 \]/);
+  assert.match(guide, /保留诊断目录/);
 });

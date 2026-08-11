@@ -28,6 +28,7 @@ git rev-parse HEAD
 无论生产目录是否有 Git 元数据，覆盖任何文件前都创建代码归档。归档放在项目目录外的 `/srv/live-in-hdu/releases/rollback`，避免归档递归收录自身。归档明确排除环境文件、运行数据库、数据备份、依赖目录和各类密钥文件：
 
 ```bash
+set -euo pipefail
 app=/srv/live-in-hdu/apps/freshman-mvp
 rollback_dir=/srv/live-in-hdu/releases/rollback
 stamp="$(date +%Y%m%d-%H%M%S)"
@@ -42,13 +43,24 @@ sudo tar --one-file-system -czf "$archive" \
   --exclude='freshman-mvp/node_modules' \
   --exclude='freshman-mvp/secrets' \
   --exclude='freshman-mvp/.git' \
+  --exclude='*.db' \
+  --exclude='*.sqlite' \
+  --exclude='*.sqlite3' \
   --exclude='*.pem' \
   --exclude='*.key' \
   --exclude='*.crt' \
   freshman-mvp
+if sudo tar -tzf "$archive" | grep -E '(^|/)(\.env[^/]*|runtime(/.*)?|backups(/.*)?|node_modules(/.*)?|secrets(/.*)?|\.git(/.*)?|[^/]+\.(db|sqlite|sqlite3|pem|key|crt))$'; then
+  printf 'ERROR: archive contains a forbidden path; deleting unusable archive.\n' >&2
+  sudo rm -f -- "$archive"
+  exit 1
+fi
 sudo chmod 600 "$archive"
 sudo sha256sum "$archive" | sudo tee "$archive.sha256" >/dev/null
 sudo chmod 600 "$archive.sha256"
+test "$(sudo stat -c '%a' "$archive")" = '600'
+test "$(sudo stat -c '%a' "$archive.sha256")" = '600'
+sudo stat -c '%a %n' "$archive" "$archive.sha256"
 printf 'CODE_ARCHIVE=%s\n' "$archive"
 sudo cat "$archive.sha256"
 ```
@@ -196,15 +208,44 @@ sudo systemctl is-active live-in-hdu
 然后使用第 3 节记录的 `CODE_ARCHIVE` 恢复代码。下面的恢复先校验 SHA，再解压到独立临时目录，最后用 `rsync` 覆盖代码；它不覆盖 `.env.local`、`runtime`、`backups`、`node_modules` 或服务器密钥：
 
 ```bash
+set -euo pipefail
 archive=/srv/live-in-hdu/releases/rollback/freshman-mvp-predeploy-YYYYMMDD-HHMMSS.tar.gz
 app=/srv/live-in-hdu/apps/freshman-mvp
-restore_dir="$(mktemp -d "$HOME/live-in-hdu-restore.XXXXXX")"
+restore_dir=''
+success=0
 
+disable_roommates() {
+  cd "$app"
+  if sudo grep -q '^ROOMMATE_MATCHING_ENABLED=' .env.local; then
+    sudo sed -i 's/^ROOMMATE_MATCHING_ENABLED=.*/ROOMMATE_MATCHING_ENABLED=false/' .env.local
+  else
+    printf 'ROOMMATE_MATCHING_ENABLED=false\n' | sudo tee -a .env.local >/dev/null
+  fi
+  sudo chmod 600 .env.local
+}
+
+finish_rollback() {
+  rc=$?
+  trap - EXIT
+  if [ "$success" -eq 1 ]; then
+    case "$restore_dir" in "$HOME"/live-in-hdu-restore.*) sudo rm -rf -- "$restore_dir" ;; *) exit 1 ;; esac
+    printf 'ROLLBACK_OK: code restored, service healthy, temporary files removed.\n'
+  else
+    disable_roommates || true
+    sudo systemctl restart live-in-hdu || true
+    printf 'ROLLBACK_FAILED: roommate matching remains disabled; 保留诊断目录 %s\n' "${restore_dir:-not-created}" >&2
+  fi
+  exit "$rc"
+}
+trap finish_rollback EXIT
+
+disable_roommates
+restore_dir="$(mktemp -d "$HOME/live-in-hdu-restore.XXXXXX")"
+case "$restore_dir" in "$HOME"/live-in-hdu-restore.*) ;; *) exit 1 ;; esac
 sudo systemctl stop live-in-hdu
 sudo sha256sum --check "$archive.sha256"
 sudo tar -xzf "$archive" -C "$restore_dir" --no-same-owner
 sudo chown -R "$(id -u):$(id -g)" "$restore_dir"
-case "$restore_dir" in "$HOME"/live-in-hdu-restore.*) ;; *) exit 1 ;; esac
 test -f "$restore_dir/freshman-mvp/package-lock.json" || exit 1
 sudo rsync -a --delete \
   --exclude='.env*' \
@@ -220,10 +261,10 @@ npm run build
 sudo systemctl start live-in-hdu
 sudo systemctl is-active live-in-hdu
 curl -fsS http://127.0.0.1:3210/api/health
-sudo rm -rf -- "$restore_dir"
+success=1
 ```
 
-`restore_dir` 由固定父目录下的 `mktemp -d` 生成；只有上述命令全部成功后才删除它。新增的 roommate 表可以保留但不对外使用。
+`set -euo pipefail` 保证校验、解压、路径防护、覆盖、安装、构建、启动或健康检查任一失败就立即中止。`restore_dir` 由固定父目录下的 `mktemp -d` 生成；只有所有门禁和健康检查成功后才删除。任何失败都会再次关闭室友功能、尝试重启服务并保留诊断目录；此时不能宣布回滚成功，必须根据 `ROLLBACK_FAILED` 路径排查。新增的 roommate 表可以保留但不对外使用。
 
 **只有** `PRAGMA integrity_check` 不再是 `ok`，或已发布答案/审核任务基线计数发生非预期变化时，才停止服务并恢复数据库备份：
 
