@@ -1,5 +1,10 @@
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, {
+  type FastifyInstance,
+  type FastifyReply,
+  type FastifyRequest,
+} from 'fastify';
 import fastifyStatic from '@fastify/static';
+import fastifyCookie from '@fastify/cookie';
 import { BlockList, isIP } from 'node:net';
 import type { AppConfig } from './config.js';
 import {
@@ -19,6 +24,15 @@ import { ContentReviewService } from '../services/content-review-service.js';
 import type { FaqSyncService } from '../services/faq-sync-service.js';
 import type { KnowledgeImportStore } from '../services/knowledge-import-service.js';
 import type { RoommateService } from '../roommates/service.js';
+import type {
+  RoommateCreateInput,
+  RoommateModerationInput,
+} from '../roommates/service.js';
+import { listCampusTemplates } from '../roommates/address-templates.js';
+import type {
+  ContactType,
+  RoommateStatus,
+} from '../roommates/models.js';
 
 export interface AnswerRouterContract {
   answer(question: string): Promise<unknown>;
@@ -44,6 +58,10 @@ const LOOPBACK_ADDRESSES = new BlockList();
 LOOPBACK_ADDRESSES.addSubnet('127.0.0.0', 8, 'ipv4');
 LOOPBACK_ADDRESSES.addAddress('::1', 'ipv6');
 LOOPBACK_ADDRESSES.addSubnet('::ffff:127.0.0.0', 104, 'ipv6');
+
+const ROOMMATE_COOKIE = 'live_in_hdu_roommate';
+const ROOMMATE_COOKIE_PATH = '/api/roommates';
+const ROOMMATE_COOKIE_MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
 
 function isLoopbackAddress(address: string): boolean {
   const family = isIP(address);
@@ -75,6 +93,132 @@ function requiredTrimmedString(field: string, value: unknown): string {
   return value.trim();
 }
 
+function boundedString(field: string, value: unknown, maxCodePoints: number): string {
+  const normalized = requiredTrimmedString(field, value);
+  if (/\p{Cc}/u.test(normalized) || [...normalized].length > maxCodePoints) {
+    throw new ValidationError(`${field} is invalid`);
+  }
+  return normalized;
+}
+
+function exactObject(value: unknown, allowedKeys: readonly string[], label = 'body'): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new ValidationError(`${label} must be an object`);
+  }
+  const body = value as Record<string, unknown>;
+  const allowed = new Set(allowedKeys);
+  if (Object.keys(body).some((key) => !allowed.has(key))) {
+    throw new ValidationError(`${label} contains unsupported fields`);
+  }
+  return body;
+}
+
+function parseRoommateInput(value: unknown): RoommateCreateInput {
+  const body = exactObject(
+    value,
+    ['address', 'nickname', 'contactType', 'contactValue', 'consent'],
+  );
+  const address = exactObject(
+    body.address,
+    ['campus', 'building', 'orientation', 'room'],
+    'address',
+  );
+  const campus = boundedString('campus', address.campus, 16);
+  const orientation = boundedString('orientation', address.orientation, 16);
+  if (campus !== 'xiasha' && campus !== 'shaoxing') {
+    throw new ValidationError('campus is invalid');
+  }
+  if (orientation !== 'south' && orientation !== 'north') {
+    throw new ValidationError('orientation is invalid');
+  }
+  const contactType = body.contactType;
+  if (
+    contactType !== null
+    && !['wechat', 'qq', 'phone', 'other'].includes(String(contactType))
+  ) {
+    throw new ValidationError('contactType is invalid');
+  }
+  const contactValue = body.contactValue === null
+    ? null
+    : boundedString('contactValue', body.contactValue, 100);
+  if (typeof body.consent !== 'boolean') {
+    throw new ValidationError('consent must be a boolean');
+  }
+  return {
+    address: {
+      campus,
+      building: boundedString('building', address.building, 20),
+      orientation,
+      room: boundedString('room', address.room, 20),
+    },
+    nickname: boundedString('nickname', body.nickname, 30),
+    contactType: contactType as ContactType | null,
+    contactValue,
+    consent: body.consent,
+  };
+}
+
+function parseRecovery(value: unknown): { registrationId: string; managementCode: string } {
+  const body = exactObject(value, ['registrationId', 'managementCode']);
+  return {
+    registrationId: boundedString('registrationId', body.registrationId, 128),
+    managementCode: boundedString('managementCode', body.managementCode, 128),
+  };
+}
+
+function parseReason(value: unknown): string {
+  const body = exactObject(value, ['reason']);
+  return boundedString('reason', body.reason, 200);
+}
+
+function parseModeration(value: unknown): Pick<RoommateModerationInput, 'action' | 'reason'> {
+  const body = exactObject(value, ['action', 'reason']);
+  if (!['hide', 'restore', 'delete'].includes(String(body.action))) {
+    throw new ValidationError('action is invalid');
+  }
+  return {
+    action: body.action as RoommateModerationInput['action'],
+    reason: boundedString('reason', body.reason, 200),
+  };
+}
+
+function translateRoommateError(error: unknown): never {
+  if (
+    error instanceof ValidationError
+    || error instanceof ConflictError
+    || error instanceof NotFoundError
+    || error instanceof ServiceUnavailableError
+  ) {
+    throw error;
+  }
+  const message = error instanceof Error ? error.message : 'Roommate request failed';
+  if (
+    message === 'Invalid or expired session'
+    || message === 'Registration or management code invalid'
+    || message === 'Registration not found'
+    || message === 'Contact unavailable'
+  ) {
+    throw new NotFoundError(message);
+  }
+  if (
+    message.includes('already')
+    || message.startsWith('Concurrent ')
+    || message.startsWith('Only ')
+    || message.includes(' cannot ')
+  ) {
+    throw new ConflictError(message);
+  }
+  throw new ValidationError(message);
+}
+
+async function callRoommates<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    return translateRoommateError(error);
+  }
+}
+
 function parseReviewDecision(value: unknown): ReviewDecision {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new ValidationError('decision must be an object');
@@ -103,8 +247,54 @@ function parseReviewDecision(value: unknown): ReviewDecision {
 }
 
 export function createApp(deps: AppDependencies): FastifyInstance {
-  const app = Fastify({ logger: false });
+  const app = Fastify({
+    logger: false,
+    trustProxy: (address) => isLoopbackAddress(address),
+  });
   const reviewService = new ContentReviewService(deps.content);
+
+  const cookieSecret = deps.config.roommate?.cookieSecret ?? undefined;
+  void app.register(fastifyCookie, cookieSecret
+    ? { secret: cookieSecret, hook: 'onRequest' }
+    : { hook: 'onRequest' });
+
+  const cookieOptions = {
+    path: ROOMMATE_COOKIE_PATH,
+    maxAge: ROOMMATE_COOKIE_MAX_AGE_SECONDS,
+    secure: true,
+    httpOnly: true,
+    sameSite: 'strict' as const,
+    signed: true,
+  };
+
+  const requireRoommateSession = (request: FastifyRequest, required: boolean): string | undefined => {
+    const raw = request.cookies[ROOMMATE_COOKIE];
+    if (raw === undefined) {
+      if (required) {
+        throw new NotFoundError('Invalid or expired session');
+      }
+      return undefined;
+    }
+    if (!cookieSecret) {
+      throw new ServiceUnavailableError('Roommate session verification is unavailable');
+    }
+    const unsigned = request.unsignCookie(raw);
+    if (!unsigned.valid || !unsigned.value) {
+      throw new NotFoundError('Invalid or expired session');
+    }
+    return unsigned.value;
+  };
+
+  const setRoommateCookie = (reply: FastifyReply, token: string): void => {
+    reply.setCookie(ROOMMATE_COOKIE, token, cookieOptions);
+  };
+
+  const clearRoommateCookie = (reply: FastifyReply): void => {
+    reply.clearCookie(ROOMMATE_COOKIE, {
+      ...cookieOptions,
+      maxAge: 0,
+    });
+  };
 
   if (deps.publicDir) {
     void app.register(fastifyStatic, {
@@ -122,9 +312,29 @@ export function createApp(deps: AppDependencies): FastifyInstance {
       || pathname.startsWith('/api/reviews/')
       || pathname === '/api/admin'
       || pathname.startsWith('/api/admin/');
-    if (isLocalOnlyRoute && !isLoopbackAddress(request.ip)) {
+    const socketAddress = request.raw.socket.remoteAddress ?? '';
+    if (isLocalOnlyRoute && !isLoopbackAddress(socketAddress)) {
       return reply.code(403).send({
         error: { code: 'FORBIDDEN', message: 'Local access only' },
+      });
+    }
+  });
+
+  app.addHook('preHandler', async (request, reply) => {
+    const pathname = request.raw.url?.split('?', 1)[0] ?? '';
+    const isSensitiveRoommateRoute = pathname.startsWith('/api/roommates/')
+      && pathname !== '/api/roommates/config';
+    if (!isSensitiveRoommateRoute) {
+      return;
+    }
+    if (!deps.roommates) {
+      return reply.code(503).send({
+        error: { code: 'SERVICE_UNAVAILABLE', message: 'Roommate matching is unavailable' },
+      });
+    }
+    if (request.protocol !== 'https') {
+      return reply.code(403).send({
+        error: { code: 'FORBIDDEN', message: 'HTTPS is required' },
       });
     }
   });
@@ -182,6 +392,133 @@ export function createApp(deps: AppDependencies): FastifyInstance {
   app.get('/api/health', async () => (
     deps.health ? deps.health() : { status: 'ok' }
   ));
+
+  app.get('/api/roommates/config', async (request) => ({
+    enabled: Boolean(
+      deps.roommates
+      && deps.config.roommate?.secure
+      && request.protocol === 'https'
+    ),
+    retentionDays: 90,
+    campuses: listCampusTemplates(),
+  }));
+
+  app.post<{ Body: unknown }>('/api/roommates/registrations', async (request, reply) => {
+    const roommates = deps.roommates!;
+    const sessionToken = requireRoommateSession(request, false);
+    const result = await callRoommates(() => roommates.create(
+      parseRoommateInput(request.body),
+      { ip: request.ip, ...(sessionToken ? { sessionToken } : {}) },
+    ));
+    setRoommateCookie(reply, result.sessionToken);
+    const { sessionToken: _secret, ...publicResult } = result;
+    return publicResult;
+  });
+
+  app.get('/api/roommates/me', async (request) => ({
+    item: await callRoommates(() => deps.roommates!.getMine(
+      requireRoommateSession(request, true)!,
+      { ip: request.ip },
+    )),
+  }));
+
+  app.patch<{ Body: unknown }>('/api/roommates/me', async (request) => ({
+    item: await callRoommates(() => deps.roommates!.updateMine(
+      requireRoommateSession(request, true)!,
+      parseRoommateInput(request.body),
+      { ip: request.ip },
+    )),
+  }));
+
+  app.delete('/api/roommates/me', async (request, reply) => {
+    await callRoommates(() => deps.roommates!.deleteMine(
+      requireRoommateSession(request, true)!,
+      { ip: request.ip },
+    ));
+    clearRoommateCookie(reply);
+    return { status: 'deleted' };
+  });
+
+  app.post<{ Body: unknown }>('/api/roommates/recover', async (request, reply) => {
+    const input = parseRecovery(request.body);
+    const result = await callRoommates(() => deps.roommates!.recover(
+      input.registrationId,
+      input.managementCode,
+      { ip: request.ip },
+    ));
+    setRoommateCookie(reply, result.sessionToken);
+    const { sessionToken: _secret, ...publicResult } = result;
+    return publicResult;
+  });
+
+  app.get('/api/roommates/members', async (request) => ({
+    items: await callRoommates(() => deps.roommates!.listMembers(
+      requireRoommateSession(request, true)!,
+      { ip: request.ip },
+    )),
+  }));
+
+  app.get<{
+    Querystring: {
+      campus?: string;
+      status?: string;
+      building?: string;
+      orientation?: string;
+      room?: string;
+    };
+  }>('/api/admin/roommates', async (request) => {
+    const { campus, status, building, orientation, room } = request.query;
+    if (status !== undefined && !['active', 'hidden', 'deleted', 'expired'].includes(status)) {
+      throw new ValidationError('status is invalid');
+    }
+    if (campus !== undefined && !['xiasha', 'shaoxing'].includes(campus)) {
+      throw new ValidationError('campus is invalid');
+    }
+    if (orientation !== undefined && !['south', 'north'].includes(orientation)) {
+      throw new ValidationError('orientation is invalid');
+    }
+    const normalizedBuilding = building === undefined ? undefined : boundedString('building', building, 20);
+    const normalizedRoom = room === undefined ? undefined : boundedString('room', room, 20);
+    const items = await callRoommates(() => deps.roommates
+      ? deps.roommates.listAdmin('local-admin', 'list-roommates', status as RoommateStatus | undefined)
+      : Promise.reject(new ServiceUnavailableError('Roommate matching is unavailable')));
+    return {
+      items: items.filter((item) => (
+        (campus === undefined || item.address.campus === campus)
+        && (normalizedBuilding === undefined || item.address.building === normalizedBuilding)
+        && (orientation === undefined || item.address.orientation === orientation)
+        && (normalizedRoom === undefined || item.address.room === normalizedRoom)
+      )),
+    };
+  });
+
+  app.post<{ Params: { id: string }; Body: unknown }>(
+    '/api/admin/roommates/:id/reveal-contact',
+    async (request) => ({
+      contact: await callRoommates(() => deps.roommates
+        ? deps.roommates.revealAdminContact(
+            boundedString('id', request.params.id, 128),
+            'local-admin',
+            parseReason(request.body),
+          )
+        : Promise.reject(new ServiceUnavailableError('Roommate matching is unavailable'))),
+    }),
+  );
+
+  app.post<{ Params: { id: string }; Body: unknown }>(
+    '/api/admin/roommates/:id/moderate',
+    async (request) => {
+      const input = parseModeration(request.body);
+      return {
+        item: await callRoommates(() => deps.roommates
+          ? deps.roommates.moderate(boundedString('id', request.params.id, 128), {
+              ...input,
+              actorId: 'local-admin',
+            })
+          : Promise.reject(new ServiceUnavailableError('Roommate matching is unavailable'))),
+      };
+    },
+  );
 
   app.post<{
     Body: unknown;
