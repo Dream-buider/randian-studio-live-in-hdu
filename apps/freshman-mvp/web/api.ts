@@ -672,6 +672,53 @@ function jsonRequest(method: 'POST' | 'PATCH', body: unknown): RequestInit {
   };
 }
 
+function projectRoommateRegistrationInput(
+  input: RoommateRegistrationInput,
+): RoommateRegistrationInput {
+  if (
+    !isRecord(input)
+    || !isRecord(input.address)
+    || (input.address.campus !== 'xiasha' && input.address.campus !== 'shaoxing')
+    || typeof input.address.building !== 'string'
+    || (input.address.orientation !== 'south' && input.address.orientation !== 'north')
+    || typeof input.address.room !== 'string'
+    || typeof input.nickname !== 'string'
+    || (input.contactType !== null && !isRoommateContactType(input.contactType))
+    || (input.contactValue !== null && typeof input.contactValue !== 'string')
+    || typeof input.consent !== 'boolean'
+  ) {
+    throw new ApiResponseError(400);
+  }
+  return {
+    address: {
+      campus: input.address.campus,
+      building: input.address.building,
+      orientation: input.address.orientation,
+      room: input.address.room,
+    },
+    nickname: input.nickname,
+    contactType: input.contactType,
+    contactValue: input.contactValue,
+    consent: input.consent,
+  };
+}
+
+function projectRoommateRecoveryCredential(
+  credential: RoommateRecoveryCredential,
+): RoommateRecoveryCredential {
+  if (
+    !isRecord(credential)
+    || typeof credential.registrationId !== 'string'
+    || typeof credential.managementCode !== 'string'
+  ) {
+    throw new ApiResponseError(400);
+  }
+  return {
+    registrationId: credential.registrationId,
+    managementCode: credential.managementCode,
+  };
+}
+
 export async function getRoommateConfig(
   options: RoommateApiOptions = {},
 ): Promise<RoommateConfig> {
@@ -689,7 +736,7 @@ export async function createRoommateRegistration(
 ): Promise<RoommateRegistrationResult> {
   const response = await roommateFetch(
     '/api/roommates/registrations',
-    jsonRequest('POST', input),
+    jsonRequest('POST', projectRoommateRegistrationInput(input)),
     options,
   );
   const body = await readJson(response);
@@ -729,7 +776,7 @@ export async function updateMyRoommateRegistration(
 ): Promise<RoommateSelf> {
   const response = await roommateFetch(
     '/api/roommates/me',
-    jsonRequest('PATCH', input),
+    jsonRequest('PATCH', projectRoommateRegistrationInput(input)),
     options,
   );
   const body = await readJson(response);
@@ -755,7 +802,7 @@ export async function recoverRoommateRegistration(
 ): Promise<RoommateRecoveryResult> {
   const response = await roommateFetch(
     '/api/roommates/recover',
-    jsonRequest('POST', credential),
+    jsonRequest('POST', projectRoommateRecoveryCredential(credential)),
     options,
   );
   const body = await readJson(response);

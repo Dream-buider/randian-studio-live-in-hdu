@@ -195,6 +195,67 @@ describe('roommate client route and API boundary', () => {
     expect('sessionToken' in recovered).toBe(false);
   });
 
+  it('projects create, update, and recovery bodies to documented fields only', async () => {
+    const fetcher = vi.fn(async (
+      path: string | URL | Request,
+      _init?: RequestInit,
+    ) => {
+      if (String(path).endsWith('/registrations')) {
+        return jsonResponse({
+          registrationId: 'registration-1',
+          managementCode: 'management-code-once',
+          own: self,
+          members: [member],
+        });
+      }
+      if (String(path).endsWith('/recover')) {
+        return jsonResponse({ registrationId: 'registration-1', own: self });
+      }
+      return jsonResponse({ item: self });
+    });
+    const unsafeInput = {
+      ...registrationInput,
+      sessionToken: 'top-level-secret',
+      debug: { sessionToken: 'nested-secret' },
+      address: {
+        ...registrationInput.address,
+        sessionToken: 'address-secret',
+        metadata: { sessionToken: 'deep-secret' },
+      },
+    } as RoommateRegistrationInput;
+
+    await createRoommateRegistration(unsafeInput, { fetcher });
+    await updateMyRoommateRegistration(unsafeInput, { fetcher });
+    await recoverRoommateRegistration({
+      registrationId: 'registration-1',
+      managementCode: 'management-code-once',
+      sessionToken: 'recovery-secret',
+      metadata: { sessionToken: 'deep-recovery-secret' },
+    } as never, { fetcher });
+
+    expect(fetcher.mock.calls.map(([, init]) => JSON.parse(String(init?.body)))).toEqual([
+      registrationInput,
+      registrationInput,
+      {
+        registrationId: 'registration-1',
+        managementCode: 'management-code-once',
+      },
+    ]);
+  });
+
+  it('rejects non-primitive documented request fields before sending them', async () => {
+    const fetcher = vi.fn();
+    await expect(createRoommateRegistration({
+      ...registrationInput,
+      nickname: { sessionToken: 'nested-in-documented-field' } as never,
+    }, { fetcher })).rejects.toBeInstanceOf(ApiResponseError);
+    await expect(recoverRoommateRegistration({
+      registrationId: 'registration-1',
+      managementCode: { sessionToken: 'nested-in-documented-field' } as never,
+    }, { fetcher })).rejects.toBeInstanceOf(ApiResponseError);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it('rejects malformed API data and a server response containing a raw session token', async () => {
     await expect(getRoommateConfig({
       fetcher: async () => jsonResponse({ enabled: true, retentionDays: '90', campuses: [] }),
