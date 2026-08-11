@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 
 export type RoommateConfig = Readonly<{
   requested: boolean;
@@ -61,6 +62,14 @@ function decodeBase64Secret(value: string | undefined): Buffer | null {
     : null;
 }
 
+function normalizeEncryptionKey(value: string | undefined): Buffer | null {
+  const decoded = decodeBase64Secret(value);
+  if (decoded === null || decoded.length === 32) {
+    return decoded;
+  }
+  return createHash('sha256').update(decoded).digest();
+}
+
 function parseHttpsOrigin(value: string | undefined): string | null {
   const trimmed = value?.trim() ?? '';
   try {
@@ -75,7 +84,7 @@ export function loadConfig(env: NodeJS.ProcessEnv, appRoot: string): AppConfig {
   const modelApiKey = (env.TOKENDANCE_API_KEY ?? '').trim();
   const roommateRequested = env.ROOMMATE_MATCHING_ENABLED === 'true';
   const roommateOrigin = parseHttpsOrigin(env.ROOMMATE_PUBLIC_ORIGIN);
-  const roommateEncryptionKey = decodeBase64Secret(env.ROOMMATE_ENCRYPTION_KEY);
+  const roommateEncryptionKey = normalizeEncryptionKey(env.ROOMMATE_ENCRYPTION_KEY);
   const roommateHmacKey = decodeBase64Secret(env.ROOMMATE_HMAC_KEY);
   const roommateCookieKey = decodeBase64Secret(env.ROOMMATE_COOKIE_SECRET);
   const roommate: RoommateConfig = {

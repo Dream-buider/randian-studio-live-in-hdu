@@ -4,20 +4,34 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { createProductionRuntime } from '../src/server/index.js';
+import { loadConfig } from '../src/server/config.js';
+import * as runtimeModule from '../src/server/index.js';
+
+const { createProductionRuntime } = runtimeModule;
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-function secureRoommateEnv(databasePath: string): NodeJS.ProcessEnv {
+function secureRoommateEnv(databasePath: string, encryptionKeyLength = 32): NodeJS.ProcessEnv {
   return {
     DATABASE_PATH: databasePath,
     ROOMMATE_MATCHING_ENABLED: 'true',
     ROOMMATE_PUBLIC_ORIGIN: 'https://liveinhdu.cn',
-    ROOMMATE_ENCRYPTION_KEY: Buffer.alloc(32, 1).toString('base64'),
+    ROOMMATE_ENCRYPTION_KEY: Buffer.alloc(encryptionKeyLength, 1).toString('base64'),
     ROOMMATE_HMAC_KEY: Buffer.alloc(32, 2).toString('base64'),
     ROOMMATE_COOKIE_SECRET: Buffer.alloc(32, 3).toString('base64'),
   };
 }
+
+test('reports PostgreSQL roommate matching as a configuration error', () => {
+  const statusFor = (runtimeModule as unknown as {
+    roommateMatchingStatus?: (config: ReturnType<typeof loadConfig>) => string;
+  }).roommateMatchingStatus;
+  assert.equal(typeof statusFor, 'function');
+  assert.equal(statusFor?.(loadConfig({
+    ...secureRoommateEnv('C:/runtime/live-in-hdu.db'),
+    DATABASE_PROVIDER: 'postgres',
+  }, appRoot)), 'configuration-error');
+});
 
 test('disabled and malformed roommate settings preserve Q&A and report no secrets', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'live-in-hdu-roommate-runtime-'));
@@ -109,6 +123,27 @@ test('secure SQLite roommate runtime migrates, unrefs retention, and closes stor
   } finally {
     globalThis.setInterval = originalSetInterval;
     globalThis.clearInterval = originalClearInterval;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('secure SQLite roommate runtime starts with 33 and 64 byte encryption secrets', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'live-in-hdu-roommate-long-key-'));
+  try {
+    for (const length of [33, 64]) {
+      const runtime = await createProductionRuntime({
+        appRoot,
+        env: secureRoommateEnv(path.join(directory, `${length}.db`), length),
+        runtimePlatform: 'linux',
+      });
+      try {
+        const health = (await runtime.app.inject({ method: 'GET', url: '/api/health' })).json();
+        assert.equal(health.components.roommateMatching.status, 'available');
+      } finally {
+        await runtime.close();
+      }
+    }
+  } finally {
     await rm(directory, { recursive: true, force: true });
   }
 });

@@ -69,6 +69,15 @@ export interface ProductionRuntime {
   close(): Promise<void>;
 }
 
+export function roommateMatchingStatus(config: AppConfig): 'disabled' | 'configuration-error' | 'available' {
+  if (!config.roommate?.requested) {
+    return 'disabled';
+  }
+  return config.roommate.secure && config.databaseProvider === 'sqlite'
+    ? 'available'
+    : 'configuration-error';
+}
+
 class DisabledModelProvider implements ModelProvider {
   async classifyIntent(): Promise<IntentClassification | null> {
     return null;
@@ -211,12 +220,7 @@ export async function createProductionRuntime(
   } | null = null;
   let roommates: RoommateService | null = null;
   let roommateTimer: NodeJS.Timeout | null = null;
-  let roommateMatchingStatus: 'disabled' | 'configuration-error' | 'available' = config.roommate?.requested
-    ? 'configuration-error'
-    : 'disabled';
-  if (config.roommate?.secure && config.databaseProvider === 'postgres') {
-    roommateMatchingStatus = 'disabled';
-  }
+  let roommateStatus = roommateMatchingStatus(config);
   let closed = false;
   try {
     if (config.databaseProvider === 'sqlite') {
@@ -253,7 +257,7 @@ export async function createProductionRuntime(
         };
         roommateTimer = setInterval(() => void runRetention(), 60 * 60 * 1000);
         roommateTimer.unref();
-        roommateMatchingStatus = 'available';
+        roommateStatus = 'available';
       }
     } else {
       if (!config.postgresUrl) {
@@ -448,7 +452,7 @@ export async function createProductionRuntime(
               status: faqStore ? 'ok' : 'not-configured',
               ...outboxCounts,
             },
-            roommateMatching: { status: roommateMatchingStatus },
+            roommateMatching: { status: roommateStatus },
           },
         };
       },
