@@ -2,6 +2,7 @@ export type CampusCode = 'xiasha' | 'shaoxing';
 export type RoomOrientation = 'south' | 'north';
 export type ContactType = 'wechat' | 'qq' | 'phone' | 'other';
 export type RoommateStatus = 'active' | 'hidden' | 'deleted' | 'expired';
+export type RoommateAdminAuditAction = 'view_contact' | 'hide' | 'restore' | 'delete';
 
 export interface RoomAddressInput {
   campus: CampusCode;
@@ -47,7 +48,7 @@ export interface RoommateAdminAuditRecord {
   id: string;
   registrationId: string;
   actorId: string;
-  action: string;
+  action: RoommateAdminAuditAction;
   reason: string;
   createdAt: string;
 }
@@ -75,6 +76,7 @@ export interface RoommateRepository {
   revokeSessions(registrationId: string): Promise<void>;
   expireDue(now: string): Promise<void>;
   listAdmin(status?: RoommateStatus): Promise<RoommateRegistrationRecord[]>;
+  listLatestAdminAudits(registrationIds: string[]): Promise<RoommateAdminAuditRecord[]>;
   moderate(
     record: RoommateRegistrationRecord,
     expected: { status: RoommateStatus; updatedAt: string },

@@ -551,15 +551,13 @@ export function createApp(deps: AppDependencies): FastifyInstance {
 
   app.post<{ Params: { id: string }; Body: unknown }>(
     '/api/admin/roommates/:id/reveal-contact',
-    async (request) => ({
-      contact: await callRoommates(() => deps.roommates
+    async (request) => callRoommates(() => deps.roommates
         ? deps.roommates.revealAdminContact(
             boundedString('id', request.params.id, 128),
             'local-admin',
             parseReason(request.body),
           )
         : Promise.reject(new ServiceUnavailableError('Roommate matching is unavailable'))),
-    }),
   );
 
   app.post<{ Params: { id: string }; Body: unknown }>(

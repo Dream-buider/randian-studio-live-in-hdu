@@ -276,3 +276,59 @@ test('repository updates, moderates, revokes sessions, and records audit entries
     db.close();
   }
 });
+
+test('repository returns the latest audit for each requested registration in one bulk result', async () => {
+  const db = openDatabase(':memory:');
+  try {
+    migrateDatabase(db);
+    const repository = new SqliteRoommateRepository(db);
+    await repository.createRegistration(registration());
+    await repository.createRegistration(registration({
+      id: 'registration-2',
+      roomKey: 'room-key-11-south-208',
+      contactDigest: 'contact-digest-2',
+      managementDigest: 'management-digest-2',
+    }));
+    await repository.appendAudit(audit({
+      id: 'audit-old',
+      action: 'view_contact',
+      reason: 'first review',
+      createdAt: '2026-08-11T00:00:00.000Z',
+    }));
+    await repository.appendAudit(audit({
+      id: 'audit-new',
+      action: 'hide',
+      reason: 'latest review',
+      createdAt: '2026-08-11T00:01:00.000Z',
+    }));
+    await repository.appendAudit(audit({
+      id: 'audit-second-registration',
+      registrationId: 'registration-2',
+      action: 'restore',
+      reason: 'appeal accepted',
+      createdAt: '2026-08-11T00:02:00.000Z',
+    }));
+
+    assert.deepEqual(
+      await repository.listLatestAdminAudits(['registration-1', 'registration-2']),
+      [
+        audit({
+          id: 'audit-new',
+          action: 'hide',
+          reason: 'latest review',
+          createdAt: '2026-08-11T00:01:00.000Z',
+        }),
+        audit({
+          id: 'audit-second-registration',
+          registrationId: 'registration-2',
+          action: 'restore',
+          reason: 'appeal accepted',
+          createdAt: '2026-08-11T00:02:00.000Z',
+        }),
+      ],
+    );
+    assert.deepEqual(await repository.listLatestAdminAudits([]), []);
+  } finally {
+    db.close();
+  }
+});

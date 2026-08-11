@@ -110,15 +110,32 @@ function fakeService(calls: ServiceCalls): RoommateService {
     },
     async listAdmin(actor) {
       calls.adminActors.push(actor);
-      return [{ ...own, contact: { type: 'wechat' as const, masked: true as const } }];
+      return [{
+        ...own,
+        contact: { type: 'wechat' as const, masked: true as const },
+        lastModeration: null,
+      }];
     },
     async revealAdminContact(_id, actor) {
       calls.adminActors.push(actor);
-      return { type: 'wechat' as const, value: 'live-in-hdu' };
+      return {
+        contact: { type: 'wechat' as const, value: 'live-in-hdu' },
+        lastModeration: {
+          actorId: 'local-admin', action: 'view_contact' as const,
+          reason: '核查用户投诉', createdAt: '2026-08-11T00:01:00.000Z',
+        },
+      };
     },
     async moderate(_id, input) {
       calls.moderationActors.push(input.actorId);
-      return { ...own, contact: { type: 'wechat' as const, masked: true as const } };
+      return {
+        ...own,
+        contact: { type: 'wechat' as const, masked: true as const },
+        lastModeration: {
+          actorId: 'local-admin', action: input.action, reason: input.reason,
+          createdAt: '2026-08-11T00:02:00.000Z',
+        },
+      };
     },
     async runRetention() {},
   } as RoommateService;
@@ -312,6 +329,7 @@ test('keeps roommate administration local-only and supplies the server actor', a
     });
     assert.equal(local.statusCode, 200);
     assert.equal(local.json().items.length, 1);
+    assert.equal(local.json().items[0].lastModeration, null);
 
     const revealed = await app.inject({
       method: 'POST',
@@ -329,6 +347,10 @@ test('keeps roommate administration local-only and supplies the server actor', a
     });
     assert.equal(validReveal.statusCode, 200);
     assert.deepEqual(validReveal.json().contact, { type: 'wechat', value: 'live-in-hdu' });
+    assert.deepEqual(validReveal.json().lastModeration, {
+      actorId: 'local-admin', action: 'view_contact', reason: '核查用户投诉',
+      createdAt: '2026-08-11T00:01:00.000Z',
+    });
 
     const moderated = await app.inject({
       method: 'POST',
@@ -337,6 +359,10 @@ test('keeps roommate administration local-only and supplies the server actor', a
       payload: { action: 'hide', reason: '隐藏异常信息' },
     });
     assert.equal(moderated.statusCode, 200);
+    assert.deepEqual(moderated.json().item.lastModeration, {
+      actorId: 'local-admin', action: 'hide', reason: '隐藏异常信息',
+      createdAt: '2026-08-11T00:02:00.000Z',
+    });
     assert.deepEqual(calls.moderationActors, ['local-admin']);
     assert.deepEqual(calls.adminActors, ['local-admin', 'local-admin']);
   });

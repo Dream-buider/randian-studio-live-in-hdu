@@ -98,12 +98,17 @@ export interface RoommateRecoveryCredential {
 
 export interface RoommateAdminItem extends Omit<RoommateSelf, 'contact'> {
   contact: { type: RoommateContactType; masked: true } | null;
-  lastModeration?: {
+  lastModeration: {
     action: 'hide' | 'restore' | 'delete' | 'view_contact';
     actorId: string;
     reason: string;
     createdAt: string;
   } | null;
+}
+
+export interface RoommateAdminContactReveal {
+  contact: RoommateContact;
+  lastModeration: NonNullable<RoommateAdminItem['lastModeration']>;
 }
 
 export interface RoommateAdminFilters {
@@ -441,11 +446,12 @@ function isRoommateAdminItem(value: unknown): value is RoommateAdminItem {
   )) {
     return false;
   }
-  if (value.lastModeration === undefined || value.lastModeration === null) {
+  if (value.lastModeration === null) {
     return true;
   }
   return isRecord(value.lastModeration)
-    && ['hide', 'restore', 'delete', 'view_contact'].includes(String(value.lastModeration.action))
+    && typeof value.lastModeration.action === 'string'
+    && ['hide', 'restore', 'delete', 'view_contact'].includes(value.lastModeration.action)
     && typeof value.lastModeration.actorId === 'string'
     && typeof value.lastModeration.reason === 'string'
     && typeof value.lastModeration.createdAt === 'string';
@@ -922,7 +928,7 @@ export async function listAdminRoommates(
 export async function revealRoommateContact(
   registrationId: string,
   reason: string,
-): Promise<RoommateContact> {
+): Promise<RoommateAdminContactReveal> {
   const normalizedReason = reason.trim();
   if (!registrationId.trim() || !normalizedReason) {
     throw new ApiResponseError(400);
@@ -940,10 +946,19 @@ export async function revealRoommateContact(
     !isRecord(body)
     || containsRoommateAdminSecret(body)
     || !isRoommateContact(body.contact)
+    || !isRecord(body.lastModeration)
+    || typeof body.lastModeration.action !== 'string'
+    || !['hide', 'restore', 'delete', 'view_contact'].includes(body.lastModeration.action)
+    || typeof body.lastModeration.actorId !== 'string'
+    || typeof body.lastModeration.reason !== 'string'
+    || typeof body.lastModeration.createdAt !== 'string'
   ) {
     throw new ApiResponseError(response.status);
   }
-  return body.contact;
+  return {
+    contact: body.contact,
+    lastModeration: body.lastModeration as RoommateAdminContactReveal['lastModeration'],
+  };
 }
 
 export async function moderateRoommate(

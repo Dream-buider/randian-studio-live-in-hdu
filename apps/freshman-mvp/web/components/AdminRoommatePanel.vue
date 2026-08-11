@@ -39,6 +39,15 @@ function contactTypeLabel(type: RoommateContact['type']): string {
   return { wechat: '微信', qq: 'QQ', phone: '手机号', other: '其他' }[type];
 }
 
+function moderationActionLabel(action: NonNullable<RoommateAdminItem['lastModeration']>['action']): string {
+  return {
+    view_contact: '查看完整联系方式',
+    hide: '隐藏',
+    restore: '恢复',
+    delete: '删除',
+  }[action];
+}
+
 function currentFilters(): RoommateAdminFilters {
   return {
     ...(filters.campus ? { campus: filters.campus as RoommateAdminFilters['campus'] } : {}),
@@ -89,7 +98,9 @@ async function revealContact(item: RoommateAdminItem): Promise<void> {
   if (!reason) return;
   pendingAction.value = `reveal:${item.id}`;
   try {
-    revealedContacts[item.id] = await revealRoommateContact(item.id, reason);
+    const result = await revealRoommateContact(item.id, reason);
+    revealedContacts[item.id] = result.contact;
+    item.lastModeration = result.lastModeration;
   } catch (error) {
     rowErrors[item.id] = error instanceof ApiResponseError && error.status === 403
       ? '仅允许在本机打开'
@@ -206,7 +217,8 @@ onMounted(load);
           <div><dt>到期时间</dt><dd>{{ item.expiresAt }}</dd></div>
         </dl>
         <p v-if="item.lastModeration">
-          最近操作：{{ item.lastModeration.actorId }} · {{ item.lastModeration.action }} ·
+          最近操作：{{ item.lastModeration.actorId }} ·
+          {{ moderationActionLabel(item.lastModeration.action) }} ·
           {{ item.lastModeration.createdAt }} · {{ item.lastModeration.reason }}
         </p>
         <label>

@@ -36,6 +36,7 @@ const older = {
   updatedAt: '2026-08-10T08:00:00.000Z',
   expiresAt: '2026-11-08T08:00:00.000Z',
   deletedAt: null,
+  lastModeration: null,
 };
 
 const newer = {
@@ -76,6 +77,25 @@ describe('roommate admin API boundary', () => {
       items: [{ ...older, managementCodeDigest: 'must-not-cross-boundary' }],
     })));
 
+    await expect(listAdminRoommates({})).rejects.toBeInstanceOf(ApiResponseError);
+  });
+
+  it('requires nullable moderation metadata and rejects array enum coercion', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({
+      items: [{
+        ...older,
+        lastModeration: {
+          actorId: 'local-admin',
+          action: ['hide'],
+          reason: '数组不能伪装成枚举',
+          createdAt: '2026-08-11T09:00:00.000Z',
+        },
+      }],
+    })));
+    await expect(listAdminRoommates({})).rejects.toBeInstanceOf(ApiResponseError);
+
+    const { lastModeration: _required, ...missingMetadata } = older;
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ items: [missingMetadata] })));
     await expect(listAdminRoommates({})).rejects.toBeInstanceOf(ApiResponseError);
   });
 
@@ -158,7 +178,15 @@ describe('AdminRoommatePanel', () => {
         return jsonResponse({ items: [older] });
       }
       if (url.endsWith('/reveal-contact')) {
-        return jsonResponse({ contact: { type: 'wechat', value: 'wx-secret-207' } });
+        return jsonResponse({
+          contact: { type: 'wechat', value: 'wx-secret-207' },
+          lastModeration: {
+            actorId: 'local-admin',
+            action: 'view_contact',
+            reason: '人工核对异常',
+            createdAt: '2026-08-11T09:30:00.000Z',
+          },
+        });
       }
       if (url.endsWith('/moderate')) {
         return jsonResponse({ item: { ...older, status: 'hidden' } });
@@ -172,6 +200,8 @@ describe('AdminRoommatePanel', () => {
     await wrapper.get('[data-action="reveal-roommate-contact"]').trigger('click');
     await flushPromises();
     expect(wrapper.text()).toContain('wx-secret-207');
+    expect(wrapper.text()).toContain('local-admin · 查看完整联系方式');
+    expect(wrapper.text()).toContain('人工核对异常');
     expect(requests.find(({ url }) => url.endsWith('/reveal-contact'))?.body).toEqual({
       reason: '人工核对异常',
     });

@@ -510,25 +510,47 @@ test('admin lists masked records and audits contact reveal plus atomic moderatio
     const listed = await service.listAdmin('local-admin', 'daily review');
     assert.equal(listed[0]?.contact?.value, undefined);
     assert.equal(listed[0]?.contact?.masked, true);
+    assert.equal(listed[0]?.lastModeration, null);
 
     await assert.rejects(() => service.revealAdminContact(created.registrationId, 'local-admin', ''), /reason/i);
     assert.deepEqual(
       await service.revealAdminContact(created.registrationId, 'local-admin', 'investigate report'),
-      { type: 'wechat', value: 'private-wx' },
+      {
+        contact: { type: 'wechat', value: 'private-wx' },
+        lastModeration: {
+          actorId: 'local-admin',
+          action: 'view_contact',
+          reason: 'investigate report',
+          createdAt: '2026-08-11T00:00:00.000Z',
+        },
+      },
     );
-    await service.moderate(created.registrationId, {
+    const hidden = await service.moderate(created.registrationId, {
       action: 'hide', actorId: 'local-admin', reason: 'privacy report',
     });
-    await service.moderate(created.registrationId, {
+    assert.deepEqual(hidden.lastModeration, {
+      actorId: 'local-admin', action: 'hide', reason: 'privacy report',
+      createdAt: '2026-08-11T00:00:00.000Z',
+    });
+    const restored = await service.moderate(created.registrationId, {
       action: 'restore', actorId: 'local-admin', reason: 'appeal accepted',
     });
-    await service.moderate(created.registrationId, {
+    assert.deepEqual(restored.lastModeration, {
+      actorId: 'local-admin', action: 'restore', reason: 'appeal accepted',
+      createdAt: '2026-08-11T00:00:00.000Z',
+    });
+    const deletedResult = await service.moderate(created.registrationId, {
       action: 'delete', actorId: 'local-admin', reason: 'owner request',
+    });
+    assert.deepEqual(deletedResult.lastModeration, {
+      actorId: 'local-admin', action: 'delete', reason: 'owner request',
+      createdAt: '2026-08-11T00:00:00.000Z',
     });
     const deleted = (await service.listAdmin('local-admin', 'verify deletion', 'deleted'))[0];
     assert.equal(deleted?.contact, null);
     assert.equal(deleted?.status, 'deleted');
     assert.equal(deleted?.deletedAt, '2026-08-11T00:00:00.000Z');
+    assert.deepEqual(deleted?.lastModeration, deletedResult.lastModeration);
 
     const audits = (database.prepare(
       'SELECT action, actor_id, reason FROM roommate_admin_audit ORDER BY rowid',

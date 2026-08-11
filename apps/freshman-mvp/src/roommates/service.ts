@@ -6,6 +6,7 @@ import type {
   NormalizedRoomAddress,
   RoomAddressInput,
   RoommateAdminAuditRecord,
+  RoommateAdminAuditAction,
   RoommateRegistrationRecord,
   RoommateRepository,
   RoommateStatus,
@@ -56,6 +57,19 @@ export interface RoommateMemberView {
 
 export interface RoommateAdminView extends Omit<RoommateOwnView, 'contact'> {
   contact: { type: ContactType; masked: true } | null;
+  lastModeration: RoommateAdminModerationView | null;
+}
+
+export interface RoommateAdminModerationView {
+  actorId: string;
+  action: RoommateAdminAuditAction;
+  reason: string;
+  createdAt: string;
+}
+
+export interface RoommateAdminContactReveal {
+  contact: RoommateContactView;
+  lastModeration: RoommateAdminModerationView;
 }
 
 export interface RoommateCreateResult {
@@ -264,21 +278,28 @@ export class RoommateService {
 
   async listAdmin(actorId: string, reason: string, status?: RoommateStatus): Promise<RoommateAdminView[]> {
     this.validateAdmin(actorId, reason);
-    return (await this.repository.listAdmin(status)).map((record) => this.toAdmin(record));
+    const records = await this.repository.listAdmin(status);
+    const latestAudits = await this.repository.listLatestAdminAudits(records.map((record) => record.id));
+    const auditByRegistration = new Map(latestAudits.map((audit) => [audit.registrationId, audit]));
+    return records.map((record) => this.toAdmin(record, auditByRegistration.get(record.id) ?? null));
   }
 
   async revealAdminContact(
     registrationId: string,
     actorId: string,
     reason: string,
-  ): Promise<RoommateContactView> {
+  ): Promise<RoommateAdminContactReveal> {
     this.validateAdmin(actorId, reason);
     const record = await this.repository.getRegistration(registrationId);
     if (!record?.contactType || !record.contactCiphertext) {
       throw new Error('Contact unavailable');
     }
-    await this.repository.appendAudit(this.audit(record.id, actorId, 'view_contact', reason));
-    return { type: record.contactType, value: this.crypto.decrypt(record.contactCiphertext) };
+    const audit = this.audit(record.id, actorId, 'view_contact', reason);
+    await this.repository.appendAudit(audit);
+    return {
+      contact: { type: record.contactType, value: this.crypto.decrypt(record.contactCiphertext) },
+      lastModeration: this.toAdminModeration(audit),
+    };
   }
 
   async moderate(registrationId: string, input: RoommateModerationInput): Promise<RoommateAdminView> {
@@ -319,7 +340,7 @@ export class RoommateService {
     if (!persisted) {
       throw new Error('Concurrent registration change');
     }
-    return this.toAdmin(persisted);
+    return this.toAdmin(persisted, audit);
   }
 
   async runRetention(): Promise<void> {
@@ -403,7 +424,10 @@ export class RoommateService {
     };
   }
 
-  private toAdmin(record: RoommateRegistrationRecord): RoommateAdminView {
+  private toAdmin(
+    record: RoommateRegistrationRecord,
+    lastModeration: RoommateAdminAuditRecord | null,
+  ): RoommateAdminView {
     return {
       id: record.id,
       address: JSON.parse(this.crypto.decrypt(record.addressCiphertext)) as NormalizedRoomAddress,
@@ -414,6 +438,16 @@ export class RoommateService {
       updatedAt: record.updatedAt,
       expiresAt: record.expiresAt,
       deletedAt: record.deletedAt,
+      lastModeration: lastModeration ? this.toAdminModeration(lastModeration) : null,
+    };
+  }
+
+  private toAdminModeration(audit: RoommateAdminAuditRecord): RoommateAdminModerationView {
+    return {
+      actorId: audit.actorId,
+      action: audit.action,
+      reason: audit.reason,
+      createdAt: audit.createdAt,
     };
   }
 
@@ -430,7 +464,12 @@ export class RoommateService {
     };
   }
 
-  private audit(registrationId: string, actorId: string, action: string, reason: string): RoommateAdminAuditRecord {
+  private audit(
+    registrationId: string,
+    actorId: string,
+    action: RoommateAdminAuditAction,
+    reason: string,
+  ): RoommateAdminAuditRecord {
     return {
       id: this.id('audit'),
       registrationId,

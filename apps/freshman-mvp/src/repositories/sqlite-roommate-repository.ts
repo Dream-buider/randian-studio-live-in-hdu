@@ -187,6 +187,27 @@ export class SqliteRoommateRepository implements RoommateRepository {
     return rows.map((row) => this.toRegistration(row));
   }
 
+  async listLatestAdminAudits(registrationIds: string[]): Promise<RoommateAdminAuditRecord[]> {
+    if (registrationIds.length === 0) {
+      return [];
+    }
+    const placeholders = registrationIds.map(() => '?').join(', ');
+    const rows = this.database.prepare(`
+      SELECT id, registration_id, actor_id, action, reason, created_at
+      FROM (
+        SELECT audit.*, ROW_NUMBER() OVER (
+          PARTITION BY registration_id
+          ORDER BY created_at DESC, rowid DESC
+        ) AS audit_rank
+        FROM roommate_admin_audit AS audit
+        WHERE registration_id IN (${placeholders})
+      )
+      WHERE audit_rank = 1
+      ORDER BY registration_id ASC
+    `).all(...registrationIds) as Row[];
+    return rows.map((row) => this.toAudit(row));
+  }
+
   async moderate(
     record: RoommateRegistrationRecord,
     expected: { status: RoommateStatus; updatedAt: string },
@@ -275,6 +296,17 @@ export class SqliteRoommateRepository implements RoommateRepository {
       updatedAt: String(row.updated_at),
       expiresAt: String(row.expires_at),
       deletedAt: row.deleted_at === null ? null : String(row.deleted_at),
+    };
+  }
+
+  private toAudit(row: Row): RoommateAdminAuditRecord {
+    return {
+      id: String(row.id),
+      registrationId: String(row.registration_id),
+      actorId: String(row.actor_id),
+      action: String(row.action) as RoommateAdminAuditRecord['action'],
+      reason: String(row.reason),
+      createdAt: String(row.created_at),
     };
   }
 
