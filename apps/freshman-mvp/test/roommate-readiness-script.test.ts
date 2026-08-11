@@ -244,7 +244,9 @@ test('operations archive excludes every database extension and verifies archive 
     "--exclude='*.db'",
     "--exclude='*.sqlite'",
     "--exclude='*.sqlite3'",
-    'tar -tzf "$archive"',
+    'listing="$(mktemp "$HOME/live-in-hdu-archive-list.XXXXXX")"',
+    'chmod 600 "$listing"',
+    'sudo tar -tzf "$archive" > "$listing"',
     "\\.(db|sqlite|sqlite3|pem|key|crt)",
     "stat -c '%a %n' \"$archive\" \"$archive.sha256\"",
   ]) {
@@ -252,6 +254,12 @@ test('operations archive excludes every database extension and verifies archive 
   }
   assert.match(guide, /test "\$\(sudo stat -c '%a' "\$archive"\)" = '600'/);
   assert.match(guide, /test "\$\(sudo stat -c '%a' "\$archive\.sha256"\)" = '600'/);
+  assert.doesNotMatch(guide, /if sudo tar -tzf/);
+  const listIndex = guide.indexOf('sudo tar -tzf "$archive" > "$listing"');
+  const scanIndex = guide.indexOf('if grep -E');
+  const checksumIndex = guide.indexOf('sudo sha256sum "$archive"');
+  assert.ok(listIndex >= 0 && listIndex < scanIndex, 'archive listing must finish before scanning');
+  assert.ok(scanIndex < checksumIndex, 'forbidden-path scan must finish before archive acceptance');
 });
 
 test('rollback is fail-fast, disables roommates on failure, and preserves diagnostics until success', async () => {

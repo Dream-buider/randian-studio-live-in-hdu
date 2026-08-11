@@ -33,8 +33,21 @@ app=/srv/live-in-hdu/apps/freshman-mvp
 rollback_dir=/srv/live-in-hdu/releases/rollback
 stamp="$(date +%Y%m%d-%H%M%S)"
 archive="$rollback_dir/freshman-mvp-predeploy-$stamp.tar.gz"
+listing=''
+archive_accepted=0
+
+cleanup_archive_check() {
+  rc=$?
+  trap - EXIT
+  if [ -n "$listing" ]; then rm -f -- "$listing"; fi
+  if [ "$archive_accepted" -ne 1 ]; then sudo rm -f -- "$archive" "$archive.sha256"; fi
+  exit "$rc"
+}
+trap cleanup_archive_check EXIT
 
 sudo install -d -m 700 "$rollback_dir"
+listing="$(mktemp "$HOME/live-in-hdu-archive-list.XXXXXX")"
+chmod 600 "$listing"
 cd /srv/live-in-hdu/apps
 sudo tar --one-file-system -czf "$archive" \
   --exclude='freshman-mvp/.env*' \
@@ -50,9 +63,9 @@ sudo tar --one-file-system -czf "$archive" \
   --exclude='*.key' \
   --exclude='*.crt' \
   freshman-mvp
-if sudo tar -tzf "$archive" | grep -E '(^|/)(\.env[^/]*|runtime(/.*)?|backups(/.*)?|node_modules(/.*)?|secrets(/.*)?|\.git(/.*)?|[^/]+\.(db|sqlite|sqlite3|pem|key|crt))$'; then
+sudo tar -tzf "$archive" > "$listing"
+if grep -E '(^|/)(\.env[^/]*|runtime(/.*)?|backups(/.*)?|node_modules(/.*)?|secrets(/.*)?|\.git(/.*)?|[^/]+\.(db|sqlite|sqlite3|pem|key|crt))$' "$listing"; then
   printf 'ERROR: archive contains a forbidden path; deleting unusable archive.\n' >&2
-  sudo rm -f -- "$archive"
   exit 1
 fi
 sudo chmod 600 "$archive"
@@ -63,9 +76,13 @@ test "$(sudo stat -c '%a' "$archive.sha256")" = '600'
 sudo stat -c '%a %n' "$archive" "$archive.sha256"
 printf 'CODE_ARCHIVE=%s\n' "$archive"
 sudo cat "$archive.sha256"
+rm -f -- "$listing"
+listing=''
+archive_accepted=1
+trap - EXIT
 ```
 
-把 `CODE_ARCHIVE` 绝对路径和输出的 SHA-256 一起写入发布记录。归档中包含当前源码、锁文件和已构建的 `dist`，但不包含任何生产密钥或数据库。
+把 `CODE_ARCHIVE` 绝对路径和输出的 SHA-256 一起写入发布记录。归档列表是仅含路径的 `mktemp` 文件，权限为 600；它在成功后删除，任何失败也由 trap 清理。只有独立 `tar -tzf` 成功、禁入路径扫描为空、权限校验为 600 后归档才会被接受；否则归档和校验文件都会删除。已接受的归档包含当前源码、锁文件和已构建的 `dist`，但不包含任何生产密钥或数据库。
 
 ## 4. SQLite 在线备份
 
