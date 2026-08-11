@@ -8,10 +8,11 @@ No production server, production database, Nginx configuration, DNS record, cert
 
 ## Reviewed code
 
-- Release code and E2E commit: `ddf73509b945ec43e92c8601f9c274a56360ade4`
+- Release executable code and privacy-fix commit: `9ca63c2c8a60db1a0fde37fa3eb294f625b6900d`
 - Starting implementation commit: `9af0e41634b36961631fa92073a5ed3aca10278c`
-- The E2E-driven production change is limited to an optional `ProductionRuntimeOptions.now` clock passed to `RoommateService`. Normal startup omits it and retains the real system clock.
+- The production changes verified by the E2E are: an optional `ProductionRuntimeOptions.now` clock passed to `RoommateService` (normal startup omits it and retains the real system clock), and `expireDue` clearing `consent_at` together with `contact_type`, `contact_ciphertext`, and `contact_digest` when a registration expires.
 - The existing health regression fixture now includes the intentional default state `roommateMatching.status = disabled`.
+- The subsequent checkpoint documentation commit changes this record only and introduces no executable drift from `9ca63c2c8a60db1a0fde37fa3eb294f625b6900d`.
 
 ## Verification evidence
 
