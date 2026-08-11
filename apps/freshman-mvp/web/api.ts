@@ -98,7 +98,23 @@ export interface RoommateRecoveryCredential {
 
 export interface RoommateAdminItem extends Omit<RoommateSelf, 'contact'> {
   contact: { type: RoommateContactType; masked: true } | null;
+  lastModeration?: {
+    action: 'hide' | 'restore' | 'delete' | 'view_contact';
+    actorId: string;
+    reason: string;
+    createdAt: string;
+  } | null;
 }
+
+export interface RoommateAdminFilters {
+  campus?: RoommateCampusCode;
+  status?: RoommateRegistrationStatus;
+  building?: string;
+  orientation?: RoommateOrientation;
+  room?: string;
+}
+
+export type RoommateModerationAction = 'hide' | 'restore' | 'delete';
 
 export interface RoommateRegistrationInput {
   address: RoommateAddressInput;
@@ -402,6 +418,53 @@ function isRoommateMember(value: unknown): value is RoommateMember {
     && typeof value.id === 'string'
     && typeof value.nickname === 'string'
     && (value.contact === null || isRoommateContact(value.contact));
+}
+
+function isRoommateAdminItem(value: unknown): value is RoommateAdminItem {
+  if (
+    !isRecord(value)
+    || typeof value.id !== 'string'
+    || !isRoommateAddress(value.address)
+    || typeof value.nickname !== 'string'
+    || !isRoommateStatus(value.status)
+    || typeof value.createdAt !== 'string'
+    || typeof value.updatedAt !== 'string'
+    || typeof value.expiresAt !== 'string'
+    || (value.deletedAt !== null && typeof value.deletedAt !== 'string')
+  ) {
+    return false;
+  }
+  if (value.contact !== null && (
+    !isRecord(value.contact)
+    || !isRoommateContactType(value.contact.type)
+    || value.contact.masked !== true
+  )) {
+    return false;
+  }
+  if (value.lastModeration === undefined || value.lastModeration === null) {
+    return true;
+  }
+  return isRecord(value.lastModeration)
+    && ['hide', 'restore', 'delete', 'view_contact'].includes(String(value.lastModeration.action))
+    && typeof value.lastModeration.actorId === 'string'
+    && typeof value.lastModeration.reason === 'string'
+    && typeof value.lastModeration.createdAt === 'string';
+}
+
+function containsRoommateAdminSecret(value: unknown): boolean {
+  if (Array.isArray(value)) {
+    return value.some(containsRoommateAdminSecret);
+  }
+  if (!isRecord(value)) {
+    return false;
+  }
+  return Object.entries(value).some(([key, nested]) => {
+    const normalized = key.toLowerCase();
+    return normalized.includes('digest')
+      || normalized === 'sessiontoken'
+      || normalized === 'managementcode'
+      || containsRoommateAdminSecret(nested);
+  });
 }
 
 function containsRawSessionToken(value: unknown): boolean {
@@ -831,6 +894,88 @@ export async function listRoommateMembers(
     throw new ApiResponseError(response.status);
   }
   return body.items;
+}
+
+export async function listAdminRoommates(
+  filters: RoommateAdminFilters = {},
+): Promise<RoommateAdminItem[]> {
+  const params = new URLSearchParams();
+  if (filters.campus) params.set('campus', filters.campus);
+  if (filters.status) params.set('status', filters.status);
+  if (filters.building?.trim()) params.set('building', filters.building.trim());
+  if (filters.orientation) params.set('orientation', filters.orientation);
+  if (filters.room?.trim()) params.set('room', filters.room.trim());
+  const suffix = params.size > 0 ? `?${params.toString()}` : '';
+  const response = await fetch(`/api/admin/roommates${suffix}`);
+  const body = await readJson(response);
+  if (
+    !isRecord(body)
+    || containsRoommateAdminSecret(body)
+    || !Array.isArray(body.items)
+    || !body.items.every(isRoommateAdminItem)
+  ) {
+    throw new ApiResponseError(response.status);
+  }
+  return body.items;
+}
+
+export async function revealRoommateContact(
+  registrationId: string,
+  reason: string,
+): Promise<RoommateContact> {
+  const normalizedReason = reason.trim();
+  if (!registrationId.trim() || !normalizedReason) {
+    throw new ApiResponseError(400);
+  }
+  const response = await fetch(
+    `/api/admin/roommates/${encodeURIComponent(registrationId)}/reveal-contact`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: normalizedReason }),
+    },
+  );
+  const body = await readJson(response);
+  if (
+    !isRecord(body)
+    || containsRoommateAdminSecret(body)
+    || !isRoommateContact(body.contact)
+  ) {
+    throw new ApiResponseError(response.status);
+  }
+  return body.contact;
+}
+
+export async function moderateRoommate(
+  registrationId: string,
+  action: RoommateModerationAction,
+  reason: string,
+): Promise<RoommateAdminItem> {
+  const normalizedReason = reason.trim();
+  if (
+    !registrationId.trim()
+    || !['hide', 'restore', 'delete'].includes(action)
+    || !normalizedReason
+  ) {
+    throw new ApiResponseError(400);
+  }
+  const response = await fetch(
+    `/api/admin/roommates/${encodeURIComponent(registrationId)}/moderate`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action, reason: normalizedReason }),
+    },
+  );
+  const body = await readJson(response);
+  if (
+    !isRecord(body)
+    || containsRoommateAdminSecret(body)
+    || !isRoommateAdminItem(body.item)
+  ) {
+    throw new ApiResponseError(response.status);
+  }
+  return body.item;
 }
 
 async function readItems<T>(

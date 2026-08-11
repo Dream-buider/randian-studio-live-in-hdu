@@ -18,6 +18,7 @@ import {
 import AdminAnswerEditor from '../components/AdminAnswerEditor.vue';
 import AdminIntentList from '../components/AdminIntentList.vue';
 import AdminReviewQueue from '../components/AdminReviewQueue.vue';
+import AdminRoommatePanel from '../components/AdminRoommatePanel.vue';
 
 const intents = ref<AdminIntent[]>([]);
 const reviews = ref<ReviewTask[]>([]);
@@ -284,6 +285,8 @@ onMounted(load);
         </li>
       </ul>
     </section>
+
+    <AdminRoommatePanel />
 
     <section v-if="loading" class="state-card">正在加载管理数据…</section>
     <section v-else-if="errorMessage" class="state-card" role="alert">
