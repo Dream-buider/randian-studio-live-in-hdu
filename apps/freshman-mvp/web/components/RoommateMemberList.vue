@@ -13,7 +13,7 @@ const emit = defineEmits<{
   'credential-saved': [];
 }>();
 
-const copied = ref(false);
+const copyStatus = ref<'idle' | 'copied' | 'manual'>('idle');
 const contactLabels: Record<string, string> = {
   wechat: '微信',
   qq: 'QQ',
@@ -23,13 +23,17 @@ const contactLabels: Record<string, string> = {
 
 async function copyCredential(): Promise<void> {
   if (!props.managementCode) return;
+  if (typeof navigator.clipboard?.writeText !== 'function') {
+    copyStatus.value = 'manual';
+    return;
+  }
   try {
-    await navigator.clipboard?.writeText(
+    await navigator.clipboard.writeText(
       `登记 ID：${props.own.id}\n管理码：${props.managementCode}`,
     );
-    copied.value = true;
+    copyStatus.value = 'copied';
   } catch {
-    copied.value = false;
+    copyStatus.value = 'manual';
   }
 }
 </script>
@@ -52,8 +56,11 @@ async function copyCredential(): Promise<void> {
         <div><dt>管理码</dt><dd>{{ managementCode }}</dd></div>
       </dl>
       <button type="button" data-action="copy-credential" @click="copyCredential">
-        {{ copied ? '已复制' : '复制完整凭证' }}
+        {{ copyStatus === 'copied' ? '已复制' : '复制完整凭证' }}
       </button>
+      <p v-if="copyStatus === 'manual'" class="roommate-copy-message" role="status">
+        无法自动复制，请手动复制并保存上方完整凭证。
+      </p>
       <button type="button" data-action="credential-saved" @click="emit('credential-saved')">
         我已保存，进入成员列表
       </button>

@@ -62,7 +62,7 @@ function unauthenticatedSetup(extra?: (url: string, init?: RequestInit) => Respo
     if (custom) return custom;
     if (url === '/api/roommates/config') return jsonResponse(enabledConfig);
     if (url === '/api/roommates/me') {
-      return jsonResponse({ error: { code: 'UNAUTHENTICATED' } }, { status: 401 });
+      return jsonResponse({ error: { code: 'NOT_FOUND' } }, { status: 404 });
     }
     throw new Error(`Unexpected request: ${url}`);
   });
@@ -108,6 +108,13 @@ describe('roommate matching client flow', () => {
     expect(wrapper.text()).not.toMatch(/ROOMMATE_|encryption|HMAC|secret/i);
   });
 
+  it('treats a real no-cookie 404 response as a first-time registration', async () => {
+    const { wrapper } = await openRegistrationForm();
+
+    expect(wrapper.get('[data-state="register"]').text()).toContain('登记寝室');
+    expect(wrapper.text()).not.toContain('这次操作没有完成');
+  });
+
   it('keeps Shaoxing visible and blocks submission while rendering the complete XiaSha form', async () => {
     const { wrapper } = await openRegistrationForm();
 
@@ -129,6 +136,35 @@ describe('roommate matching client flow', () => {
     expect(wrapper.text()).toContain('非学校官方身份认证系统');
     expect(wrapper.text()).toContain('90 天');
     expect(wrapper.text()).toContain('身份证号');
+  });
+
+  it('enforces backend field limits and associates visible validation errors with inputs', async () => {
+    const { wrapper } = await openRegistrationForm();
+    const form = wrapper.get('form[data-role="roommate-registration-form"]');
+
+    await wrapper.get('input[name="building"]').setValue('0');
+    await wrapper.get('input[name="room"]').setValue('20#7');
+    await wrapper.get('input[name="nickname"]').setValue('x'.repeat(31));
+    await wrapper.get('select[name="contactType"]').setValue('wechat');
+    expect(wrapper.get('[data-action="confirm-registration"]').attributes('disabled'))
+      .toBeUndefined();
+    await form.trigger('submit');
+
+    const building = wrapper.get('input[name="building"]');
+    const room = wrapper.get('input[name="room"]');
+    const nickname = wrapper.get('input[name="nickname"]');
+    const contact = wrapper.get('input[name="contactValue"]');
+    expect(building.attributes('aria-invalid')).toBe('true');
+    expect(building.attributes('aria-describedby')).toContain('roommate-building-message');
+    expect(wrapper.get('#roommate-building-message').text()).toContain('正整数');
+    expect(room.attributes('aria-invalid')).toBe('true');
+    expect(room.attributes('aria-describedby')).toContain('roommate-room-message');
+    expect(nickname.attributes('maxlength')).toBe('30');
+    expect(nickname.attributes('aria-invalid')).toBe('true');
+    expect(contact.attributes('maxlength')).toBe('100');
+    expect(contact.attributes('aria-invalid')).toBe('true');
+    expect(wrapper.get('#roommate-contact-message').text()).toContain('选择类型后请填写');
+    expect(wrapper.find('[data-state="confirm"]').exists()).toBe(false);
   });
 
   it('confirms the normalized room, creates once, and removes the one-time code after leaving', async () => {
@@ -157,6 +193,10 @@ describe('roommate matching client flow', () => {
     expect(credential.text()).toContain('registration-1');
     expect(credential.text()).toContain(managementCode);
     expect(credential.text()).toContain('暂未留下联系方式');
+    await wrapper.get('[data-action="copy-credential"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.text()).toContain('无法自动复制，请手动复制并保存');
+    expect(wrapper.get('[data-action="copy-credential"]').text()).not.toContain('已复制');
     await wrapper.get('[data-action="credential-saved"]').trigger('click');
     expect(wrapper.get('[data-state="members"]').text()).toContain('小火');
     expect(wrapper.text()).not.toContain(managementCode);
@@ -259,6 +299,25 @@ describe('roommate matching client flow', () => {
     await wrapper.get('[data-action="create-registration"]').trigger('click');
     await flushPromises();
     expect(wrapper.get('[data-state="credential"]').text()).toContain('retry-code');
+  });
+
+  it('never exposes arbitrary network diagnostics in the error state', async () => {
+    const diagnostic = 'socket failed at C:\\secret\\roommate-key.txt';
+    const fetcher = unauthenticatedSetup((url, init) => {
+      if (url === '/api/roommates/registrations' && init?.method === 'POST') {
+        throw new Error(diagnostic);
+      }
+      return null;
+    });
+    const { wrapper } = await openRegistrationForm(fetcher);
+    await fillXiaShaForm(wrapper);
+    await wrapper.get('form[data-role="roommate-registration-form"]').trigger('submit');
+    await wrapper.get('[data-action="create-registration"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.get('[data-state="error"]').text()).toContain('请求失败，请稍后重试');
+    expect(wrapper.text()).not.toContain(diagnostic);
+    expect(wrapper.text()).not.toContain('roommate-key.txt');
   });
 
   it('sets noindex,nofollow only while the roommate route is mounted', async () => {

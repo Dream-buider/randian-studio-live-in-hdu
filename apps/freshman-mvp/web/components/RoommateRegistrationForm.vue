@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import type {
   RoommateCampusTemplate,
   RoommateContactType,
@@ -18,18 +18,38 @@ const emit = defineEmits<{
   recover: [];
 }>();
 
+const validationAttempted = ref(false);
 const contactEnabled = computed(() => props.modelValue.contactType !== null);
 const requiresConsent = computed(() => Boolean(props.modelValue.contactValue?.trim()));
 const selectedCampus = computed(() => (
   props.campuses.find((campus) => campus.code === props.modelValue.address.campus)
 ));
+const buildingValid = computed(() => {
+  const value = props.modelValue.address.building.trim();
+  return /^\d{1,10}$/.test(value) && Number(value) > 0;
+});
+const roomValid = computed(() => /^[A-Za-z0-9]{1,10}$/.test(props.modelValue.address.room.trim()));
+const nicknameValid = computed(() => {
+  const value = props.modelValue.nickname.trim();
+  return value.length > 0 && Array.from(value).length <= 30;
+});
+const contactValid = computed(() => {
+  if (!contactEnabled.value) return true;
+  const value = props.modelValue.contactValue?.trim() ?? '';
+  return value.length > 0 && Array.from(value).length <= 100 && props.modelValue.consent;
+});
 const canSubmit = computed(() => (
   selectedCampus.value?.enabled === true
-  && Boolean(props.modelValue.address.building.trim())
-  && Boolean(props.modelValue.address.room.trim())
-  && Boolean(props.modelValue.nickname.trim())
-  && (!requiresConsent.value || props.modelValue.consent)
+  && buildingValid.value
+  && roomValid.value
+  && nicknameValid.value
+  && contactValid.value
 ));
+
+function submitIfValid(): void {
+  validationAttempted.value = true;
+  if (canSubmit.value) emit('submit');
+}
 
 function updateAddress(field: 'campus' | 'building' | 'orientation' | 'room', value: string): void {
   emit('update:modelValue', {
@@ -64,7 +84,8 @@ function updateConsent(checked: boolean): void {
   <form
     class="roommate-form roommate-panel"
     data-role="roommate-registration-form"
-    @submit.prevent="emit('submit')"
+    novalidate
+    @submit.prevent="submitIfValid"
   >
     <fieldset :disabled="busy">
       <legend>登记寝室</legend>
@@ -100,9 +121,18 @@ function updateConsent(checked: boolean): void {
             autocomplete="off"
             required
             maxlength="10"
+            aria-describedby="roommate-building-message"
+            :aria-invalid="validationAttempted && !buildingValid"
             :value="modelValue.address.building"
             @input="updateAddress('building', ($event.target as HTMLInputElement).value)"
           />
+          <p
+            id="roommate-building-message"
+            class="roommate-field-message"
+            :class="{ 'is-error': validationAttempted && !buildingValid }"
+          >
+            {{ validationAttempted && !buildingValid ? '请输入正整数楼栋' : '例如：11' }}
+          </p>
         </div>
         <div>
           <label for="roommate-orientation">南北</label>
@@ -124,9 +154,18 @@ function updateConsent(checked: boolean): void {
             autocomplete="off"
             required
             maxlength="10"
+            aria-describedby="roommate-room-message"
+            :aria-invalid="validationAttempted && !roomValid"
             :value="modelValue.address.room"
             @input="updateAddress('room', ($event.target as HTMLInputElement).value)"
           />
+          <p
+            id="roommate-room-message"
+            class="roommate-field-message"
+            :class="{ 'is-error': validationAttempted && !roomValid }"
+          >
+            {{ validationAttempted && !roomValid ? '请输入 1–10 位数字或字母' : '例如：207' }}
+          </p>
         </div>
       </div>
 
@@ -136,10 +175,19 @@ function updateConsent(checked: boolean): void {
         name="nickname"
         autocomplete="nickname"
         required
-        maxlength="40"
+        maxlength="30"
+        aria-describedby="roommate-nickname-message"
+        :aria-invalid="validationAttempted && !nicknameValid"
         :value="modelValue.nickname"
         @input="updateField('nickname', ($event.target as HTMLInputElement).value)"
       />
+      <p
+        id="roommate-nickname-message"
+        class="roommate-field-message"
+        :class="{ 'is-error': validationAttempted && !nicknameValid }"
+      >
+        {{ validationAttempted && !nicknameValid ? '请输入 1–30 个字符的昵称' : '同寝室成员会看到这个昵称' }}
+      </p>
 
       <label for="roommate-contact-type">联系方式类型（可选）</label>
       <select
@@ -161,10 +209,22 @@ function updateConsent(checked: boolean): void {
           id="roommate-contact-value"
           name="contactValue"
           autocomplete="off"
-          maxlength="120"
+          required
+          maxlength="100"
+          aria-describedby="roommate-contact-message"
+          :aria-invalid="validationAttempted && !contactValid"
           :value="modelValue.contactValue ?? ''"
           @input="updateField('contactValue', ($event.target as HTMLInputElement).value)"
         />
+        <p
+          id="roommate-contact-message"
+          class="roommate-field-message"
+          :class="{ 'is-error': validationAttempted && !contactValid }"
+        >
+          {{ validationAttempted && !contactValid
+            ? '选择类型后请填写联系方式，并同意展示'
+            : '最多 100 个字符，仅同寝室已登记成员可见' }}
+        </p>
         <label v-if="requiresConsent" class="roommate-consent">
           <input
             name="consent"
@@ -192,7 +252,7 @@ function updateConsent(checked: boolean): void {
       class="roommate-primary-action"
       type="submit"
       data-action="confirm-registration"
-      :disabled="busy || !canSubmit"
+      :disabled="busy || selectedCampus?.enabled !== true"
     >
       核对寝室信息
     </button>

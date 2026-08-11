@@ -116,7 +116,7 @@ async function loadPage(): Promise<void> {
     try {
       own.value = await getMyRoommateRegistration();
     } catch (error) {
-      if (error instanceof ApiResponseError && error.status === 401) {
+      if (error instanceof ApiResponseError && (error.status === 401 || error.status === 404)) {
         state.value = 'register';
         return;
       }
@@ -200,7 +200,9 @@ async function recoverRegistration(): Promise<void> {
 }
 
 function showError(error: unknown, returnState: ViewState): void {
-  errorMessage.value = error instanceof Error ? error.message : '请求失败，请稍后重试';
+  errorMessage.value = error instanceof ApiResponseError
+    ? error.message
+    : '请求失败，请稍后重试';
   errorReturnState.value = returnState;
   state.value = 'error';
 }

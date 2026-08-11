@@ -2464,6 +2464,19 @@ button:disabled {
   font-weight: 750;
 }
 
+.roommate-field-message {
+  margin: -2px 0 4px;
+  color: #7b6258;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.roommate-field-message.is-error,
+.roommate-copy-message {
+  color: #a42d22;
+  font-weight: 700;
+}
+
 .roommate-form input,
 .roommate-form select {
   width: 100%;
