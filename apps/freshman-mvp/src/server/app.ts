@@ -134,7 +134,10 @@ function parseRoommateInput(value: unknown): RoommateCreateInput {
   const contactType = body.contactType;
   if (
     contactType !== null
-    && !['wechat', 'qq', 'phone', 'other'].includes(String(contactType))
+    && (
+      typeof contactType !== 'string'
+      || !['wechat', 'qq', 'phone', 'other'].includes(contactType)
+    )
   ) {
     throw new ValidationError('contactType is invalid');
   }
@@ -173,7 +176,10 @@ function parseReason(value: unknown): string {
 
 function parseModeration(value: unknown): Pick<RoommateModerationInput, 'action' | 'reason'> {
   const body = exactObject(value, ['action', 'reason']);
-  if (!['hide', 'restore', 'delete'].includes(String(body.action))) {
+  if (
+    typeof body.action !== 'string'
+    || !['hide', 'restore', 'delete'].includes(body.action)
+  ) {
     throw new ValidationError('action is invalid');
   }
   return {
@@ -181,6 +187,53 @@ function parseModeration(value: unknown): Pick<RoommateModerationInput, 'action'
     reason: boundedString('reason', body.reason, 200),
   };
 }
+
+function normalizeAdminBuilding(value: unknown): string {
+  const normalized = boundedString('building', value, 20);
+  if (!/^\d+$/.test(normalized)) {
+    throw new ValidationError('building is invalid');
+  }
+  const canonical = normalized.replace(/^0+(?=\d)/, '');
+  if (Number(canonical) <= 0) {
+    throw new ValidationError('building is invalid');
+  }
+  return canonical;
+}
+
+function normalizeAdminRoom(value: unknown): string {
+  const normalized = boundedString('room', value, 10);
+  if (!/^[A-Z0-9]+$/.test(normalized)) {
+    throw new ValidationError('room is invalid');
+  }
+  return /^\d+$/.test(normalized)
+    ? normalized.replace(/^0+(?=\d)/, '')
+    : normalized;
+}
+
+const SAFE_ROOMMATE_VALIDATION_ERRORS = new Set([
+  '楼栋格式无效',
+  '楼栋必须为正数',
+  '房间号格式无效',
+  '寝室分配规则确认中，暂未开放匹配',
+  '校区不支持',
+  '朝向不支持',
+  'Nickname must contain 1-30 Unicode code points without controls',
+  'Contact type and value must be provided together',
+  'Contact type is invalid',
+  'Contact value is invalid',
+  'Contact consent is required',
+  'Invalid moderation action',
+  'Admin reason is required',
+]);
+
+const SAFE_ROOMMATE_CONFLICT_ERRORS = new Set([
+  'Contact already has an active registration',
+  'Concurrent registration change',
+  'Only active registrations can be hidden',
+  'Only hidden registrations can be restored',
+  'Expired registrations cannot be restored',
+  'Registration cannot be deleted',
+]);
 
 function translateRoommateError(error: unknown): never {
   if (
@@ -200,15 +253,16 @@ function translateRoommateError(error: unknown): never {
   ) {
     throw new NotFoundError(message);
   }
-  if (
-    message.includes('already')
-    || message.startsWith('Concurrent ')
-    || message.startsWith('Only ')
-    || message.includes(' cannot ')
-  ) {
+  if (SAFE_ROOMMATE_CONFLICT_ERRORS.has(message)) {
     throw new ConflictError(message);
   }
-  throw new ValidationError(message);
+  if (SAFE_ROOMMATE_VALIDATION_ERRORS.has(message)) {
+    throw new ValidationError(message);
+  }
+  if (message === 'Rate limit exceeded' || message === 'Rate limit capacity exceeded') {
+    throw Object.assign(new Error('Roommate request rate limited'), { statusCode: 429 });
+  }
+  throw error instanceof Error ? error : new Error('Unknown roommate service failure');
 }
 
 async function callRoommates<T>(operation: () => Promise<T>): Promise<T> {
@@ -313,7 +367,10 @@ export function createApp(deps: AppDependencies): FastifyInstance {
       || pathname === '/api/admin'
       || pathname.startsWith('/api/admin/');
     const socketAddress = request.raw.socket.remoteAddress ?? '';
-    if (isLocalOnlyRoute && !isLoopbackAddress(socketAddress)) {
+    if (
+      isLocalOnlyRoute
+      && (!isLoopbackAddress(socketAddress) || !isLoopbackAddress(request.ip))
+    ) {
       return reply.code(403).send({
         error: { code: 'FORBIDDEN', message: 'Local access only' },
       });
@@ -477,8 +534,8 @@ export function createApp(deps: AppDependencies): FastifyInstance {
     if (orientation !== undefined && !['south', 'north'].includes(orientation)) {
       throw new ValidationError('orientation is invalid');
     }
-    const normalizedBuilding = building === undefined ? undefined : boundedString('building', building, 20);
-    const normalizedRoom = room === undefined ? undefined : boundedString('room', room, 20);
+    const normalizedBuilding = building === undefined ? undefined : normalizeAdminBuilding(building);
+    const normalizedRoom = room === undefined ? undefined : normalizeAdminRoom(room);
     const items = await callRoommates(() => deps.roommates
       ? deps.roommates.listAdmin('local-admin', 'list-roommates', status as RoommateStatus | undefined)
       : Promise.reject(new ServiceUnavailableError('Roommate matching is unavailable')));

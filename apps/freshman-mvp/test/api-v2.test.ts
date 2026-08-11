@@ -701,7 +701,8 @@ test('publication API keeps admin and review routes loopback-only while public r
         feedbackTarget: 'discard',
       },
     });
-    assert.equal(loopbackDecision.statusCode, 404);
+    assert.equal(loopbackDecision.statusCode, 403);
+    assert.equal(loopbackDecision.json().error.code, 'FORBIDDEN');
   });
 });
 

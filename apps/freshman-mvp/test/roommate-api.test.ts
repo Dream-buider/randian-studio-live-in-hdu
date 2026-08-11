@@ -127,6 +127,7 @@ function fakeService(calls: ServiceCalls): RoommateService {
 async function withApp(
   enabled: boolean,
   run: (app: ReturnType<typeof createApp>, calls: ServiceCalls) => Promise<void>,
+  mutateService?: (service: RoommateService) => void,
 ): Promise<void> {
   const directory = await mkdtemp(path.join(tmpdir(), 'live-in-hdu-roommate-api-'));
   const database = openDatabase(path.join(directory, 'api.db'));
@@ -141,12 +142,14 @@ async function withApp(
     adminActors: [],
     moderationActors: [],
   };
+  const service = fakeService(calls);
+  mutateService?.(service);
   const app = createApp({
     config: config(enabled),
     content: new SqliteContentRepository(database),
     reviews: new SqliteReviewRepository(database),
     router: { async answer() { return {}; } },
-    roommates: enabled ? fakeService(calls) : undefined,
+    roommates: enabled ? service : undefined,
   });
   try {
     await run(app, calls);
@@ -294,9 +297,17 @@ test('keeps roommate administration local-only and supplies the server actor', a
     });
     assert.equal(remote.statusCode, 403);
 
+    const proxiedRemote = await app.inject({
+      method: 'GET',
+      url: '/api/admin/roommates?status=active',
+      remoteAddress: '127.0.0.1',
+      headers: { 'x-forwarded-for': '203.0.113.8' },
+    });
+    assert.equal(proxiedRemote.statusCode, 403);
+
     const local = await app.inject({
       method: 'GET',
-      url: '/api/admin/roommates?status=active&building=11&orientation=south&room=207',
+      url: '/api/admin/roommates?status=active&building=011&orientation=south&room=0207',
       remoteAddress: '127.0.0.1',
     });
     assert.equal(local.statusCode, 200);
@@ -331,12 +342,25 @@ test('keeps roommate administration local-only and supplies the server actor', a
   });
 });
 
+test('normalizes exact numeric building and room filters before matching', async () => {
+  await withApp(true, async (app) => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/admin/roommates?status=active&building=011&orientation=south&room=0207',
+      remoteAddress: '127.0.0.1',
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json().items.length, 1);
+  });
+});
+
 test('rejects unknown or oversized public fields before calling the service', async () => {
   await withApp(true, async (app, calls) => {
     for (const payload of [
       { ...VALID_INPUT, status: 'active' },
       { ...VALID_INPUT, nickname: '新'.repeat(31) },
       { ...VALID_INPUT, address: { ...VALID_INPUT.address, roomKey: 'attacker-controlled' } },
+      { ...VALID_INPUT, contactType: ['wechat'] },
     ]) {
       const response = await app.inject({
         method: 'POST',
@@ -348,5 +372,37 @@ test('rejects unknown or oversized public fields before calling the service', as
       assert.equal(response.statusCode, 400);
     }
     assert.equal(calls.createContexts.length, 0);
+
+    const arrayAction = await app.inject({
+      method: 'POST',
+      url: '/api/admin/roommates/registration-1/moderate',
+      remoteAddress: '127.0.0.1',
+      payload: { action: ['hide'], reason: '数组不应通过' },
+    });
+    assert.equal(arrayAction.statusCode, 400);
+    assert.equal(calls.moderationActors.length, 0);
+  });
+});
+
+test('keeps unexpected roommate storage and crypto diagnostics out of responses', async () => {
+  await withApp(true, async (app) => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/roommates/registrations',
+      remoteAddress: '127.0.0.1',
+      headers: { 'x-forwarded-proto': 'https' },
+      payload: VALID_INPUT,
+    });
+    assert.equal(response.statusCode, 500);
+    assert.deepEqual(response.json(), {
+      error: { code: 'INTERNAL_ERROR', message: 'Internal server error' },
+    });
+    assert.doesNotMatch(response.body, /SQLITE_IOERR|\/srv\/live-in-hdu|ciphertext/i);
+  }, (service) => {
+    Object.defineProperty(service, 'create', {
+      value: async () => {
+        throw new Error('SQLITE_IOERR at /srv/live-in-hdu/runtime/live-in-hdu.db ciphertext');
+      },
+    });
   });
 });
