@@ -15,7 +15,8 @@
     "test": "tsx --test test/*.test.ts",
     "test:web": "vitest run test/web",
     "test:all": "npm test && npm run test:web",
-    "verify:guide": "tsx scripts/verify-freshman-guide.mts"
+    "verify:guide": "tsx scripts/verify-freshman-guide.mts",
+    "verify:roommates": "tsx scripts/verify-roommate-readiness.mts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.2",
