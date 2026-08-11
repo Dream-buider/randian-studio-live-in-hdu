@@ -57,6 +57,7 @@ export interface ProductionRuntimeOptions {
   env?: NodeJS.ProcessEnv;
   fetch?: typeof globalThis.fetch;
   runtimePlatform?: NodeJS.Platform;
+  now?: () => Date;
 }
 
 export interface ProductionRuntime {
@@ -246,7 +247,10 @@ export async function createProductionRuntime(
             encryptionKey: roommate.encryptionKey,
             hmacKey: roommate.hmacKey,
           }),
-          { limiter: new SlidingWindowRateLimiter(roommate.hmacKey) },
+          {
+            limiter: new SlidingWindowRateLimiter(roommate.hmacKey),
+            now: options.now,
+          },
         );
         const runRetention = async () => {
           try {

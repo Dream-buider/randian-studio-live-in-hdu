@@ -97,6 +97,7 @@ test('full local flow reports honest health, serves SPA routes, and persists rev
           pending: 0,
           failed: 0,
         },
+        roommateMatching: { status: 'disabled' },
       },
     });
     assert.doesNotMatch(health.body, /api[_-]?key|test-key|tokendance_api_key/i);
