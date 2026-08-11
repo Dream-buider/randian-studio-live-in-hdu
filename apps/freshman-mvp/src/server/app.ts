@@ -355,7 +355,7 @@ export function createApp(deps: AppDependencies): FastifyInstance {
       root: deps.publicDir,
       wildcard: false,
     });
-    for (const route of ['/questions', '/chat', '/admin', '/guide']) {
+    for (const route of ['/questions', '/chat', '/admin', '/guide', '/roommates']) {
       app.get(route, (_request, reply) => reply.type('text/html').sendFile('index.html'));
     }
   }

@@ -29,6 +29,97 @@ export interface QuestionContext {
   category: string | null;
 }
 
+export type RoommateCampusCode = 'xiasha' | 'shaoxing';
+export type RoommateOrientation = 'south' | 'north';
+export type RoommateContactType = 'wechat' | 'qq' | 'phone' | 'other';
+export type RoommateRegistrationStatus = 'active' | 'hidden' | 'deleted' | 'expired';
+
+export type RoommateCampusTemplate =
+  | {
+    code: 'xiasha';
+    name: string;
+    templateVersion: 'xiasha-v1';
+    enabled: true;
+  }
+  | {
+    code: 'shaoxing';
+    name: string;
+    templateVersion: null;
+    enabled: false;
+    unavailableReason: string;
+  };
+
+export interface RoommateConfig {
+  enabled: boolean;
+  retentionDays: number;
+  campuses: RoommateCampusTemplate[];
+}
+
+export interface RoommateAddressInput {
+  campus: RoommateCampusCode;
+  building: string;
+  orientation: RoommateOrientation;
+  room: string;
+}
+
+export interface RoommateAddress extends RoommateAddressInput {
+  templateVersion: 'xiasha-v1';
+  canonical: string;
+  display: string;
+}
+
+export interface RoommateContact {
+  type: RoommateContactType;
+  value: string;
+}
+
+export interface RoommateSelf {
+  id: string;
+  address: RoommateAddress;
+  nickname: string;
+  contact: RoommateContact | null;
+  status: RoommateRegistrationStatus;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string;
+  deletedAt: string | null;
+}
+
+export interface RoommateMember {
+  id: string;
+  nickname: string;
+  contact: RoommateContact | null;
+}
+
+export interface RoommateRecoveryCredential {
+  registrationId: string;
+  managementCode: string;
+}
+
+export interface RoommateAdminItem extends Omit<RoommateSelf, 'contact'> {
+  contact: { type: RoommateContactType; masked: true } | null;
+}
+
+export interface RoommateRegistrationInput {
+  address: RoommateAddressInput;
+  nickname: string;
+  contactType: RoommateContactType | null;
+  contactValue: string | null;
+  consent: boolean;
+}
+
+export interface RoommateRegistrationResult {
+  registrationId: string;
+  managementCode: string | null;
+  own: RoommateSelf;
+  members: RoommateMember[];
+}
+
+export interface RoommateRecoveryResult {
+  registrationId: string;
+  own: RoommateSelf;
+}
+
 export interface RawAnswer {
   id: string;
   intentId: string;
@@ -187,8 +278,29 @@ export class ApiResponseError extends Error {
   readonly status: number | null;
 
   constructor(status: number | null = null) {
-    super('API response could not be read');
+    super(safeApiErrorMessage(status));
     this.status = status;
+  }
+}
+
+function safeApiErrorMessage(status: number | null): string {
+  switch (status) {
+    case 400:
+      return '填写内容有误，请检查后重试';
+    case 401:
+      return '当前登记会话已失效，请重新恢复';
+    case 403:
+      return '当前请求无法完成';
+    case 404:
+      return '未找到相关登记';
+    case 409:
+      return '登记信息发生冲突，请刷新后重试';
+    case 429:
+      return '请求过于频繁，请稍后再试';
+    case 503:
+      return '室友匹配暂不可用，请稍后再试';
+    default:
+      return '请求失败，请稍后再试';
   }
 }
 
@@ -217,6 +329,90 @@ function isPublishedQuestion(value: unknown): value is PublishedQuestion {
     && typeof value.updatedAt === 'string'
     && typeof value.featured === 'boolean'
     && typeof value.displayOrder === 'number';
+}
+
+function isRoommateCampusTemplate(value: unknown): value is RoommateCampusTemplate {
+  if (
+    !isRecord(value)
+    || typeof value.name !== 'string'
+    || typeof value.enabled !== 'boolean'
+  ) {
+    return false;
+  }
+  if (value.code === 'xiasha') {
+    return value.enabled === true && value.templateVersion === 'xiasha-v1';
+  }
+  return value.code === 'shaoxing'
+    && value.enabled === false
+    && value.templateVersion === null
+    && typeof value.unavailableReason === 'string';
+}
+
+function isRoommateConfig(value: unknown): value is RoommateConfig {
+  return isRecord(value)
+    && typeof value.enabled === 'boolean'
+    && Number.isSafeInteger(value.retentionDays)
+    && Number(value.retentionDays) > 0
+    && Array.isArray(value.campuses)
+    && value.campuses.every(isRoommateCampusTemplate);
+}
+
+function isRoommateContactType(value: unknown): value is RoommateContactType {
+  return typeof value === 'string'
+    && ['wechat', 'qq', 'phone', 'other'].includes(value);
+}
+
+function isRoommateStatus(value: unknown): value is RoommateRegistrationStatus {
+  return typeof value === 'string'
+    && ['active', 'hidden', 'deleted', 'expired'].includes(value);
+}
+
+function isRoommateContact(value: unknown): value is RoommateContact {
+  return isRecord(value)
+    && isRoommateContactType(value.type)
+    && typeof value.value === 'string';
+}
+
+function isRoommateAddress(value: unknown): value is RoommateAddress {
+  return isRecord(value)
+    && value.campus === 'xiasha'
+    && value.templateVersion === 'xiasha-v1'
+    && typeof value.building === 'string'
+    && (value.orientation === 'south' || value.orientation === 'north')
+    && typeof value.room === 'string'
+    && typeof value.canonical === 'string'
+    && typeof value.display === 'string';
+}
+
+function isRoommateSelf(value: unknown): value is RoommateSelf {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && isRoommateAddress(value.address)
+    && typeof value.nickname === 'string'
+    && (value.contact === null || isRoommateContact(value.contact))
+    && isRoommateStatus(value.status)
+    && typeof value.createdAt === 'string'
+    && typeof value.updatedAt === 'string'
+    && typeof value.expiresAt === 'string'
+    && (value.deletedAt === null || typeof value.deletedAt === 'string');
+}
+
+function isRoommateMember(value: unknown): value is RoommateMember {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && typeof value.nickname === 'string'
+    && (value.contact === null || isRoommateContact(value.contact));
+}
+
+function containsRawSessionToken(value: unknown): boolean {
+  if (Array.isArray(value)) {
+    return value.some(containsRawSessionToken);
+  }
+  if (!isRecord(value)) {
+    return false;
+  }
+  return Object.prototype.hasOwnProperty.call(value, 'sessionToken')
+    || Object.values(value).some(containsRawSessionToken);
 }
 
 function isRawAnswer(value: unknown): value is RawAnswer {
@@ -451,6 +647,143 @@ export async function askQuestion(
     throw new ApiResponseError();
   }
   return body;
+}
+
+export interface RoommateApiOptions {
+  fetcher?: typeof fetch;
+}
+
+function roommateFetch(
+  path: string,
+  init: RequestInit | undefined,
+  options: RoommateApiOptions,
+): Promise<Response> {
+  const fetcher = options.fetcher ?? fetch;
+  return fetcher(path, init
+    ? { ...init, credentials: 'same-origin' }
+    : { credentials: 'same-origin' });
+}
+
+function jsonRequest(method: 'POST' | 'PATCH', body: unknown): RequestInit {
+  return {
+    method,
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  };
+}
+
+export async function getRoommateConfig(
+  options: RoommateApiOptions = {},
+): Promise<RoommateConfig> {
+  const response = await roommateFetch('/api/roommates/config', undefined, options);
+  const body = await readJson(response);
+  if (containsRawSessionToken(body) || !isRoommateConfig(body)) {
+    throw new ApiResponseError(response.status);
+  }
+  return body;
+}
+
+export async function createRoommateRegistration(
+  input: RoommateRegistrationInput,
+  options: RoommateApiOptions = {},
+): Promise<RoommateRegistrationResult> {
+  const response = await roommateFetch(
+    '/api/roommates/registrations',
+    jsonRequest('POST', input),
+    options,
+  );
+  const body = await readJson(response);
+  if (
+    !isRecord(body)
+    || containsRawSessionToken(body)
+    || typeof body.registrationId !== 'string'
+    || (body.managementCode !== null && typeof body.managementCode !== 'string')
+    || !isRoommateSelf(body.own)
+    || !Array.isArray(body.members)
+    || !body.members.every(isRoommateMember)
+  ) {
+    throw new ApiResponseError(response.status);
+  }
+  return {
+    registrationId: body.registrationId,
+    managementCode: body.managementCode as string | null,
+    own: body.own,
+    members: body.members,
+  };
+}
+
+export async function getMyRoommateRegistration(
+  options: RoommateApiOptions = {},
+): Promise<RoommateSelf> {
+  const response = await roommateFetch('/api/roommates/me', undefined, options);
+  const body = await readJson(response);
+  if (!isRecord(body) || containsRawSessionToken(body) || !isRoommateSelf(body.item)) {
+    throw new ApiResponseError(response.status);
+  }
+  return body.item;
+}
+
+export async function updateMyRoommateRegistration(
+  input: RoommateRegistrationInput,
+  options: RoommateApiOptions = {},
+): Promise<RoommateSelf> {
+  const response = await roommateFetch(
+    '/api/roommates/me',
+    jsonRequest('PATCH', input),
+    options,
+  );
+  const body = await readJson(response);
+  if (!isRecord(body) || containsRawSessionToken(body) || !isRoommateSelf(body.item)) {
+    throw new ApiResponseError(response.status);
+  }
+  return body.item;
+}
+
+export async function deleteMyRoommateRegistration(
+  options: RoommateApiOptions = {},
+): Promise<void> {
+  const response = await roommateFetch('/api/roommates/me', { method: 'DELETE' }, options);
+  const body = await readJson(response);
+  if (!isRecord(body) || containsRawSessionToken(body) || body.status !== 'deleted') {
+    throw new ApiResponseError(response.status);
+  }
+}
+
+export async function recoverRoommateRegistration(
+  credential: RoommateRecoveryCredential,
+  options: RoommateApiOptions = {},
+): Promise<RoommateRecoveryResult> {
+  const response = await roommateFetch(
+    '/api/roommates/recover',
+    jsonRequest('POST', credential),
+    options,
+  );
+  const body = await readJson(response);
+  if (
+    !isRecord(body)
+    || containsRawSessionToken(body)
+    || typeof body.registrationId !== 'string'
+    || !isRoommateSelf(body.own)
+  ) {
+    throw new ApiResponseError(response.status);
+  }
+  return { registrationId: body.registrationId, own: body.own };
+}
+
+export async function listRoommateMembers(
+  options: RoommateApiOptions = {},
+): Promise<RoommateMember[]> {
+  const response = await roommateFetch('/api/roommates/members', undefined, options);
+  const body = await readJson(response);
+  if (
+    !isRecord(body)
+    || containsRawSessionToken(body)
+    || !Array.isArray(body.items)
+    || !body.items.every(isRoommateMember)
+  ) {
+    throw new ApiResponseError(response.status);
+  }
+  return body.items;
 }
 
 async function readItems<T>(

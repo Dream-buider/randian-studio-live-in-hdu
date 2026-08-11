@@ -141,6 +141,7 @@ onMounted(async () => {
         <p>新生必看 {{ questions.length }} 问</p>
       </div>
       <div class="deck-header-actions">
+        <RouterLink v-if="router" to="/roommates" data-action="open-roommates">匹配室友</RouterLink>
         <RouterLink v-if="router" to="/guide" data-action="open-guide">新生指北</RouterLink>
         <button
           v-if="questions.length"

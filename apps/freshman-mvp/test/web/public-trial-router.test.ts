@@ -13,10 +13,12 @@ describe('public trial router', () => {
       '/chat',
       '/guide',
       '/questions',
+      '/roommates',
     ]);
     expect(router.resolve('/').name).toBe('welcome');
     expect(router.resolve('/questions').name).toBe('deck');
     expect(router.resolve('/guide').matched).not.toHaveLength(0);
+    expect(router.resolve('/roommates').name).toBe('roommates');
     expect(router.getRoutes().some((route) => route.path === '/admin')).toBe(false);
   });
 
