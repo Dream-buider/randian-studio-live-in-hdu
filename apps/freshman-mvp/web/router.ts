@@ -5,16 +5,12 @@ import {
   type Router,
   type RouterHistory,
 } from 'vue-router';
-import { defineComponent } from 'vue';
 import QuestionDeckView from './views/QuestionDeckView.vue';
 import WelcomeView from './views/WelcomeView.vue';
 import ChatView from './views/ChatView.vue';
 import GuideView from './views/GuideView.vue';
 
-const loadRoommateView = async () => defineComponent({
-  name: 'RoommateViewLoading',
-  template: '<main><p role="status">匹配室友功能正在加载…</p></main>',
-});
+const loadRoommateView = () => import('./views/RoommateView.vue');
 
 export interface AppRouterOptions {
   adminEnabled?: boolean;
