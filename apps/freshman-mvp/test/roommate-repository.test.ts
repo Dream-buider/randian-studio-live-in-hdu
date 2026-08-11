@@ -233,7 +233,8 @@ test('repository scopes active members and atomically expires personal contact a
     assert.deepEqual(await repository.getRegistrationBySessionDigest('session-hidden', createdAt), null);
     assert.deepEqual(await repository.getRegistration('registration-1'), registration({
       expiresAt: due.expiresAt,
-      status: 'expired', contactType: null, contactCiphertext: null, contactDigest: null, updatedAt: createdAt,
+      status: 'expired', contactType: null, contactCiphertext: null, contactDigest: null,
+      consentAt: null, updatedAt: createdAt,
     }));
     assert.deepEqual(await repository.getRegistration(hidden.id), {
       ...hidden,
@@ -241,6 +242,7 @@ test('repository scopes active members and atomically expires personal contact a
       contactType: null,
       contactCiphertext: null,
       contactDigest: null,
+      consentAt: null,
       updatedAt: createdAt,
     });
   } finally {

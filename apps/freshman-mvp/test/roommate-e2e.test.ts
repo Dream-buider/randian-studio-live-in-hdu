@@ -8,6 +8,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { migrateDatabase } from '../src/db/migrations.js';
 import { openDatabase } from '../src/db/sqlite.js';
+import { normalizeRoomAddress } from '../src/roommates/address-templates.js';
 import { createProductionRuntime } from '../src/server/index.js';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -81,6 +82,46 @@ function input(index: number, otherRoom = false) {
   } as const;
 }
 
+function roommatePlaintexts(
+  cookies: string[],
+  recoveredCookie: string,
+  managementCodes: string[],
+  secretEnv: { encryption: string; hmac: string; cookie: string },
+): string[] {
+  const roomAddresses = [input(1).address, input(6, true).address]
+    .map((address) => normalizeRoomAddress(address));
+  return [
+    ...Array.from({ length: 6 }, (_, index) => input(index + 1, index === 5).nickname),
+    ...Array.from({ length: 6 }, (_, index) => input(index + 1, index === 5).contactValue),
+    '更新后昵称-QxV',
+    ...roomAddresses.flatMap((address) => [
+      address.canonical,
+      address.display,
+      JSON.stringify(address),
+    ]),
+    ...managementCodes,
+    ...[...cookies, recoveredCookie].map(sessionSecretFromCookie),
+    secretEnv.encryption,
+    secretEnv.hmac,
+    secretEnv.cookie,
+  ];
+}
+
+function assertDatabaseContainsNoPlaintext(databasePath: string, forbidden: string[]): void {
+  const bytes = Buffer.concat(
+    [databasePath, `${databasePath}-wal`, `${databasePath}-shm`]
+      .filter((file) => existsSync(file))
+      .map((file) => readFileSync(file)),
+  );
+  for (const plaintext of forbidden) {
+    assert.equal(
+      bytes.includes(Buffer.from(plaintext, 'utf8')),
+      false,
+      `SQLite leaked plaintext: ${plaintext}`,
+    );
+  }
+}
+
 test('production runtime preserves Q&A while completing the encrypted roommate lifecycle', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'live-in-hdu-roommate-e2e-'));
   const databasePath = path.join(directory, 'roommate-e2e.db');
@@ -120,6 +161,8 @@ test('production runtime preserves Q&A while completing the encrypted roommate l
   const cookies: string[] = [];
   const managementCodes: string[] = [];
   const registrationIds: string[] = [];
+  let recoveredCookie = '';
+  let forbiddenPlaintexts: string[] = [];
   try {
     const before = {
       questions: runtime.database!.prepare('SELECT * FROM question_intents ORDER BY id').all(),
@@ -155,7 +198,7 @@ test('production runtime preserves Q&A while completing the encrypted roommate l
       payload: { registrationId: registrationIds[0], managementCode: managementCodes[0] },
     });
     assert.equal(recovered.statusCode, 200, recovered.body);
-    const recoveredCookie = cookieFrom(recovered);
+    recoveredCookie = cookieFrom(recovered);
     assert.notEqual(recoveredCookie, cookies[0]);
 
     const updatedInput = { ...input(1), nickname: '更新后昵称-QxV' };
@@ -165,12 +208,6 @@ test('production runtime preserves Q&A while completing the encrypted roommate l
     });
     assert.equal(updated.statusCode, 200, updated.body);
     assert.equal(updated.json().item.nickname, updatedInput.nickname);
-
-    const deleted = await runtime.app.inject({
-      method: 'DELETE', url: '/api/roommates/me', remoteAddress: '127.0.0.1',
-      headers: { ...HTTPS_HEADERS, cookie: cookies[1] },
-    });
-    assert.equal(deleted.statusCode, 200, deleted.body);
 
     const moderate = async (action: 'hide' | 'restore') => runtime.app.inject({
       method: 'POST', url: `/api/admin/roommates/${registrationIds[2]}/moderate`,
@@ -182,6 +219,16 @@ test('production runtime preserves Q&A while completing the encrypted roommate l
     const restored = await moderate('restore');
     assert.equal(restored.statusCode, 200, restored.body);
     assert.equal(restored.json().item.status, 'active');
+
+    forbiddenPlaintexts = roommatePlaintexts(cookies, recoveredCookie, managementCodes, secretEnv);
+    runtime.database!.exec('PRAGMA wal_checkpoint(PASSIVE)');
+    assertDatabaseContainsNoPlaintext(databasePath, forbiddenPlaintexts);
+
+    const deleted = await runtime.app.inject({
+      method: 'DELETE', url: '/api/roommates/me', remoteAddress: '127.0.0.1',
+      headers: { ...HTTPS_HEADERS, cookie: cookies[1] },
+    });
+    assert.equal(deleted.statusCode, 200, deleted.body);
 
     const members = await runtime.app.inject({
       method: 'GET', url: '/api/roommates/members', remoteAddress: '127.0.0.1',
@@ -203,6 +250,28 @@ test('production runtime preserves Q&A while completing the encrypted roommate l
       Number((runtime.database!.prepare('SELECT COUNT(*) AS count FROM roommate_sessions').get() as { count: number }).count),
       0,
     );
+    const terminalRows = runtime.database!.prepare(`
+      SELECT status, contact_type, contact_ciphertext, contact_digest, consent_at
+      FROM roommate_registrations
+      WHERE status IN ('expired', 'deleted')
+      ORDER BY id
+    `).all() as Array<Record<string, unknown>>;
+    assert.equal(terminalRows.length, 6);
+    assert.equal(terminalRows.filter((row) => row.status === 'expired').length, 5);
+    assert.equal(terminalRows.filter((row) => row.status === 'deleted').length, 1);
+    for (const row of terminalRows) {
+      assert.equal(row.contact_type, null);
+      assert.equal(row.contact_ciphertext, null);
+      assert.equal(row.contact_digest, null);
+      assert.equal(row.consent_at, null);
+    }
+    for (const cookie of [recoveredCookie, cookies[4]!]) {
+      const denied = await runtime.app.inject({
+        method: 'GET', url: '/api/roommates/members', remoteAddress: '127.0.0.1',
+        headers: { ...HTTPS_HEADERS, cookie },
+      });
+      assert.ok([401, 404].includes(denied.statusCode), denied.body);
+    }
     assert.deepEqual(runtime.database!.prepare('SELECT * FROM question_intents ORDER BY id').all(), before.questions);
     assert.deepEqual(runtime.database!.prepare('SELECT * FROM canonical_answers ORDER BY id').all(), before.answers);
     assert.deepEqual(runtime.database!.prepare('SELECT * FROM review_tasks ORDER BY id').all(), before.reviews);
@@ -213,26 +282,7 @@ test('production runtime preserves Q&A while completing the encrypted roommate l
   }
 
   try {
-    const sqliteBytes = Buffer.concat(
-      [databasePath, `${databasePath}-wal`, `${databasePath}-shm`]
-        .filter((file) => existsSync(file))
-        .map((file) => readFileSync(file)),
-    ).toString('utf8');
-    const forbidden = [
-      ...Array.from({ length: 6 }, (_, index) => input(index + 1, index === 5).nickname),
-      ...Array.from({ length: 6 }, (_, index) => input(index + 1, index === 5).contactValue),
-      '更新后昵称-QxV',
-      'xiasha|xiasha-v1|9371|south|ZX91',
-      '下沙校区 · 9371号楼 · 南 · ZX91',
-      ...managementCodes,
-      ...cookies.map(sessionSecretFromCookie),
-      secretEnv.encryption,
-      secretEnv.hmac,
-      secretEnv.cookie,
-    ];
-    for (const plaintext of forbidden) {
-      assert.equal(sqliteBytes.includes(plaintext), false, `SQLite leaked plaintext: ${plaintext}`);
-    }
+    assertDatabaseContainsNoPlaintext(databasePath, forbiddenPlaintexts);
     assert.equal((await readFile(databasePath)).length > 0, true);
   } finally {
     await rm(directory, { recursive: true, force: true });

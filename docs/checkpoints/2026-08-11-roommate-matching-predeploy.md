@@ -37,6 +37,8 @@ The production-runtime E2E used a temporary SQLite database, generated test-only
 - unchanged question, canonical-answer, and review rows; and
 - no plaintext nickname, room address, contact, management code, session token, or generated key in the SQLite main file or surviving sidecars.
 
+The raw-byte inspection is performed after create, recovery, update, hide, and restore but before delete or retention can erase evidence, and is repeated after retention. It includes the recovered-client session token and both normalized room canonical/display/JSON forms. After retention, every expired or deleted row has contact ciphertext, contact digest, and consent time cleared, and pre-expiry cookies can no longer list room members.
+
 ## Configuration and migration boundary
 
 - Default feature state: disabled. `ROOMMATE_MATCHING_ENABLED` must equal the exact string `true` before enablement is requested.

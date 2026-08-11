@@ -166,7 +166,7 @@ export class SqliteRoommateRepository implements RoommateRepository {
       this.database.prepare(`
         UPDATE roommate_registrations
         SET status = 'expired', contact_type = NULL, contact_ciphertext = NULL,
-            contact_digest = NULL, updated_at = ?
+            contact_digest = NULL, consent_at = NULL, updated_at = ?
         WHERE status IN ('active', 'hidden') AND expires_at <= ?
       `).run(now, now);
       const deleteSessions = this.database.prepare(
