@@ -51,4 +51,3 @@ Before any server build is replaced or the service is restarted, create an onlin
 ## HTTPS and ICP blocker
 
 Roommate matching must remain disabled on the current plain-HTTP IP endpoint. Public enablement requires a controlled domain, completed ICP filing for the mainland China server, DNS pointing to the server, a valid TLS certificate, Nginx on ports 80/443, forced HTTPS, Node bound to `127.0.0.1:3210`, and explicit Nginx denial of public `/api/admin` and `/api/reviews` access. Until these gates are verified, the correct release state remains **not deployed**.
-
