@@ -57,4 +57,4 @@ Roommate matching remains disabled because `liveinhdu.cn` does not currently res
 - Bundle SHA-256: `3a22aeea0bd906e988edd9942daf9288a948da32a18f09abcd73795bc263cde9`
 - `git bundle verify` confirmed that the bundle contains a complete history.
 - No `.env.local` file is tracked. The history pattern scan found only documented placeholders and test-only fake secrets, not a production TokenDance key.
-- GitHub repository permissions were confirmed for `Dream-buider/randian-studio-live-in-hdu`, but both the workstation and server currently fail DNS resolution for `github.com`; therefore no remote push is claimed.
+- GitHub repository permissions were confirmed for `Dream-buider/randian-studio-live-in-hdu`. After a temporary per-command DNS resolution override, branch `codex/member3-real-api-integration-20260808` was pushed and independently observed at commit `a3b0e9e5e2d7296c106335264751d409ce4ad312`. No pull request or merge was created.
