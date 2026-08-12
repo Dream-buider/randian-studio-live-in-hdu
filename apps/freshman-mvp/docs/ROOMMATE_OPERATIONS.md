@@ -45,7 +45,7 @@ journalctl -u live-in-hdu-healthcheck.service --since today --no-pager
 cd /srv/live-in-hdu/apps/freshman-mvp
 systemctl is-active live-in-hdu
 systemctl is-enabled live-in-hdu
-curl -fsS http://127.0.0.1:3210/api/health
+curl -fsS http://127.0.0.1:3212/api/health
 sqlite3 runtime/live-in-hdu.db \
   "SELECT 'published',count(*) FROM canonical_answers WHERE status='published'; SELECT 'reviews',count(*) FROM review_tasks;"
 git rev-parse HEAD
@@ -182,7 +182,7 @@ npm run test:all
 npm run build
 sudo systemctl restart live-in-hdu
 sudo systemctl --no-pager --full status live-in-hdu
-curl -fsS http://127.0.0.1:3210/api/health
+curl -fsS http://127.0.0.1:3212/api/health
 ```
 
 这一阶段必须保持 `ROOMMATE_MATCHING_ENABLED=false`。先核对既有问答、审核数量和客户端，再处理 Nginx。
@@ -192,16 +192,16 @@ curl -fsS http://127.0.0.1:3210/api/health
 1. 把 `deploy/nginx/liveinhdu.cn.conf.example` 复制到 `/etc/nginx/sites-available/liveinhdu.cn`。
 2. 安装有效证书并替换示例证书路径；不得把证书私钥放进项目目录。
 3. 保留对 `/api/admin` 和 `/api/reviews` 及其子路径的精确拒绝规则。Nginx 从回环连接 Node，如果删除这层会破坏公网管理边界。
-4. 把 `.env.local` 中 `HOST` 设为 `127.0.0.1`，保留 `PORT=3210`。
+4. 把 `.env.local` 中 `HOST` 设为 `127.0.0.1`，保留 `PORT=3212`。
 
 ```bash
 sudo nginx -t
 sudo systemctl reload nginx
 sudo systemctl restart live-in-hdu
-ss -lntp | grep ':3210'
+ss -lntp | grep ':3212'
 ```
 
-`3210` 必须只显示 `127.0.0.1:3210`，不能是 `0.0.0.0:3210` 或 `[::]:3210`。安全组和主机防火墙不再向公网开放 3210；SearXNG 8888 继续只监听回环。
+`3212` 必须只显示 `127.0.0.1:3212`，不能是 `0.0.0.0:3212` 或 `[::]:3212`。公网 80/443 由 Nginx 处理；临时兼容端口 3210 也只能由 Nginx 监听，不能由 Node 直接监听。SearXNG 8888 继续只监听回环。
 
 ## 8. disabled 健康检查与开启
 
@@ -307,7 +307,7 @@ npm ci
 npm run build
 sudo systemctl start live-in-hdu
 sudo systemctl is-active live-in-hdu
-curl -fsS http://127.0.0.1:3210/api/health
+curl -fsS http://127.0.0.1:3212/api/health
 success=1
 ```
 
