@@ -29,7 +29,7 @@ if (-not (Test-AdminTunnel)) {
     '-o', 'ExitOnForwardFailure=yes',
     '-o', 'ServerAliveInterval=30',
     '-o', 'ServerAliveCountMax=3',
-    '-L', "$localPort`:127.0.0.1:3210",
+    '-L', "$localPort`:127.0.0.1:3212",
     'ubuntu@124.222.171.40'
   ) -WindowStyle Hidden | Out-Null
 
@@ -50,4 +50,3 @@ Write-Host "管理端安全通道已就绪：$adminUrl" -ForegroundColor Green
 if (-not $NoBrowser) {
   Start-Process $adminUrl
 }
-
