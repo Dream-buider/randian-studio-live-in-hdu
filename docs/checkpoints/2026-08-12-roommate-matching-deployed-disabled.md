@@ -41,9 +41,20 @@ The first incremental-source deployment failed during compilation because the pr
 - TokenDance last call status became `ok`; SearXNG last search status became `available`.
 - The web fallback probe intentionally added one review item, moving pending reviews from 18 to 19.
 - Full Vue regression suite after deployment: 12 files, 105/105 tests passed.
+- Nginx now owns public ports 80 and 3210 for the IP host; both keep the client reachable, while `/api/admin*` and `/api/reviews*` are denied at the proxy layer.
+- Node now listens only on `127.0.0.1:3212`; the one-click administrator tunnel targets that loopback port.
+- Nginx/environment rollback snapshot: `/srv/live-in-hdu/backups/nginx-boundary-20260812-112318`.
 
 `npm audit --omit=dev` reported 0 critical, 4 high, and 2 moderate dependency advisories. The advertised automatic fixes require semver-major changes (including `@fastify/static` and `exceljs`), so no blind `audit fix --force` was applied during this production deployment. These upgrades require a separate compatibility-tested security change.
 
 ## Remaining enablement gate
 
 Roommate matching remains disabled because `liveinhdu.cn` does not currently resolve and the mainland deployment has no validated ICP/DNS/TLS path. Do not enable contact collection on the plain HTTP IP endpoint. Enablement still requires the approved domain, completed ICP filing, DNS, a valid certificate, HTTPS-only Nginx, Node bound to loopback, explicit public admin/review denial, generated server-only secrets, the readiness verifier, and phone acceptance testing.
+
+## Source handoff
+
+- Complete Git history bundle: `D:\Star\LIVE_IN_HDU_RUNTIME\releases\live-in-hdu-source-20260812.bundle`
+- Bundle SHA-256: `3a22aeea0bd906e988edd9942daf9288a948da32a18f09abcd73795bc263cde9`
+- `git bundle verify` confirmed that the bundle contains a complete history.
+- No `.env.local` file is tracked. The history pattern scan found only documented placeholders and test-only fake secrets, not a production TokenDance key.
+- GitHub repository permissions were confirmed for `Dream-buider/randian-studio-live-in-hdu`, but both the workstation and server currently fail DNS resolution for `github.com`; therefore no remote push is claimed.
