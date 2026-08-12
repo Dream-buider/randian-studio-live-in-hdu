@@ -12,6 +12,15 @@ powershell -ExecutionPolicy Bypass -File .\scripts\open-production-admin.ps1
 
 脚本会通过已授权的 SSH 公钥建立 `127.0.0.1:3211` 到服务器内部 `127.0.0.1:3212` 的安全通道，并打开 `http://127.0.0.1:3211/admin`。它不保存 SSH 密码、TokenDance 密钥或室友匹配密钥。关闭或重启电脑后通道会消失，下次管理时重新运行脚本即可；不影响公网客户端和服务器运行。
 
+## 自动数据库备份
+
+生产服务器安装 `deploy/systemd/live-in-hdu-backup.*` 后，每天北京时间 04:10 左右使用 SQLite 在线备份生成一份快照。备份位于 `/srv/live-in-hdu/backups/daily`，每份都执行 `PRAGMA integrity_check` 和 SHA-256 校验，权限为 `600`，目录权限为 `700`，最多保留 30 份。检查状态：
+
+```bash
+systemctl status live-in-hdu-backup.timer --no-pager
+journalctl -u live-in-hdu-backup.service --since today --no-pager
+```
+
 ## 1. 域名、备案和发布责任
 
 1. `liveinhdu.cn` 必须由老板或团队长期控制的腾讯云账号购买并实名，不要挂在临时成员名下。

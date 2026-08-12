@@ -1,0 +1,12 @@
+[Unit]
+Description=Run LIVE IN HDU SQLite backup daily
+
+[Timer]
+OnCalendar=*-*-* 04:10:00 Asia/Shanghai
+Persistent=true
+RandomizedDelaySec=10m
+Unit=live-in-hdu-backup.service
+
+[Install]
+WantedBy=timers.target
+

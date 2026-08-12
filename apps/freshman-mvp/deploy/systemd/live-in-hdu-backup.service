@@ -1,0 +1,15 @@
+[Unit]
+Description=LIVE IN HDU SQLite online backup
+After=local-fs.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+ExecStart=/usr/local/sbin/live-in-hdu-backup
+UMask=0077
+Nice=10
+
+[Install]
+WantedBy=multi-user.target
+
