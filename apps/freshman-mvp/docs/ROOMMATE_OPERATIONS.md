@@ -16,6 +16,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\open-production-admin.ps1
 
 生产服务器安装 `deploy/systemd/live-in-hdu-backup.*` 后，每天北京时间 04:10 左右使用 SQLite 在线备份生成一份快照。备份位于 `/srv/live-in-hdu/backups/daily`，每份都执行 `PRAGMA integrity_check` 和 SHA-256 校验，权限为 `600`，目录权限为 `700`，最多保留 30 份。检查状态：
 
+备份脚本应安装为 `root:root 755`，以便 systemd 中的非特权 `ubuntu` 用户执行；脚本不包含任何密钥。备份文件仍由 `UMask=0077` 和脚本显式权限保持私有。
+
 ```bash
 systemctl status live-in-hdu-backup.timer --no-pager
 journalctl -u live-in-hdu-backup.service --since today --no-pager
