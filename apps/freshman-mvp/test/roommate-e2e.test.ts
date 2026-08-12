@@ -82,18 +82,28 @@ function input(index: number, otherRoom = false) {
   } as const;
 }
 
+const hiddenUpdateInput = {
+  address: { campus: 'xiasha', building: '9388', orientation: 'north', room: 'HD88' },
+  nickname: '隐藏后更新昵称-QxV',
+  contactType: 'qq',
+  contactValue: 'hidden-updated-contact-QxV',
+  consent: true,
+} as const;
+
 function roommatePlaintexts(
   cookies: string[],
   recoveredCookie: string,
   managementCodes: string[],
   secretEnv: { encryption: string; hmac: string; cookie: string },
 ): string[] {
-  const roomAddresses = [input(1).address, input(6, true).address]
+  const roomAddresses = [input(1).address, input(6, true).address, hiddenUpdateInput.address]
     .map((address) => normalizeRoomAddress(address));
   return [
     ...Array.from({ length: 6 }, (_, index) => input(index + 1, index === 5).nickname),
     ...Array.from({ length: 6 }, (_, index) => input(index + 1, index === 5).contactValue),
     '更新后昵称-QxV',
+    hiddenUpdateInput.nickname,
+    hiddenUpdateInput.contactValue,
     ...roomAddresses.flatMap((address) => [
       address.canonical,
       address.display,
@@ -216,9 +226,63 @@ test('production runtime preserves Q&A while completing the encrypted roommate l
     const hidden = await moderate('hide');
     assert.equal(hidden.statusCode, 200, hidden.body);
     assert.equal(hidden.json().item.status, 'hidden');
+
+    const hiddenMine = await runtime.app.inject({
+      method: 'GET', url: '/api/roommates/me', remoteAddress: '127.0.0.1',
+      headers: { ...HTTPS_HEADERS, cookie: cookies[2] },
+    });
+    assert.equal(hiddenMine.statusCode, 200, hiddenMine.body);
+    assert.equal(hiddenMine.json().item.status, 'hidden');
+    const hiddenMembers = await runtime.app.inject({
+      method: 'GET', url: '/api/roommates/members', remoteAddress: '127.0.0.1',
+      headers: { ...HTTPS_HEADERS, cookie: cookies[2] },
+    });
+    assert.ok([401, 404].includes(hiddenMembers.statusCode), hiddenMembers.body);
+
+    const duplicateCreate = await runtime.app.inject({
+      method: 'POST', url: '/api/roommates/registrations', remoteAddress: '127.0.0.1',
+      headers: { ...HTTPS_HEADERS, cookie: cookies[2] }, payload: input(6, true),
+    });
+    assert.equal(duplicateCreate.statusCode, 200, duplicateCreate.body);
+    assert.equal(duplicateCreate.json().registrationId, registrationIds[2]);
+    assert.equal(duplicateCreate.json().own.status, 'hidden');
+    assert.equal(duplicateCreate.json().managementCode, null);
+    assert.deepEqual(duplicateCreate.json().members, []);
+
+    const hiddenUpdated = await runtime.app.inject({
+      method: 'PATCH', url: '/api/roommates/me', remoteAddress: '127.0.0.1',
+      headers: { ...HTTPS_HEADERS, cookie: cookies[2] }, payload: hiddenUpdateInput,
+    });
+    assert.equal(hiddenUpdated.statusCode, 200, hiddenUpdated.body);
+    assert.equal(hiddenUpdated.json().item.status, 'hidden');
+    assert.equal(hiddenUpdated.json().item.nickname, hiddenUpdateInput.nickname);
+    assert.equal(hiddenUpdated.json().item.address.room, hiddenUpdateInput.address.room);
+    assert.equal(hiddenUpdated.json().item.contact.value, hiddenUpdateInput.contactValue);
+
+    const hiddenRecovered = await runtime.app.inject({
+      method: 'POST', url: '/api/roommates/recover', remoteAddress: '127.0.0.1',
+      headers: { ...HTTPS_HEADERS, 'x-forwarded-for': '203.0.113.102' },
+      payload: { registrationId: registrationIds[2], managementCode: managementCodes[2] },
+    });
+    assert.equal(hiddenRecovered.statusCode, 200, hiddenRecovered.body);
+    assert.equal(hiddenRecovered.json().own.status, 'hidden');
+    const hiddenRecoveredCookie = cookieFrom(hiddenRecovered);
+    cookies.push(hiddenRecoveredCookie);
+    const recoveredHiddenMembers = await runtime.app.inject({
+      method: 'GET', url: '/api/roommates/members', remoteAddress: '127.0.0.1',
+      headers: { ...HTTPS_HEADERS, cookie: hiddenRecoveredCookie },
+    });
+    assert.ok([401, 404].includes(recoveredHiddenMembers.statusCode), recoveredHiddenMembers.body);
+
     const restored = await moderate('restore');
     assert.equal(restored.statusCode, 200, restored.body);
     assert.equal(restored.json().item.status, 'active');
+    const restoredMembers = await runtime.app.inject({
+      method: 'GET', url: '/api/roommates/members', remoteAddress: '127.0.0.1',
+      headers: { ...HTTPS_HEADERS, cookie: hiddenRecoveredCookie },
+    });
+    assert.equal(restoredMembers.statusCode, 200, restoredMembers.body);
+    assert.equal(restoredMembers.json().items.length, 1);
 
     forbiddenPlaintexts = roommatePlaintexts(cookies, recoveredCookie, managementCodes, secretEnv);
     runtime.database!.exec('PRAGMA wal_checkpoint(PASSIVE)');
@@ -235,7 +299,7 @@ test('production runtime preserves Q&A while completing the encrypted roommate l
       headers: { ...HTTPS_HEADERS, cookie: recoveredCookie },
     });
     assert.equal(members.statusCode, 200, members.body);
-    assert.equal(members.json().items.length, 4);
+    assert.equal(members.json().items.length, 3);
 
     nowMs += 91 * DAY_MS;
     assert.ok(retentionCallback);

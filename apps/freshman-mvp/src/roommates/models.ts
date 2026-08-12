@@ -68,9 +68,10 @@ export interface RoommateRepository {
   getActiveRegistrationByContactDigest(contactDigest: string): Promise<RoommateRegistrationRecord | null>;
   listActiveMembers(roomKey: string, now: string): Promise<RoommateRegistrationRecord[]>;
   updateRegistration(record: RoommateRegistrationRecord): Promise<RoommateRegistrationRecord>;
-  updateActiveRegistration(
+  updateSelfRegistration(
     record: RoommateRegistrationRecord,
     expectedUpdatedAt: string,
+    expectedStatus: 'active' | 'hidden',
   ): Promise<RoommateRegistrationRecord | null>;
   createSession(record: RoommateSessionRecord): Promise<RoommateSessionRecord>;
   revokeSessions(registrationId: string): Promise<void>;

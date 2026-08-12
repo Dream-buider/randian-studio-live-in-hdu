@@ -45,7 +45,7 @@ async function copyCredential(): Promise<void> {
         <p>当前寝室</p>
         <h1 id="roommate-members-title">{{ own.address.display }}</h1>
       </div>
-      <span>{{ members.length }} 人已登记</span>
+      <span v-if="own.status === 'active'">{{ members.length }} 人已登记</span>
     </div>
 
     <aside v-if="managementCode" class="roommate-credential" aria-labelledby="roommate-credential-title">
@@ -66,7 +66,11 @@ async function copyCredential(): Promise<void> {
       </button>
     </aside>
 
-    <ul class="roommate-member-grid" aria-label="同寝室已登记成员">
+    <p v-if="own.status === 'hidden'" class="roommate-hidden-notice" role="status">
+      登记已被隐藏，暂时不能查看成员；可修改资料并等待管理员恢复
+    </p>
+
+    <ul v-else class="roommate-member-grid" aria-label="同寝室已登记成员">
       <li v-for="member in members" :key="member.id">
         <strong>{{ member.nickname }}<span v-if="member.id === own.id">（我）</span></strong>
         <p v-if="member.contact">

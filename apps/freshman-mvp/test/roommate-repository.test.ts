@@ -279,6 +279,47 @@ test('repository updates, moderates, revokes sessions, and records audit entries
   }
 });
 
+test('self-update CAS accepts hidden records, preserves hidden status, and rejects stale versions', async () => {
+  const db = openDatabase(':memory:');
+  try {
+    migrateDatabase(db);
+    const repository = new SqliteRoommateRepository(db);
+    const active = registration();
+    await repository.createRegistration(active);
+    const hidden = {
+      ...active,
+      status: 'hidden' as const,
+      updatedAt: '2026-08-12T00:00:00.000Z',
+    };
+    await repository.moderate(hidden, { status: active.status, updatedAt: active.updatedAt });
+
+    const changed = {
+      ...hidden,
+      roomKey: 'room-key-12-north-301',
+      addressCiphertext: 'new-encrypted-address',
+      nicknameCiphertext: 'new-encrypted-nickname',
+      contactType: 'qq' as const,
+      contactCiphertext: 'new-encrypted-contact',
+      contactDigest: 'new-contact-digest',
+      updatedAt: '2026-08-12T01:00:00.000Z',
+    };
+    assert.deepEqual(
+      await repository.updateSelfRegistration(changed, hidden.updatedAt, hidden.status),
+      changed,
+    );
+    assert.equal((await repository.getRegistration(active.id))?.status, 'hidden');
+
+    const stale = { ...changed, nicknameCiphertext: 'stale-write', updatedAt: '2026-08-12T02:00:00.000Z' };
+    assert.equal(
+      await repository.updateSelfRegistration(stale, hidden.updatedAt, hidden.status),
+      null,
+    );
+    assert.equal((await repository.getRegistration(active.id))?.nicknameCiphertext, 'new-encrypted-nickname');
+  } finally {
+    db.close();
+  }
+});
+
 test('repository returns the latest audit for each requested registration in one bulk result', async () => {
   const db = openDatabase(':memory:');
   try {

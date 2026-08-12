@@ -108,6 +108,10 @@ interface ValidatedInput {
   consent: boolean;
 }
 
+type SelfManageableRegistration = RoommateRegistrationRecord & {
+  status: 'active' | 'hidden';
+};
+
 export class RoommateService {
   private readonly repository: RoommateRepository;
   private readonly crypto: RoommateCrypto;
@@ -129,8 +133,10 @@ export class RoommateService {
     const now = this.timestamp();
     this.limiter.consume('create', this.requireIp(context), Date.parse(now));
     if (context.sessionToken !== undefined) {
-      const existing = await this.authenticate(context.sessionToken, now);
-      const members = await this.membersForSession(context.sessionToken, now);
+      const existing = await this.authenticateSelf(context.sessionToken, now);
+      const members = existing.status === 'active'
+        ? await this.membersForSession(context.sessionToken, now)
+        : [];
       return {
         registrationId: existing.id,
         managementCode: null,
@@ -193,7 +199,7 @@ export class RoommateService {
   }
 
   async getMine(sessionToken: string, _context: RoommateRequestContext): Promise<RoommateOwnView> {
-    return this.toOwn(await this.authenticate(sessionToken, this.timestamp()));
+    return this.toOwn(await this.authenticateSelf(sessionToken, this.timestamp()));
   }
 
   async updateMine(
@@ -202,7 +208,7 @@ export class RoommateService {
     _context: RoommateRequestContext,
   ): Promise<RoommateOwnView> {
     const now = this.timestamp();
-    const current = await this.authenticate(sessionToken, now);
+    const current = await this.authenticateSelf(sessionToken, now);
     const validated = this.validateInput(input);
     const contactDigest = validated.contactType && validated.normalizedContact
       ? this.crypto.contactDigest(validated.contactType, validated.normalizedContact)
@@ -227,7 +233,11 @@ export class RoommateService {
       consentAt: validated.consent ? now : null,
       updatedAt: this.nextVersion(current.updatedAt, now),
     };
-    const persisted = await this.repository.updateActiveRegistration(updated, current.updatedAt);
+    const persisted = await this.repository.updateSelfRegistration(
+      updated,
+      current.updatedAt,
+      current.status,
+    );
     if (!persisted) {
       throw new Error('Concurrent registration change');
     }
@@ -236,7 +246,7 @@ export class RoommateService {
 
   async deleteMine(sessionToken: string, _context: RoommateRequestContext): Promise<void> {
     const now = this.timestamp();
-    const current = await this.authenticate(sessionToken, now);
+    const current = await this.authenticateSelf(sessionToken, now);
     const deleted = await this.repository.moderate(
       this.deletedRecord(current, now),
       { status: current.status, updatedAt: current.updatedAt },
@@ -257,7 +267,12 @@ export class RoommateService {
     const suppliedDigest = this.crypto.managementDigest(managementCode);
     const expectedDigest = record?.managementDigest ?? this.crypto.managementDigest('missing-registration');
     const matches = this.constantTimeEqual(suppliedDigest, expectedDigest);
-    if (!record || !matches || record.status !== 'active' || record.expiresAt <= now) {
+    if (
+      !record
+      || !matches
+      || !['active', 'hidden'].includes(record.status)
+      || record.expiresAt <= now
+    ) {
       throw new Error(INVALID_RECOVERY);
     }
     const sessionToken = this.crypto.newSessionToken();
@@ -347,15 +362,19 @@ export class RoommateService {
     await this.repository.expireDue(this.timestamp());
   }
 
-  private async authenticate(sessionToken: string, now: string): Promise<RoommateRegistrationRecord> {
+  private async authenticateSelf(sessionToken: string, now: string): Promise<SelfManageableRegistration> {
     const record = await this.repository.getRegistrationBySessionDigest(
       this.crypto.sessionDigest(sessionToken),
       now,
     );
-    if (!record || record.status !== 'active' || record.expiresAt <= now) {
+    if (
+      !record
+      || (record.status !== 'active' && record.status !== 'hidden')
+      || record.expiresAt <= now
+    ) {
       throw new Error(INVALID_SESSION);
     }
-    return record;
+    return { ...record, status: record.status };
   }
 
   private async membersForSession(sessionToken: string, now: string): Promise<RoommateMemberView[]> {

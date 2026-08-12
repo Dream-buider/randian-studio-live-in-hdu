@@ -117,9 +117,10 @@ export class SqliteRoommateRepository implements RoommateRepository {
     });
   }
 
-  async updateActiveRegistration(
+  async updateSelfRegistration(
     record: RoommateRegistrationRecord,
     expectedUpdatedAt: string,
+    expectedStatus: 'active' | 'hidden',
   ): Promise<RoommateRegistrationRecord | null> {
     if (record.updatedAt <= expectedUpdatedAt) {
       throw new Error('Updated version must advance');
@@ -130,14 +131,14 @@ export class SqliteRoommateRepository implements RoommateRepository {
         SET campus_code = ?, template_version = ?, room_key = ?, building_key = ?,
             address_ciphertext = ?, nickname_ciphertext = ?, contact_type = ?,
             contact_ciphertext = ?, contact_digest = ?, consent_at = ?, updated_at = ?
-        WHERE id = ? AND status = 'active' AND updated_at = ?
+        WHERE id = ? AND status = ? AND updated_at = ?
       `).run(
         record.campusCode, record.templateVersion, record.roomKey, record.buildingKey,
         record.addressCiphertext, record.nicknameCiphertext, record.contactType,
         record.contactCiphertext, record.contactDigest, record.consentAt, record.updatedAt,
-        record.id, expectedUpdatedAt,
+        record.id, expectedStatus, expectedUpdatedAt,
       );
-      return Number(result.changes) === 1 ? { ...record, status: 'active' } : null;
+      return Number(result.changes) === 1 ? { ...record, status: expectedStatus } : null;
     });
   }
 

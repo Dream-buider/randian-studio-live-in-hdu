@@ -49,6 +49,11 @@ const own = {
   deletedAt: null,
 } as const;
 
+const hiddenOwn = {
+  ...own,
+  status: 'hidden' as const,
+};
+
 const noContactMember = {
   id: 'registration-2',
   nickname: '小火',
@@ -241,6 +246,71 @@ describe('roommate matching client flow', () => {
     await wrapper.get('[data-action="delete-registration"]').trigger('click');
     await flushPromises();
     expect(wrapper.get('[data-state="register"]').text()).toContain('登记寝室');
+  });
+
+  it('keeps a hidden registration editable and deletable without requesting or rendering members', async () => {
+    const confirm = vi.fn(() => true);
+    vi.stubGlobal('confirm', confirm);
+    const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/roommates/config') return jsonResponse(enabledConfig);
+      if (url === '/api/roommates/me' && !init?.method) return jsonResponse({ item: hiddenOwn });
+      if (url === '/api/roommates/me' && init?.method === 'PATCH') {
+        return jsonResponse({ item: { ...hiddenOwn, nickname: '隐藏后修改' } });
+      }
+      if (url === '/api/roommates/me' && init?.method === 'DELETE') {
+        return jsonResponse({ status: 'deleted' });
+      }
+      if (url === '/api/roommates/members') {
+        throw new Error('hidden registration must not request members');
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetcher);
+    const wrapper = mount(RoommateView);
+    await flushPromises();
+
+    expect(wrapper.get('[data-state="members"]').text()).toContain(
+      '登记已被隐藏，暂时不能查看成员；可修改资料并等待管理员恢复',
+    );
+    expect(wrapper.find('.roommate-member-grid').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('0 人已登记');
+
+    await wrapper.get('[data-action="edit-registration"]').trigger('click');
+    await wrapper.get('input[name="nickname"]').setValue('隐藏后修改');
+    await wrapper.get('form[data-role="roommate-registration-form"]').trigger('submit');
+    await wrapper.get('[data-action="update-registration"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.get('[data-state="members"]').text()).toContain('登记已被隐藏');
+
+    await wrapper.get('[data-action="delete-registration"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.get('[data-state="register"]').text()).toContain('登记寝室');
+    expect(fetcher.mock.calls.some(([url]) => String(url) === '/api/roommates/members')).toBe(false);
+  });
+
+  it('recovers a hidden registration without requesting members or treating it as new', async () => {
+    const fetcher = unauthenticatedSetup((url, init) => {
+      if (url === '/api/roommates/recover' && init?.method === 'POST') {
+        return jsonResponse({ registrationId: hiddenOwn.id, own: hiddenOwn });
+      }
+      if (url === '/api/roommates/members') {
+        throw new Error('hidden registration must not request members');
+      }
+      return null;
+    });
+    const { wrapper } = await openRegistrationForm(fetcher);
+    await wrapper.get('[data-action="open-recovery"]').trigger('click');
+    const recover = wrapper.get('form[data-role="roommate-recovery-form"]');
+    await recover.get('input[name="registrationId"]').setValue(hiddenOwn.id);
+    await recover.get('input[name="managementCode"]').setValue('hidden-management-code');
+    await recover.trigger('submit');
+    await flushPromises();
+
+    expect(wrapper.get('[data-state="members"]').text()).toContain(
+      '登记已被隐藏，暂时不能查看成员；可修改资料并等待管理员恢复',
+    );
+    expect(wrapper.find('.roommate-member-grid').exists()).toBe(false);
   });
 
   it('requires the complete recovery credential and never writes it to browser storage', async () => {

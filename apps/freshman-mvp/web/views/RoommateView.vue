@@ -122,11 +122,16 @@ async function loadPage(): Promise<void> {
       }
       throw error;
     }
-    members.value = await listRoommateMembers();
-    state.value = 'members';
+    await showOwn(own.value);
   } catch (error) {
     showError(error, 'loading');
   }
+}
+
+async function showOwn(item: RoommateSelf): Promise<void> {
+  own.value = item;
+  members.value = item.status === 'hidden' ? [] : await listRoommateMembers();
+  state.value = 'members';
 }
 
 function openConfirmation(): void {
@@ -151,9 +156,7 @@ async function submitConfirmed(): Promise<void> {
       oneTimeManagementCode.value = result.managementCode;
       state.value = result.managementCode ? 'credential' : 'members';
     } else {
-      own.value = await updateMyRoommateRegistration(draft.value);
-      members.value = await listRoommateMembers();
-      state.value = 'members';
+      await showOwn(await updateMyRoommateRegistration(draft.value));
     }
   } catch (error) {
     showError(error, 'confirm');
@@ -188,10 +191,8 @@ async function recoverRegistration(): Promise<void> {
   busy.value = true;
   try {
     const result = await recoverRoommateRegistration(recoveryDraft.value);
-    own.value = result.own;
-    members.value = await listRoommateMembers();
+    await showOwn(result.own);
     recoveryDraft.value = { registrationId: '', managementCode: '' };
-    state.value = 'members';
   } catch (error) {
     showError(error, 'recover');
   } finally {

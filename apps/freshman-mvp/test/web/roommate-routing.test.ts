@@ -195,6 +195,32 @@ describe('roommate client route and API boundary', () => {
     expect('sessionToken' in recovered).toBe(false);
   });
 
+  it('accepts hidden self records from create, read, update, and recovery responses', async () => {
+    const hidden = { ...self, status: 'hidden' as const };
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({
+        registrationId: hidden.id,
+        managementCode: null,
+        own: hidden,
+        members: [],
+      }))
+      .mockResolvedValueOnce(jsonResponse({ item: hidden }))
+      .mockResolvedValueOnce(jsonResponse({ item: { ...hidden, nickname: '隐藏后修改' } }))
+      .mockResolvedValueOnce(jsonResponse({ registrationId: hidden.id, own: hidden }));
+
+    await expect(createRoommateRegistration(registrationInput, { fetcher })).resolves.toMatchObject({
+      own: { status: 'hidden' }, members: [], managementCode: null,
+    });
+    await expect(getMyRoommateRegistration({ fetcher })).resolves.toMatchObject({ status: 'hidden' });
+    await expect(updateMyRoommateRegistration(registrationInput, { fetcher })).resolves.toMatchObject({
+      status: 'hidden', nickname: '隐藏后修改',
+    });
+    await expect(recoverRoommateRegistration({
+      registrationId: hidden.id,
+      managementCode: 'hidden-management-code',
+    }, { fetcher })).resolves.toMatchObject({ own: { status: 'hidden' } });
+  });
+
   it('projects create, update, and recovery bodies to documented fields only', async () => {
     const fetcher = vi.fn(async (
       path: string | URL | Request,

@@ -316,6 +316,54 @@ test('valid same-session create returns the existing active registration', async
   }
 });
 
+test('hidden registration remains self-manageable without regaining member access', async () => {
+  const { database, service } = setup();
+  try {
+    const created = await service.create(
+      xiashaInput('11', 'south', '207', '隐藏前', 'wechat', 'hidden-before'),
+      ctxA,
+    );
+    await service.moderate(created.registrationId, {
+      action: 'hide', actorId: 'local-admin', reason: '等待资料修正',
+    });
+
+    const mine = await service.getMine(created.sessionToken, ctxA);
+    assert.equal(mine.status, 'hidden');
+    await assert.rejects(() => service.listMembers(created.sessionToken, ctxA), /session/i);
+
+    const duplicateCreate = await service.create(
+      xiashaInput('12', 'north', '301', '不能重复创建', null, null),
+      { ...ctxA, sessionToken: created.sessionToken },
+    );
+    assert.equal(duplicateCreate.registrationId, created.registrationId);
+    assert.equal(duplicateCreate.own.status, 'hidden');
+    assert.equal(duplicateCreate.managementCode, null);
+    assert.deepEqual(duplicateCreate.members, []);
+
+    const updated = await service.updateMine(
+      created.sessionToken,
+      xiashaInput('12', 'north', '301', '隐藏后修改', 'qq', 'hidden-after'),
+      ctxA,
+    );
+    assert.equal(updated.status, 'hidden');
+    assert.equal(updated.address.display, '下沙校区 · 12号楼 · 北 · 301');
+    assert.equal(updated.nickname, '隐藏后修改');
+    assert.deepEqual(updated.contact, { type: 'qq', value: 'hidden-after' });
+    await assert.rejects(() => service.listMembers(created.sessionToken, ctxA), /session/i);
+
+    const recovered = await service.recover(created.registrationId, created.managementCode!, ctxB);
+    assert.equal(recovered.own.status, 'hidden');
+    assert.notEqual(recovered.sessionToken, created.sessionToken);
+    assert.equal((await service.getMine(recovered.sessionToken, ctxB)).nickname, '隐藏后修改');
+    await assert.rejects(() => service.listMembers(recovered.sessionToken, ctxB), /session/i);
+
+    await service.deleteMine(recovered.sessionToken, ctxB);
+    await assert.rejects(() => service.getMine(recovered.sessionToken, ctxB), /session/i);
+  } finally {
+    database.close();
+  }
+});
+
 test('rejects duplicate active contact and permits reuse after deletion', async () => {
   const { database, service } = setup();
   try {
