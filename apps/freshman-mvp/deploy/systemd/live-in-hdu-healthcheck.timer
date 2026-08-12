@@ -1,0 +1,13 @@
+[Unit]
+Description=Check LIVE IN HDU health every five minutes
+
+[Timer]
+OnBootSec=2m
+OnUnitActiveSec=5m
+AccuracySec=30s
+Persistent=true
+Unit=live-in-hdu-healthcheck.service
+
+[Install]
+WantedBy=timers.target
+

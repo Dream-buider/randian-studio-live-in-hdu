@@ -1,0 +1,9 @@
+[Unit]
+Description=LIVE IN HDU local health check and one-shot recovery
+After=live-in-hdu.service
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/local/sbin/live-in-hdu-healthcheck
+

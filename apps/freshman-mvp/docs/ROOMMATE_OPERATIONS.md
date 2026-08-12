@@ -23,6 +23,15 @@ systemctl status live-in-hdu-backup.timer --no-pager
 journalctl -u live-in-hdu-backup.service --since today --no-pager
 ```
 
+## 自动健康检查
+
+`live-in-hdu-healthcheck.timer` 每 5 分钟访问服务器内部 `127.0.0.1:3212/api/health`。若连接失败或总体状态不是 `ok`，会重启一次 `live-in-hdu` 并重新验证；两次都失败时保留失败状态与 systemd 日志，不会循环重启。检查状态：
+
+```bash
+systemctl status live-in-hdu-healthcheck.timer --no-pager
+journalctl -u live-in-hdu-healthcheck.service --since today --no-pager
+```
+
 ## 1. 域名、备案和发布责任
 
 1. `liveinhdu.cn` 必须由老板或团队长期控制的腾讯云账号购买并实名，不要挂在临时成员名下。
