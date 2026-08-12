@@ -2,6 +2,16 @@
 
 本手册以生产目录 `/srv/live-in-hdu/apps/freshman-mvp` 和 systemd 服务 `live-in-hdu` 为准。室友功能含精确寝室和可选联系方式，必须先完成 HTTPS 与备份门禁，不得在纯 HTTP 公网上开启。
 
+## 在维护电脑上打开管理端
+
+服务器会独立运行，不需要维护电脑长期保持开机。只有需要审核或维护时，在项目目录运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\open-production-admin.ps1
+```
+
+脚本会通过已授权的 SSH 公钥建立 `127.0.0.1:3211` 到服务器的安全通道，并打开 `http://127.0.0.1:3211/admin`。它不保存 SSH 密码、TokenDance 密钥或室友匹配密钥。关闭或重启电脑后通道会消失，下次管理时重新运行脚本即可；不影响公网客户端和服务器运行。
+
 ## 1. 域名、备案和发布责任
 
 1. `liveinhdu.cn` 必须由老板或团队长期控制的腾讯云账号购买并实名，不要挂在临时成员名下。
