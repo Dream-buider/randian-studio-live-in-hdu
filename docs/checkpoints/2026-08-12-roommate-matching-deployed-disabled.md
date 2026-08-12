@@ -42,7 +42,8 @@ The first incremental-source deployment failed during compilation because the pr
 - The web fallback probe intentionally added one review item, moving pending reviews from 18 to 19.
 - Full Vue regression suite after deployment: 12 files, 105/105 tests passed.
 
+`npm audit --omit=dev` reported 0 critical, 4 high, and 2 moderate dependency advisories. The advertised automatic fixes require semver-major changes (including `@fastify/static` and `exceljs`), so no blind `audit fix --force` was applied during this production deployment. These upgrades require a separate compatibility-tested security change.
+
 ## Remaining enablement gate
 
 Roommate matching remains disabled because `liveinhdu.cn` does not currently resolve and the mainland deployment has no validated ICP/DNS/TLS path. Do not enable contact collection on the plain HTTP IP endpoint. Enablement still requires the approved domain, completed ICP filing, DNS, a valid certificate, HTTPS-only Nginx, Node bound to loopback, explicit public admin/review denial, generated server-only secrets, the readiness verifier, and phone acceptance testing.
-
