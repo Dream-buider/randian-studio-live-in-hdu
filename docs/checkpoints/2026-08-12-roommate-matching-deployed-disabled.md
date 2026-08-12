@@ -44,6 +44,8 @@ The first incremental-source deployment failed during compilation because the pr
 - Nginx now owns public ports 80 and 3210 for the IP host; both keep the client reachable, while `/api/admin*` and `/api/reviews*` are denied at the proxy layer.
 - Node now listens only on `127.0.0.1:3212`; the one-click administrator tunnel targets that loopback port.
 - Nginx/environment rollback snapshot: `/srv/live-in-hdu/backups/nginx-boundary-20260812-112318`.
+- `live-in-hdu-backup.timer` is enabled and generated a verified `600`-mode online SQLite backup; it runs daily and retains 30 snapshots.
+- `live-in-hdu-healthcheck.timer` is enabled and passed its first probe; it checks every five minutes and performs at most one recovery restart per failed run.
 
 `npm audit --omit=dev` reported 0 critical, 4 high, and 2 moderate dependency advisories. The advertised automatic fixes require semver-major changes (including `@fastify/static` and `exceljs`), so no blind `audit fix --force` was applied during this production deployment. These upgrades require a separate compatibility-tested security change.
 
