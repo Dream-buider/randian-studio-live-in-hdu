@@ -1,0 +1,27 @@
+{
+  "name": "live-in-hdu-goai-agent",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "description": "LIVE IN HDU GOAI Agent - 无界应用赛道初赛提交",
+  "scripts": {
+    "dev": "npm --prefix apps/freshman-mvp run dev",
+    "dev:web": "npm --prefix apps/freshman-mvp run dev:web",
+    "build": "npm --prefix apps/freshman-mvp run build",
+    "start": "npm --prefix apps/freshman-mvp run start",
+    "test": "npm --prefix apps/freshman-mvp run test",
+    "test:web": "npm --prefix apps/freshman-mvp run test:web",
+    "verify:goai-agent": "npm --prefix apps/freshman-mvp run verify:goai-agent"
+  },
+  "keywords": [
+    "goai",
+    "agent",
+    "live-in-hdu",
+    "demo"
+  ],
+  "author": "LIVE IN HDU Team",
+  "license": "MIT",
+  "dependencies": {
+    "playwright-core": "^1.60.0"
+  }
+}
