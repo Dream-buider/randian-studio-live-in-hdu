@@ -53,6 +53,17 @@ The first incremental-source deployment failed during compilation because the pr
 
 Roommate matching remains disabled because `liveinhdu.cn` does not currently resolve and the mainland deployment has no validated ICP/DNS/TLS path. Do not enable contact collection on the plain HTTP IP endpoint. Enablement still requires the approved domain, completed ICP filing, DNS, a valid certificate, HTTPS-only Nginx, Node bound to loopback, explicit public admin/review denial, generated server-only secrets, the readiness verifier, and phone acceptance testing.
 
+## 2026-08-13 revalidation
+
+- The Tencent Cloud access-provider review passed, but the filing is still waiting to be submitted to the communications administration because the domain real-name record is less than three days old. This is not the final ICP approval.
+- No executable source, client, server, dependency, or package-lock change exists after this disabled deployment; later commits only changed operations and filing documentation.
+- Fresh roommate backend verification passed 63/63 tests, the full Web suite passed 105/105 tests, and the production build completed successfully.
+- The local and production `RoommateView-CSfxQAZ2.js` SHA-256 values both equal `895f8ed1bafad366ed854cd217e5cd8a77e4e732b1c0111afe080c55678f8dfe`.
+- Production SQLite integrity is `ok`, migration count remains 4, canonical answers remain 25, pending reviews remain 19, and no roommate registration exists while the feature is disabled.
+- The original database and code rollback artifacts remain present with mode `600`; the latest daily backup also passed SQLite integrity validation and both backup and health-check timers remain active.
+- Public pages including `/roommates` return HTTP 200, public admin/review data remain HTTP 403, and the disabled roommate API remains HTTP 503.
+- Because the deployed executable already matches the fresh verified build, no redundant code or database overwrite was performed. The release is ready for the existing post-ICP DNS, TLS, readiness, enablement, and phone-acceptance sequence.
+
 ## Source handoff
 
 - Complete Git history bundle: `D:\Star\LIVE_IN_HDU_RUNTIME\releases\live-in-hdu-source-20260812.bundle`
