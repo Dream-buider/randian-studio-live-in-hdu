@@ -6,8 +6,10 @@
   "scripts": {
     "dev": "tsx watch src/server/index.ts",
     "dev:web": "vite",
+    "preview": "vite preview",
     "dev:ui": "vite --mode ui-preview --host 127.0.0.1",
-    "build": "vue-tsc --noEmit -p tsconfig.json && tsc -p tsconfig.server.json && vite build && tsx scripts/assert-no-ui-preview-data.mts dist/client",
+    "build": "npm run build:demo",
+    "build:demo": "vue-tsc --noEmit -p tsconfig.json && vite build && tsx scripts/assert-no-ui-preview-data.mts dist/client",
     "build:server": "tsc -p tsconfig.server.json",
     "build:trial": "vue-tsc --noEmit -p tsconfig.json && vite build --mode public-trial && tsx scripts/assert-public-trial-build.mts && tsx scripts/assert-no-ui-preview-data.mts dist/public-trial-client",
     "start": "node --preserve-symlinks --preserve-symlinks-main dist/server/index.js",

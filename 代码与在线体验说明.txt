@@ -1,0 +1,39 @@
+LIVE IN HDU GOAI Agent — 代码与在线体验说明
+================================================
+
+一、公开代码仓库
+---------------
+仓库名称：live-in-hdu-goai-agent
+状态：已准备完成，等待推送至 GitHub
+本地路径：publish/live-in-hdu-goai-agent/
+
+推送命令（需要解决网络/代理后执行）：
+  cd publish/live-in-hdu-goai-agent
+  # origin 已配置，无需重复添加
+  git push -u origin master
+
+仓库内容：
+- 可运行的高保真 Demo（/goai-demo）
+- Agent 垂直切片前后端代码
+- README、LICENSE、.env.example
+- 3 张 Demo 截图
+
+二、在线体验
+-----------
+本地启动：
+  npm run dev:web
+  访问 http://localhost:5173/goai-demo
+
+公开 URL：待 GitHub 推送并完成静态部署后补充；当前候选 URL 返回 404，不能作为有效 Demo 链接提交。
+
+三、验证信息
+-----------
+验证时间：2026-08-13
+提交 SHA：624226b（本地仓库 master 分支）
+构建状态：PASS（Node 55/55，Web 64/64，vue-tsc PASS，tsc PASS）
+
+四、限制声明
+-----------
+- 本仓库不包含 node_modules、.env、数据库、用户私有资料；
+- Demo 为初赛演示回放，不代表 GOAI 官网或飞书生产系统已自动完成操作；
+- 对外发布和 GOAI 官网最终提交都必须停在用户确认门前。

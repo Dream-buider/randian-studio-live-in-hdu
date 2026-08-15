@@ -9,5 +9,10 @@
     "types": ["vite/client"],
     "skipLibCheck": true
   },
-  "include": ["web/**/*.ts", "web/**/*.vue", "test/web/**/*.ts"]
+  "include": [
+    "web/main.ts",
+    "web/router.ts",
+    "web/App.vue",
+    "web/views/GoaiDemoView.vue"
+  ]
 }

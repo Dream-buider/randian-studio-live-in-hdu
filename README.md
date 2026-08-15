@@ -9,7 +9,7 @@
 
 ## 在线体验
 
-- **公开 Demo**：[https://live-in-hdu-goai-agent.vercel.app/goai-demo](https://live-in-hdu-goai-agent.vercel.app/goai-demo)
+- **公开 Demo**：待部署后填写（当前候选域名尚未上线，请以本 README 后续更新为准）
 - **演示模式**：打开链接后自动播放完整链路；也可点击按钮手动推进。
 
 > 注：Demo 为初赛演示回放，基于真实本地执行记录；不代表 GOAI 官网或飞书生产系统已自动完成操作。
@@ -58,7 +58,7 @@ npm install
 ### 运行
 
 ```powershell
-# 开发模式（前端 + 后端）
+# 开发模式（公开 Demo）
 npm run dev
 
 # 仅前端
@@ -69,11 +69,13 @@ npm run build
 npm start
 ```
 
+公开仓库默认构建的是可静态部署的 `/goai-demo`。仓库保留 Agent 编排、工具、API 和持久化源码供评审，但为避免带入主项目数据库、校园内容与生产适配器，不把完整服务器运行时作为公开发行物。
+
 ### 验证
 
 ```powershell
-# Agent 专项验证（Node + Web + 类型检查）
-npm run verify:goai-agent
+# 静态 Demo 类型检查与生产构建
+npm run verify
 ```
 
 ## 事实分层

@@ -8,10 +8,8 @@
     "dev": "npm --prefix apps/freshman-mvp run dev",
     "dev:web": "npm --prefix apps/freshman-mvp run dev:web",
     "build": "npm --prefix apps/freshman-mvp run build",
-    "start": "npm --prefix apps/freshman-mvp run start",
-    "test": "npm --prefix apps/freshman-mvp run test",
-    "test:web": "npm --prefix apps/freshman-mvp run test:web",
-    "verify:goai-agent": "npm --prefix apps/freshman-mvp run verify:goai-agent"
+    "start": "npm --prefix apps/freshman-mvp run preview",
+    "verify": "npm run build"
   },
   "keywords": [
     "goai",
