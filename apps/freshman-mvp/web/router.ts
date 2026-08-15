@@ -1,6 +1,6 @@
 import {
   createRouter,
-  createWebHistory,
+  createWebHashHistory,
   type RouteRecordRaw,
   type Router,
   type RouterHistory,
@@ -12,7 +12,7 @@ export interface AppRouterOptions {
 }
 
 export function createAppRouter(
-  history: RouterHistory = createWebHistory(),
+  history: RouterHistory = createWebHashHistory(),
   _options: AppRouterOptions = {},
 ): Router {
   const routes: RouteRecordRaw[] = [
