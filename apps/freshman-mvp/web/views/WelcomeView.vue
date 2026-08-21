@@ -415,8 +415,10 @@ onUnmounted(() => {
 
 .countdown-card strong {
   display: block;
+  width: 100%;
   max-width: 100%;
-  overflow: hidden;
+  padding-inline: clamp(3px, 1vw, 6px);
+  overflow: visible;
   color: var(--arrival-coral);
   font-family: "HDU Arrival Display", "Arial Narrow", sans-serif;
   font-size: clamp(2.35rem, 11.5vw, 3.35rem);
@@ -424,6 +426,7 @@ onUnmounted(() => {
   font-weight: 400;
   letter-spacing: -0.04em;
   line-height: 0.98;
+  text-align: center;
 }
 
 .countdown-card span {
