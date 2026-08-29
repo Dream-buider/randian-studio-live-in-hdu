@@ -25,6 +25,7 @@ export interface RoommateRegistrationRecord {
   campusCode: CampusCode;
   templateVersion: string;
   roomKey: string;
+  bedKey: string | null;
   buildingKey: string;
   addressCiphertext: string;
   nicknameCiphertext: string;

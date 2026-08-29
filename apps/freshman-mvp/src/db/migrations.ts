@@ -107,6 +107,7 @@ CREATE TABLE IF NOT EXISTS roommate_registrations (
   campus_code TEXT NOT NULL,
   template_version TEXT NOT NULL,
   room_key TEXT NOT NULL,
+  bed_key TEXT,
   building_key TEXT NOT NULL,
   address_ciphertext TEXT NOT NULL,
   nickname_ciphertext TEXT NOT NULL,
@@ -126,7 +127,6 @@ CREATE INDEX IF NOT EXISTS roommate_registrations_room_status
 CREATE UNIQUE INDEX IF NOT EXISTS roommate_registrations_active_contact
   ON roommate_registrations(contact_digest)
   WHERE contact_digest IS NOT NULL AND status = 'active';
-
 CREATE TABLE IF NOT EXISTS roommate_sessions (
   session_digest TEXT PRIMARY KEY,
   registration_id TEXT NOT NULL REFERENCES roommate_registrations(id) ON DELETE CASCADE,
@@ -173,6 +173,12 @@ export function migrateDatabase(database: SqliteDatabase): void {
       'raw_search_leads_json',
       `raw_search_leads_json TEXT NOT NULL DEFAULT '[]'`,
     );
+    addColumnIfMissing(database, 'roommate_registrations', 'bed_key', 'bed_key TEXT');
+    database.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS roommate_registrations_active_bed
+        ON roommate_registrations(room_key, bed_key)
+        WHERE bed_key IS NOT NULL AND status = 'active';
+    `);
     database.prepare(
       'INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)',
     ).run(1, new Date().toISOString());
@@ -185,6 +191,9 @@ export function migrateDatabase(database: SqliteDatabase): void {
     database.prepare(
       'INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)',
     ).run(4, new Date().toISOString());
+    database.prepare(
+      'INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)',
+    ).run(5, new Date().toISOString());
     database.exec('COMMIT');
   } catch (error) {
     database.exec('ROLLBACK');

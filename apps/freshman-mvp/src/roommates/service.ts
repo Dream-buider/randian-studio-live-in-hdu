@@ -161,6 +161,7 @@ export class RoommateService {
       campusCode: validated.address.campus,
       templateVersion: validated.address.templateVersion,
       roomKey: this.crypto.roomKey(validated.address.canonical),
+      bedKey: this.crypto.bedKey(validated.address.canonical, validated.address.bed),
       buildingKey: this.crypto.buildingKey(validated.address.campus, validated.address.building),
       addressCiphertext: this.crypto.encrypt(JSON.stringify(validated.address)),
       nicknameCiphertext: this.crypto.encrypt(validated.nickname),
@@ -224,6 +225,7 @@ export class RoommateService {
       campusCode: validated.address.campus,
       templateVersion: validated.address.templateVersion,
       roomKey: this.crypto.roomKey(validated.address.canonical),
+      bedKey: this.crypto.bedKey(validated.address.canonical, validated.address.bed),
       buildingKey: this.crypto.buildingKey(validated.address.campus, validated.address.building),
       addressCiphertext: this.crypto.encrypt(JSON.stringify(validated.address)),
       nicknameCiphertext: this.crypto.encrypt(validated.nickname),
@@ -430,7 +432,7 @@ export class RoommateService {
   private toOwn(record: RoommateRegistrationRecord): RoommateOwnView {
     return {
       id: record.id,
-      address: JSON.parse(this.crypto.decrypt(record.addressCiphertext)) as NormalizedRoomAddress,
+      address: this.readAddress(record.addressCiphertext),
       nickname: this.crypto.decrypt(record.nicknameCiphertext),
       contact: record.contactType && record.contactCiphertext
         ? { type: record.contactType, value: this.crypto.decrypt(record.contactCiphertext) }
@@ -449,7 +451,7 @@ export class RoommateService {
   ): RoommateAdminView {
     return {
       id: record.id,
-      address: JSON.parse(this.crypto.decrypt(record.addressCiphertext)) as NormalizedRoomAddress,
+      address: this.readAddress(record.addressCiphertext),
       nickname: this.crypto.decrypt(record.nicknameCiphertext),
       contact: record.contactType ? { type: record.contactType, masked: true } : null,
       status: record.status,
@@ -459,6 +461,14 @@ export class RoommateService {
       deletedAt: record.deletedAt,
       lastModeration: lastModeration ? this.toAdminModeration(lastModeration) : null,
     };
+  }
+
+  private readAddress(ciphertext: string): NormalizedRoomAddress {
+    const address = JSON.parse(this.crypto.decrypt(ciphertext)) as NormalizedRoomAddress;
+    if (!Object.prototype.hasOwnProperty.call(address, 'bed')) {
+      address.bed = null;
+    }
+    return address;
   }
 
   private toAdminModeration(audit: RoommateAdminAuditRecord): RoommateAdminModerationView {

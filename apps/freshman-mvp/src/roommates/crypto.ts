@@ -4,7 +4,7 @@ import {
   createHmac,
   randomBytes,
 } from 'node:crypto';
-import type { ContactType } from './models.js';
+import type { BedNumber, ContactType } from './models.js';
 
 export interface RoommateCryptoOptions {
   encryptionKey: Buffer;
@@ -70,6 +70,10 @@ export class RoommateCrypto {
 
   roomKey(canonical: string): string {
     return this.digest(`room\0${canonical}`);
+  }
+
+  bedKey(roomCanonical: string, bed: BedNumber | null): string | null {
+    return bed === null ? null : this.digest(`bed\0${roomCanonical}|${bed}`);
   }
 
   buildingKey(campus: string, building: string): string {

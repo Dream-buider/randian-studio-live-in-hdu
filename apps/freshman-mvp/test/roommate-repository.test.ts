@@ -21,6 +21,7 @@ function registration(overrides: Partial<RoommateRegistrationRecord> = {}): Room
     campusCode: 'xiasha',
     templateVersion: 'xiasha-v1',
     roomKey: 'room-key-11-south-207',
+    bedKey: null,
     buildingKey: 'building-key-11',
     addressCiphertext: 'encrypted-address',
     nicknameCiphertext: 'encrypted-nickname',
@@ -72,7 +73,7 @@ function seedQuestionIntent(database: ReturnType<typeof openDatabase>): void {
   );
 }
 
-test('migration adds roommate tables without changing existing pre-v4 Q&A rows', async () => {
+test('migration adds roommate tables without changing existing pre-v5 Q&A rows', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'live-in-hdu-roommate-upgrade-'));
   const databasePath = path.join(directory, 'upgrade.db');
   const db = openDatabase(databasePath);
@@ -94,17 +95,48 @@ test('migration adds roommate tables without changing existing pre-v4 Q&A rows',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
+      CREATE TABLE roommate_registrations (
+        id TEXT PRIMARY KEY,
+        campus_code TEXT NOT NULL,
+        template_version TEXT NOT NULL,
+        room_key TEXT NOT NULL,
+        building_key TEXT NOT NULL,
+        address_ciphertext TEXT NOT NULL,
+        nickname_ciphertext TEXT NOT NULL,
+        contact_type TEXT,
+        contact_ciphertext TEXT,
+        contact_digest TEXT,
+        management_digest TEXT NOT NULL UNIQUE,
+        consent_at TEXT,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        deleted_at TEXT
+      );
     `);
     for (const version of [1, 2, 3]) {
       db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(version, createdAt);
     }
     seedQuestionIntent(db);
+    const legacy = registration();
+    db.prepare(`
+      INSERT INTO roommate_registrations (
+        id, campus_code, template_version, room_key, building_key, address_ciphertext,
+        nickname_ciphertext, contact_type, contact_ciphertext, contact_digest,
+        management_digest, consent_at, status, created_at, updated_at, expires_at, deleted_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      legacy.id, legacy.campusCode, legacy.templateVersion, legacy.roomKey, legacy.buildingKey,
+      legacy.addressCiphertext, legacy.nicknameCiphertext, legacy.contactType,
+      legacy.contactCiphertext, legacy.contactDigest, legacy.managementDigest, legacy.consentAt,
+      legacy.status, legacy.createdAt, legacy.updatedAt, legacy.expiresAt, legacy.deletedAt,
+    );
     const before = {
       ...(db.prepare('SELECT * FROM question_intents WHERE id = ?').get('qa-intent-1') as Record<string, unknown>),
     };
     migrateDatabase(db);
     const repository = new SqliteRoommateRepository(db);
-    await repository.createRegistration(registration());
     await repository.createSession(session());
 
     const names = db.prepare(
@@ -120,6 +152,18 @@ test('migration adds roommate tables without changing existing pre-v4 Q&A rows',
     );
     assert.equal(
       Number((db.prepare('SELECT COUNT(*) AS count FROM schema_migrations WHERE version = 4').get() as { count: number }).count),
+      1,
+    );
+    assert.equal(
+      Number((db.prepare('SELECT COUNT(*) AS count FROM schema_migrations WHERE version = 5').get() as { count: number }).count),
+      1,
+    );
+    assert.equal(
+      (db.prepare('SELECT bed_key FROM roommate_registrations WHERE id = ?').get('registration-1') as { bed_key: string | null }).bed_key,
+      null,
+    );
+    assert.equal(
+      Number((db.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'index' AND name = 'roommate_registrations_active_bed'").get() as { count: number }).count),
       1,
     );
     assert.deepEqual(
@@ -273,6 +317,61 @@ test('repository updates, moderates, revokes sessions, and records audit entries
       db.prepare('SELECT id, registration_id, actor_id, action, reason, created_at FROM roommate_admin_audit').all()
         .map((row) => ({ ...(row as Record<string, unknown>) })),
       [{ id: 'audit-1', registration_id: 'registration-1', actor_id: 'local-admin', action: 'hide', reason: 'duplicate submission', created_at: createdAt }],
+    );
+  } finally {
+    db.close();
+  }
+});
+
+test('repository enforces active bed uniqueness while allowing null or distinct beds', async () => {
+  const db = openDatabase(':memory:');
+  try {
+    migrateDatabase(db);
+    const repository = new SqliteRoommateRepository(db);
+    await repository.createRegistration(registration({ id: 'bed-1', bedKey: 'bed-key-1' }));
+    await assert.rejects(
+      () => repository.createRegistration(registration({
+        id: 'bed-1-conflict', managementDigest: 'management-bed-1-conflict',
+        contactDigest: 'contact-bed-1-conflict', bedKey: 'bed-key-1',
+      })),
+      (error: unknown) => error instanceof Error && error.message === 'Bed already occupied',
+    );
+    await repository.createRegistration(registration({
+      id: 'bed-2', managementDigest: 'management-bed-2', contactDigest: 'contact-bed-2', bedKey: 'bed-key-2',
+    }));
+    await repository.createRegistration(registration({
+      id: 'other-room-bed-1', managementDigest: 'management-other-room-bed-1', contactDigest: 'contact-other-room-bed-1',
+      roomKey: 'room-key-other', bedKey: 'bed-key-1',
+    }));
+    await repository.createRegistration(registration({
+      id: 'null-bed-1', managementDigest: 'management-null-bed-1', contactDigest: 'contact-null-bed-1', bedKey: null,
+    }));
+    await repository.createRegistration(registration({
+      id: 'null-bed-2', managementDigest: 'management-null-bed-2', contactDigest: 'contact-null-bed-2', bedKey: null,
+    }));
+  } finally {
+    db.close();
+  }
+});
+
+test('repository maps a bed conflict during hidden-to-active restore', async () => {
+  const db = openDatabase(':memory:');
+  try {
+    migrateDatabase(db);
+    const repository = new SqliteRoommateRepository(db);
+    const occupant = registration({ id: 'restore-occupant', bedKey: 'bed-key-restore' });
+    const hidden = registration({
+      id: 'restore-hidden', managementDigest: 'management-restore-hidden', contactDigest: 'contact-restore-hidden',
+      bedKey: 'bed-key-hidden', status: 'hidden',
+    });
+    await repository.createRegistration(occupant);
+    await repository.createRegistration(hidden);
+    const movedWhileHidden = { ...hidden, bedKey: occupant.bedKey, updatedAt: '2026-08-12T00:00:00.000Z' };
+    await repository.updateRegistration(movedWhileHidden);
+    const conflicting = { ...movedWhileHidden, status: 'active' as const, updatedAt: '2026-08-12T00:00:01.000Z' };
+    await assert.rejects(
+      () => repository.moderate(conflicting, { status: movedWhileHidden.status, updatedAt: movedWhileHidden.updatedAt }),
+      (error: unknown) => error instanceof Error && error.message === 'Bed already occupied',
     );
   } finally {
     db.close();

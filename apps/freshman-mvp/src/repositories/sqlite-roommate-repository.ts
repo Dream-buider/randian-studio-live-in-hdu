@@ -99,13 +99,13 @@ export class SqliteRoommateRepository implements RoommateRepository {
     return this.inTransaction(() => {
       const result = this.database.prepare(`
         UPDATE roommate_registrations
-        SET campus_code = ?, template_version = ?, room_key = ?, building_key = ?,
+        SET campus_code = ?, template_version = ?, room_key = ?, bed_key = ?, building_key = ?,
             address_ciphertext = ?, nickname_ciphertext = ?, contact_type = ?,
             contact_ciphertext = ?, contact_digest = ?, management_digest = ?, consent_at = ?,
             status = ?, updated_at = ?, expires_at = ?, deleted_at = ?
         WHERE id = ?
       `).run(
-        record.campusCode, record.templateVersion, record.roomKey, record.buildingKey,
+        record.campusCode, record.templateVersion, record.roomKey, record.bedKey, record.buildingKey,
         record.addressCiphertext, record.nicknameCiphertext, record.contactType,
         record.contactCiphertext, record.contactDigest, record.managementDigest, record.consentAt,
         record.status, record.updatedAt, record.expiresAt, record.deletedAt, record.id,
@@ -128,12 +128,12 @@ export class SqliteRoommateRepository implements RoommateRepository {
     return this.inTransaction(() => {
       const result = this.database.prepare(`
         UPDATE roommate_registrations
-        SET campus_code = ?, template_version = ?, room_key = ?, building_key = ?,
+        SET campus_code = ?, template_version = ?, room_key = ?, bed_key = ?, building_key = ?,
             address_ciphertext = ?, nickname_ciphertext = ?, contact_type = ?,
             contact_ciphertext = ?, contact_digest = ?, consent_at = ?, updated_at = ?
         WHERE id = ? AND status = ? AND updated_at = ?
       `).run(
-        record.campusCode, record.templateVersion, record.roomKey, record.buildingKey,
+        record.campusCode, record.templateVersion, record.roomKey, record.bedKey, record.buildingKey,
         record.addressCiphertext, record.nicknameCiphertext, record.contactType,
         record.contactCiphertext, record.contactDigest, record.consentAt, record.updatedAt,
         record.id, expectedStatus, expectedUpdatedAt,
@@ -257,12 +257,12 @@ export class SqliteRoommateRepository implements RoommateRepository {
   private insertRegistration(record: RoommateRegistrationRecord): void {
     this.database.prepare(`
       INSERT INTO roommate_registrations (
-        id, campus_code, template_version, room_key, building_key, address_ciphertext,
+        id, campus_code, template_version, room_key, bed_key, building_key, address_ciphertext,
         nickname_ciphertext, contact_type, contact_ciphertext, contact_digest,
         management_digest, consent_at, status, created_at, updated_at, expires_at, deleted_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      record.id, record.campusCode, record.templateVersion, record.roomKey, record.buildingKey,
+      record.id, record.campusCode, record.templateVersion, record.roomKey, record.bedKey, record.buildingKey,
       record.addressCiphertext, record.nicknameCiphertext, record.contactType,
       record.contactCiphertext, record.contactDigest, record.managementDigest, record.consentAt,
       record.status, record.createdAt, record.updatedAt, record.expiresAt, record.deletedAt,
@@ -282,6 +282,7 @@ export class SqliteRoommateRepository implements RoommateRepository {
       campusCode: String(row.campus_code) as RoommateRegistrationRecord['campusCode'],
       templateVersion: String(row.template_version),
       roomKey: String(row.room_key),
+      bedKey: row.bed_key === null || row.bed_key === undefined ? null : String(row.bed_key),
       buildingKey: String(row.building_key),
       addressCiphertext: String(row.address_ciphertext),
       nicknameCiphertext: String(row.nickname_ciphertext),
@@ -319,6 +320,10 @@ export class SqliteRoommateRepository implements RoommateRepository {
       return result;
     } catch (error) {
       this.database.exec('ROLLBACK');
+      const message = error instanceof Error ? error.message : '';
+      if (message.includes('roommate_registrations.room_key') && message.includes('roommate_registrations.bed_key')) {
+        throw new Error('Bed already occupied');
+      }
       throw error;
     }
   }

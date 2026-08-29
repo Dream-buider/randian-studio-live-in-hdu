@@ -19,14 +19,15 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 function xiashaInput(
   building: string,
-  orientation: 'south' | 'north',
+  orientation: 'east' | 'south' | 'west' | 'north' | 'unknown',
   room: string,
   nickname: string,
   contactType: 'wechat' | 'qq' | 'phone' | 'other' | null,
   contactValue: string | null,
+  bed: '1' | '2' | '3' | '4' | '5' | null = null,
 ): RoommateCreateInput {
   return {
-    address: { campus: 'xiasha', building, orientation, room },
+    address: { campus: 'xiasha', building, orientation, room, bed },
     nickname,
     contactType,
     contactValue,
@@ -56,6 +57,7 @@ function setup(options: {
   return {
     database,
     repository,
+    crypto,
     service,
     setNow: (value: string) => { nowMs = Date.parse(value); },
     advance: (milliseconds: number) => { nowMs += milliseconds; },
@@ -77,6 +79,66 @@ test('only an active same-room registration can read member contacts', async () 
     assert.equal(members[0]?.contact?.value, 'wx-a');
     await assert.rejects(() => service.listMembers('invalid', ctxA), /session/i);
     assert.equal(second.managementCode.length > 30, true);
+  } finally {
+    database.close();
+  }
+});
+
+test('service rejects duplicate active beds but allows distinct rooms, beds, and empty beds', async () => {
+  const { database, service } = setup();
+  try {
+    await service.create(xiashaInput('11', 'south', '207', '床位一', null, null, '1'), ctxA);
+    await assert.rejects(
+      () => service.create(xiashaInput('11', 'south', '207', '冲突', null, null, '1'), ctxB),
+      (error: unknown) => error instanceof Error && error.message === 'Bed already occupied',
+    );
+    await service.create(xiashaInput('11', 'south', '207', '床位二', null, null, '2'), ctxB);
+    await service.create(xiashaInput('12', 'south', '207', '另一房间', null, null, '1'), ctxC);
+    await service.create(xiashaInput('11', 'south', '207', '无床位一', null, null), { ip: '203.0.113.4' });
+    await service.create(xiashaInput('11', 'south', '207', '无床位二', null, null), { ip: '203.0.113.5' });
+  } finally {
+    database.close();
+  }
+});
+
+test('service applies bed conflicts to updates and hidden restoration', async () => {
+  const { database, repository, service } = setup();
+  try {
+    const first = await service.create(xiashaInput('11', 'south', '207', '占用者', null, null, '1'), ctxA);
+    const second = await service.create(xiashaInput('11', 'south', '207', '待修改', null, null, '2'), ctxB);
+    await assert.rejects(
+      () => service.updateMine(second.sessionToken, xiashaInput('11', 'south', '207', '冲突修改', null, null, '1'), ctxB),
+      /Bed already occupied/,
+    );
+    assert.equal((await service.getMine(second.sessionToken, ctxB)).address.bed, '2');
+
+    await service.moderate(second.registrationId, { action: 'hide', actorId: 'local-admin', reason: 'test hide' });
+    const secondRecord = await repository.getRegistration(second.registrationId);
+    assert.ok(secondRecord);
+    await repository.updateRegistration({ ...secondRecord!, bedKey: first.own.address.bed ? (await repository.getRegistration(first.registrationId))!.bedKey : null, updatedAt: '2026-08-11T00:00:02.000Z' });
+    await assert.rejects(
+      () => service.moderate(second.registrationId, { action: 'restore', actorId: 'local-admin', reason: 'test restore' }),
+      /Bed already occupied/,
+    );
+    assert.equal((await repository.getRegistration(second.registrationId))?.status, 'hidden');
+  } finally {
+    database.close();
+  }
+});
+
+test('service fills a missing legacy bed field as null without rewriting ciphertext', async () => {
+  const { database, crypto, repository, service } = setup();
+  try {
+    const created = await service.create(xiashaInput('11', 'south', '207', '旧记录', null, null), ctxA);
+    const legacyAddress = {
+      campus: 'xiasha', templateVersion: 'xiasha-v1', building: '11', orientation: 'south', room: '207',
+      canonical: 'xiasha|xiasha-v1|11|south|207', display: '下沙校区 · 11号楼 · 南 · 207',
+    };
+    const ciphertext = crypto.encrypt(JSON.stringify(legacyAddress));
+    database.prepare('UPDATE roommate_registrations SET address_ciphertext = ? WHERE id = ?')
+      .run(ciphertext, created.registrationId);
+    assert.equal((await service.getMine(created.sessionToken, ctxA)).address.bed, null);
+    assert.equal((await repository.getRegistration(created.registrationId))?.addressCiphertext, ciphertext);
   } finally {
     database.close();
   }

@@ -125,6 +125,10 @@ test('uses domain-separated HMAC indexes and 32-byte random credentials', () => 
   const digest = (value: string) => createHmac('sha256', hmacKey).update(value).digest('base64url');
 
   assert.equal(crypto.roomKey('room-id'), digest('room\0room-id'));
+  assert.equal(crypto.bedKey('room-id', '1'), digest('bed\0room-id|1'));
+  assert.equal(crypto.bedKey('room-id', null), null);
+  assert.notEqual(crypto.bedKey('room-id', '1'), crypto.bedKey('other-room', '1'));
+  assert.notEqual(crypto.bedKey('room-id', '1'), crypto.bedKey('room-id', '2'));
   assert.equal(crypto.buildingKey('xiasha', '11'), digest('building\0xiasha|11'));
   assert.equal(crypto.contactDigest('wechat', 'user-id'), digest('contact\0wechat|user-id'));
   assert.equal(crypto.managementDigest('code'), digest('management\0code'));
