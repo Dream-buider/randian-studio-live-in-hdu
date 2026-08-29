@@ -7,6 +7,7 @@ import { migrateDatabase } from '../src/db/migrations.js';
 import { openDatabase } from '../src/db/sqlite.js';
 import { SqliteContentRepository } from '../src/repositories/sqlite-content-repository.js';
 import { SqliteReviewRepository } from '../src/repositories/sqlite-review-repository.js';
+import { SqliteRoommateBuildingGroupRepository } from '../src/repositories/sqlite-roommate-building-group-repository.js';
 import { createApp } from '../src/server/app.js';
 import type { AppConfig } from '../src/server/config.js';
 import type { RoommateService } from '../src/roommates/service.js';
@@ -161,6 +162,7 @@ async function withApp(
     moderationActors: [],
   };
   const service = fakeService(calls);
+  const buildingGroups = new SqliteRoommateBuildingGroupRepository(database);
   mutateService?.(service);
   const app = createApp({
     config: config(enabled),
@@ -168,6 +170,7 @@ async function withApp(
     reviews: new SqliteReviewRepository(database),
     router: { async answer() { return {}; } },
     roommates: enabled ? service : undefined,
+    roommateBuildingGroups: buildingGroups,
   });
   try {
     await run(app, calls);
@@ -487,5 +490,173 @@ test('keeps unexpected roommate storage and crypto diagnostics out of responses'
         throw new Error('SQLITE_IOERR at /srv/live-in-hdu/runtime/live-in-hdu.db ciphertext');
       },
     });
+  });
+});
+
+const QR_PNG_BASE64 = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00,
+]).toString('base64');
+
+function pngBase64OfSize(size: number): string {
+  const image = Buffer.alloc(size);
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(image);
+  return image.toString('base64');
+}
+
+test('manages building group QR codes locally while keeping public responses safe', async () => {
+  await withApp(false, async (app) => {
+    const put = await app.inject({
+      method: 'PUT',
+      url: '/api/admin/roommate-building-groups/xiasha/015',
+      remoteAddress: '127.0.0.1',
+      payload: { mimeType: 'image/png', imageBase64: QR_PNG_BASE64 },
+    });
+    assert.equal(put.statusCode, 200);
+    assert.equal(put.json().updatedBy, 'local-admin');
+
+    const list = await app.inject({
+      method: 'GET',
+      url: '/api/admin/roommate-building-groups',
+      remoteAddress: '127.0.0.1',
+    });
+    assert.equal(list.statusCode, 200);
+    assert.equal(list.json().items.length, 1);
+    assert.equal(list.json().items[0].imageUrl.endsWith('/xiasha/15/image'), true);
+
+    const adminImage = await app.inject({
+      method: 'GET',
+      url: '/api/admin/roommate-building-groups/xiasha/15/image',
+      remoteAddress: '127.0.0.1',
+    });
+    assert.equal(adminImage.statusCode, 200);
+    assert.equal(adminImage.headers['content-type'], 'image/png');
+    assert.equal(adminImage.headers['x-content-type-options'], 'nosniff');
+    assert.equal(adminImage.headers['cache-control'], 'no-store');
+
+    const unavailable = await app.inject({
+      method: 'GET',
+      url: '/api/roommates/building-groups/xiasha/15',
+      remoteAddress: '127.0.0.1',
+      headers: { 'x-forwarded-proto': 'https' },
+    });
+    assert.equal(unavailable.statusCode, 503);
+    const unavailableImage = await app.inject({
+      method: 'GET',
+      url: '/api/roommates/building-groups/xiasha/15/image',
+      remoteAddress: '127.0.0.1',
+      headers: { 'x-forwarded-proto': 'https' },
+    });
+    assert.equal(unavailableImage.statusCode, 503);
+
+    const remotePut = await app.inject({
+      method: 'PUT',
+      url: '/api/admin/roommate-building-groups/xiasha/15',
+      remoteAddress: '203.0.113.8',
+      payload: { mimeType: 'image/png', imageBase64: QR_PNG_BASE64 },
+    });
+    assert.equal(remotePut.statusCode, 403);
+    for (const request of [
+      { method: 'GET' as const, url: '/api/admin/roommate-building-groups' },
+      { method: 'GET' as const, url: '/api/admin/roommate-building-groups/xiasha/15/image' },
+      { method: 'DELETE' as const, url: '/api/admin/roommate-building-groups/xiasha/15' },
+    ]) {
+      const remote = await app.inject({ ...request, remoteAddress: '203.0.113.8' });
+      assert.equal(remote.statusCode, 403);
+    }
+
+    const deleted = await app.inject({
+      method: 'DELETE',
+      url: '/api/admin/roommate-building-groups/xiasha/15',
+      remoteAddress: '127.0.0.1',
+    });
+    assert.equal(deleted.statusCode, 200);
+    assert.equal(deleted.json().status, 'deleted');
+  });
+});
+
+test('serves public QR metadata and image only over HTTPS when matching is enabled', async () => {
+  await withApp(true, async (app) => {
+    const missing = await app.inject({
+      method: 'GET',
+      url: '/api/roommates/building-groups/xiasha/15',
+      remoteAddress: '127.0.0.1',
+      headers: { 'x-forwarded-proto': 'https' },
+    });
+    assert.deepEqual(missing.json(), {
+      campus: 'xiasha', building: '15', available: false, message: '该楼栋群暂未开放',
+    });
+
+    const put = await app.inject({
+      method: 'PUT',
+      url: '/api/admin/roommate-building-groups/shaoxing/40',
+      remoteAddress: '127.0.0.1',
+      payload: { mimeType: 'image/png', imageBase64: QR_PNG_BASE64, extra: 'reject' },
+    });
+    assert.equal(put.statusCode, 400);
+
+    const validPut = await app.inject({
+      method: 'PUT',
+      url: '/api/admin/roommate-building-groups/shaoxing/40',
+      remoteAddress: '127.0.0.1',
+      payload: { mimeType: 'image/png', imageBase64: QR_PNG_BASE64 },
+    });
+    assert.equal(validPut.statusCode, 200);
+
+    const metadata = await app.inject({
+      method: 'GET',
+      url: '/api/roommates/building-groups/shaoxing/040',
+      remoteAddress: '127.0.0.1',
+      headers: { 'x-forwarded-proto': 'https' },
+    });
+    assert.equal(metadata.statusCode, 200);
+    assert.deepEqual(metadata.json(), {
+      campus: 'shaoxing',
+      building: '40',
+      available: true,
+      imageUrl: '/api/roommates/building-groups/shaoxing/40/image',
+      updatedAt: validPut.json().updatedAt,
+    });
+    assert.equal('imageBase64' in metadata.json(), false);
+    assert.equal('updatedBy' in metadata.json(), false);
+
+    const image = await app.inject({
+      method: 'GET',
+      url: '/api/roommates/building-groups/shaoxing/40/image',
+      remoteAddress: '127.0.0.1',
+      headers: { 'x-forwarded-proto': 'https' },
+    });
+    assert.equal(image.statusCode, 200);
+    assert.equal(image.headers['content-type'], 'image/png');
+    assert.equal(image.headers['x-content-type-options'], 'nosniff');
+    assert.equal(image.headers['cache-control'], 'no-store');
+
+    const insecure = await app.inject({
+      method: 'GET',
+      url: '/api/roommates/building-groups/shaoxing/40/image',
+      remoteAddress: '127.0.0.1',
+    });
+    assert.equal(insecure.statusCode, 403);
+  });
+});
+
+test('allows a decoded 1 MiB PNG and rejects larger images in business validation', async () => {
+  await withApp(false, async (app) => {
+    const exact = await app.inject({
+      method: 'PUT',
+      url: '/api/admin/roommate-building-groups/xiasha/1',
+      remoteAddress: '127.0.0.1',
+      payload: { mimeType: 'image/png', imageBase64: pngBase64OfSize(1024 * 1024) },
+    });
+    assert.equal(exact.statusCode, 200);
+
+    const oversized = await app.inject({
+      method: 'PUT',
+      url: '/api/admin/roommate-building-groups/xiasha/2',
+      remoteAddress: '127.0.0.1',
+      payload: { mimeType: 'image/png', imageBase64: pngBase64OfSize(1024 * 1024 + 1) },
+    });
+    assert.equal(oversized.statusCode, 400);
+    assert.notEqual(oversized.statusCode, 413);
+    assert.match(oversized.body, /exceeds 1 MiB/);
   });
 });

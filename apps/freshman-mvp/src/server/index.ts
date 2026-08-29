@@ -29,6 +29,7 @@ import { SqliteContentRepository } from '../repositories/sqlite-content-reposito
 import { SqliteApprovedReviewPublisher } from '../repositories/sqlite-approved-review-publisher.js';
 import { SqliteReviewRepository } from '../repositories/sqlite-review-repository.js';
 import { SqliteRoommateRepository } from '../repositories/sqlite-roommate-repository.js';
+import { SqliteRoommateBuildingGroupRepository } from '../repositories/sqlite-roommate-building-group-repository.js';
 import type {
   ApprovedReviewPublisher,
   ContentRepository,
@@ -220,6 +221,7 @@ export async function createProductionRuntime(
     retry(id: string): Promise<unknown>;
   } | null = null;
   let roommates: RoommateService | null = null;
+  let roommateBuildingGroups: SqliteRoommateBuildingGroupRepository | null = null;
   let roommateTimer: NodeJS.Timeout | null = null;
   let roommateStatus = roommateMatchingStatus(config);
   let closed = false;
@@ -234,6 +236,7 @@ export async function createProductionRuntime(
       content = new SqliteContentRepository(database);
       reviews = new SqliteReviewRepository(database);
       approvedReviewPublisher = new SqliteApprovedReviewPublisher(database);
+      roommateBuildingGroups = new SqliteRoommateBuildingGroupRepository(database);
       closeStorage = async () => { database?.close(); };
       const roommate = config.roommate;
       if (
@@ -405,6 +408,7 @@ export async function createProductionRuntime(
       knowledgeImports: knowledgeImports ?? undefined,
       knowledgeImportRetry: knowledgeImportRetry ?? undefined,
       roommates: roommates ?? undefined,
+      roommateBuildingGroups: roommateBuildingGroups ?? undefined,
       health: async () => {
         const outboxCounts = faqStore
           ? await faqStore.counts()

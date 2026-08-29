@@ -142,6 +142,18 @@ CREATE TABLE IF NOT EXISTS roommate_admin_audit (
   reason TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS roommate_building_groups (
+  campus_code TEXT NOT NULL,
+  building TEXT NOT NULL,
+  image_mime TEXT NOT NULL CHECK (image_mime IN ('image/png', 'image/jpeg')),
+  image_blob BLOB NOT NULL,
+  image_sha256 TEXT NOT NULL,
+  image_size INTEGER NOT NULL,
+  updated_at TEXT NOT NULL,
+  updated_by TEXT NOT NULL,
+  PRIMARY KEY (campus_code, building)
+);
 `;
 
 function addColumnIfMissing(database: SqliteDatabase, table: string, column: string, definition: string): void {
@@ -194,6 +206,9 @@ export function migrateDatabase(database: SqliteDatabase): void {
     database.prepare(
       'INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)',
     ).run(5, new Date().toISOString());
+    database.prepare(
+      'INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)',
+    ).run(6, new Date().toISOString());
     database.exec('COMMIT');
   } catch (error) {
     database.exec('ROLLBACK');

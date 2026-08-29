@@ -24,6 +24,12 @@ import { ContentReviewService } from '../services/content-review-service.js';
 import type { FaqSyncService } from '../services/faq-sync-service.js';
 import type { KnowledgeImportStore } from '../services/knowledge-import-service.js';
 import type { RoommateService } from '../roommates/service.js';
+import type { RoommateBuildingGroupRepository } from '../roommates/building-groups.js';
+import {
+  decodeBuildingGroupImage,
+  normalizeBuildingGroup,
+  normalizeBuildingGroupCampus,
+} from '../roommates/building-groups.js';
 import type {
   RoommateCreateInput,
   RoommateModerationInput,
@@ -54,6 +60,7 @@ export interface AppDependencies {
     retry(id: string): Promise<unknown>;
   };
   roommates?: RoommateService;
+  roommateBuildingGroups?: RoommateBuildingGroupRepository;
 }
 
 const LOOPBACK_ADDRESSES = new BlockList();
@@ -398,7 +405,7 @@ export function createApp(deps: AppDependencies): FastifyInstance {
     if (!isSensitiveRoommateRoute) {
       return;
     }
-    if (!deps.roommates) {
+    if (!deps.roommates || !deps.config.roommate?.secure) {
       return reply.code(503).send({
         error: { code: 'SERVICE_UNAVAILABLE', message: 'Roommate matching is unavailable' },
       });
@@ -474,6 +481,51 @@ export function createApp(deps: AppDependencies): FastifyInstance {
     campuses: listCampusTemplates(),
   }));
 
+  app.get<{
+    Params: { campus: string; building: string };
+  }>('/api/roommates/building-groups/:campus/:building', async (request) => {
+    const campus = normalizeBuildingGroupCampus(request.params.campus);
+    const building = normalizeBuildingGroup(request.params.building);
+    if (!deps.roommateBuildingGroups) {
+      throw new ServiceUnavailableError('Roommate building groups are unavailable');
+    }
+    const record = await deps.roommateBuildingGroups.get(campus, building);
+    if (!record) {
+      return {
+        campus,
+        building,
+        available: false,
+        message: '该楼栋群暂未开放',
+      };
+    }
+    return {
+      campus,
+      building,
+      available: true,
+      imageUrl: `/api/roommates/building-groups/${campus}/${building}/image`,
+      updatedAt: record.updatedAt,
+    };
+  });
+
+  app.get<{
+    Params: { campus: string; building: string };
+  }>('/api/roommates/building-groups/:campus/:building/image', async (request, reply) => {
+    const campus = normalizeBuildingGroupCampus(request.params.campus);
+    const building = normalizeBuildingGroup(request.params.building);
+    if (!deps.roommateBuildingGroups) {
+      throw new ServiceUnavailableError('Roommate building groups are unavailable');
+    }
+    const record = await deps.roommateBuildingGroups.get(campus, building);
+    if (!record) {
+      throw new NotFoundError('Building group image not found');
+    }
+    return reply
+      .type(record.imageMime)
+      .header('X-Content-Type-Options', 'nosniff')
+      .header('Cache-Control', 'no-store')
+      .send(record.imageBlob);
+  });
+
   app.post<{ Body: unknown }>('/api/roommates/registrations', async (request, reply) => {
     const roommates = deps.roommates!;
     const sessionToken = requireRoommateSession(request, false);
@@ -528,6 +580,91 @@ export function createApp(deps: AppDependencies): FastifyInstance {
       { ip: request.ip },
     )),
   }));
+
+  app.get('/api/admin/roommate-building-groups', async () => {
+    if (!deps.roommateBuildingGroups) {
+      throw new ServiceUnavailableError('Roommate building groups are unavailable');
+    }
+    const items = await deps.roommateBuildingGroups.list();
+    return {
+      items: items.map((record) => ({
+        campus: record.campusCode,
+        building: record.building,
+        imageMime: record.imageMime,
+        imageSha256: record.imageSha256,
+        imageSize: record.imageSize,
+        updatedAt: record.updatedAt,
+        updatedBy: record.updatedBy,
+        imageUrl: `/api/admin/roommate-building-groups/${record.campusCode}/${record.building}/image`,
+      })),
+    };
+  });
+
+  app.route<{
+    Params: { campus: string; building: string };
+    Body: unknown;
+  }>({
+    method: 'PUT',
+    url: '/api/admin/roommate-building-groups/:campus/:building',
+    bodyLimit: 1_500_000,
+    handler: async (request) => {
+    const campus = normalizeBuildingGroupCampus(request.params.campus);
+    const building = normalizeBuildingGroup(request.params.building);
+    const body = exactObject(request.body, ['mimeType', 'imageBase64']);
+    const image = decodeBuildingGroupImage(body.mimeType, body.imageBase64);
+    if (!deps.roommateBuildingGroups) {
+      throw new ServiceUnavailableError('Roommate building groups are unavailable');
+    }
+    const record = await deps.roommateBuildingGroups.upsert({
+      campusCode: campus,
+      building,
+      ...image,
+      updatedAt: new Date().toISOString(),
+      updatedBy: 'local-admin',
+    });
+    return {
+      campus: record.campusCode,
+      building: record.building,
+      imageMime: record.imageMime,
+      imageSha256: record.imageSha256,
+      imageSize: record.imageSize,
+      updatedAt: record.updatedAt,
+      updatedBy: record.updatedBy,
+      imageUrl: `/api/admin/roommate-building-groups/${record.campusCode}/${record.building}/image`,
+    };
+    },
+  });
+
+  app.delete<{
+    Params: { campus: string; building: string };
+  }>('/api/admin/roommate-building-groups/:campus/:building', async (request) => {
+    const campus = normalizeBuildingGroupCampus(request.params.campus);
+    const building = normalizeBuildingGroup(request.params.building);
+    if (!deps.roommateBuildingGroups) {
+      throw new ServiceUnavailableError('Roommate building groups are unavailable');
+    }
+    const deleted = await deps.roommateBuildingGroups.delete(campus, building);
+    return { status: deleted ? 'deleted' : 'not_found' };
+  });
+
+  app.get<{
+    Params: { campus: string; building: string };
+  }>('/api/admin/roommate-building-groups/:campus/:building/image', async (request, reply) => {
+    const campus = normalizeBuildingGroupCampus(request.params.campus);
+    const building = normalizeBuildingGroup(request.params.building);
+    if (!deps.roommateBuildingGroups) {
+      throw new ServiceUnavailableError('Roommate building groups are unavailable');
+    }
+    const record = await deps.roommateBuildingGroups.get(campus, building);
+    if (!record) {
+      throw new NotFoundError('Building group image not found');
+    }
+    return reply
+      .type(record.imageMime)
+      .header('X-Content-Type-Options', 'nosniff')
+      .header('Cache-Control', 'no-store')
+      .send(record.imageBlob);
+  });
 
   app.get<{
     Querystring: {
