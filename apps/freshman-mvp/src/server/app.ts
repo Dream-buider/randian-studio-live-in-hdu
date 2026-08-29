@@ -30,7 +30,9 @@ import type {
 } from '../roommates/service.js';
 import { listCampusTemplates } from '../roommates/address-templates.js';
 import type {
+  BedNumber,
   ContactType,
+  RoomOrientation,
   RoommateStatus,
 } from '../roommates/models.js';
 
@@ -118,18 +120,18 @@ function parseRoommateInput(value: unknown): RoommateCreateInput {
     value,
     ['address', 'nickname', 'contactType', 'contactValue', 'consent'],
   );
-  const address = exactObject(
-    body.address,
-    ['campus', 'building', 'orientation', 'room'],
-    'address',
-  );
+  const address = exactObject(body.address, ['campus', 'building', 'orientation', 'room', 'bed'], 'address');
   const campus = boundedString('campus', address.campus, 16);
   const orientation = boundedString('orientation', address.orientation, 16);
   if (campus !== 'xiasha' && campus !== 'shaoxing') {
     throw new ValidationError('campus is invalid');
   }
-  if (orientation !== 'south' && orientation !== 'north') {
+  if (!['east', 'south', 'west', 'north', 'unknown'].includes(orientation)) {
     throw new ValidationError('orientation is invalid');
+  }
+  const bed = address.bed === undefined ? null : address.bed;
+  if (bed !== null && (typeof bed !== 'string' || !['1', '2', '3', '4', '5'].includes(bed))) {
+    throw new ValidationError('bed is invalid');
   }
   const contactType = body.contactType;
   if (
@@ -147,12 +149,17 @@ function parseRoommateInput(value: unknown): RoommateCreateInput {
   if (typeof body.consent !== 'boolean') {
     throw new ValidationError('consent must be a boolean');
   }
+  const building = boundedString('building', address.building, 20);
+  if (/^\d+$/.test(building) && Number(building.replace(/^0+(?=\d)/, '')) > 40) {
+    throw new ValidationError('楼栋必须在1-40号之间');
+  }
   return {
     address: {
       campus,
-      building: boundedString('building', address.building, 20),
-      orientation,
+      building,
+      orientation: orientation as RoomOrientation,
       room: boundedString('room', address.room, 20),
+      bed: bed as BedNumber | null,
     },
     nickname: boundedString('nickname', body.nickname, 30),
     contactType: contactType as ContactType | null,
@@ -197,6 +204,9 @@ function normalizeAdminBuilding(value: unknown): string {
   if (Number(canonical) <= 0) {
     throw new ValidationError('building is invalid');
   }
+  if (Number(canonical) > 40) {
+    throw new ValidationError('building is invalid');
+  }
   return canonical;
 }
 
@@ -213,10 +223,13 @@ function normalizeAdminRoom(value: unknown): string {
 const SAFE_ROOMMATE_VALIDATION_ERRORS = new Set([
   '楼栋格式无效',
   '楼栋必须为正数',
+  '楼栋必须在1-40号之间',
   '房间号格式无效',
   '寝室分配规则确认中，暂未开放匹配',
   '校区不支持',
   '朝向不支持',
+  'bed is invalid',
+  '床位必须为1-5号',
   'Nickname must contain 1-30 Unicode code points without controls',
   'Contact type and value must be provided together',
   'Contact type is invalid',
@@ -233,6 +246,7 @@ const SAFE_ROOMMATE_CONFLICT_ERRORS = new Set([
   'Only hidden registrations can be restored',
   'Expired registrations cannot be restored',
   'Registration cannot be deleted',
+  'Bed already occupied',
 ]);
 
 function translateRoommateError(error: unknown): never {
@@ -531,7 +545,7 @@ export function createApp(deps: AppDependencies): FastifyInstance {
     if (campus !== undefined && !['xiasha', 'shaoxing'].includes(campus)) {
       throw new ValidationError('campus is invalid');
     }
-    if (orientation !== undefined && !['south', 'north'].includes(orientation)) {
+    if (orientation !== undefined && !['east', 'south', 'west', 'north', 'unknown'].includes(orientation)) {
       throw new ValidationError('orientation is invalid');
     }
     const normalizedBuilding = building === undefined ? undefined : normalizeAdminBuilding(building);

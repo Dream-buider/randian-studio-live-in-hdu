@@ -52,6 +52,7 @@ export interface RoommateOwnView {
 export interface RoommateMemberView {
   id: string;
   nickname: string;
+  bed: NormalizedRoomAddress['bed'];
   contact: RoommateContactView | null;
 }
 
@@ -390,6 +391,7 @@ export class RoommateService {
     return members.map((member) => ({
       id: member.id,
       nickname: this.crypto.decrypt(member.nicknameCiphertext),
+      bed: this.readAddress(member.addressCiphertext).bed,
       contact: member.contactType && member.contactCiphertext
         ? { type: member.contactType, value: this.crypto.decrypt(member.contactCiphertext) }
         : null,

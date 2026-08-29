@@ -80,13 +80,7 @@ function verifyConfig(value: unknown): void {
   }
   const exactCampuses = [
     { code: 'xiasha', name: '下沙校区', templateVersion: 'xiasha-v1', enabled: true },
-    {
-      code: 'shaoxing',
-      name: '绍兴校区',
-      templateVersion: null,
-      enabled: false,
-      unavailableReason: '寝室分配规则确认中，暂未开放匹配',
-    },
+    { code: 'shaoxing', name: '绍兴校区', templateVersion: 'shaoxing-v1', enabled: true },
   ] as const;
   if (
     value.campuses.length !== exactCampuses.length

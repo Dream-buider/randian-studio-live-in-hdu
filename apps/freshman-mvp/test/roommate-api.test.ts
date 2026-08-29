@@ -75,6 +75,7 @@ function fakeService(calls: ServiceCalls): RoommateService {
       building: '11',
       orientation: 'south' as const,
       room: '207',
+      bed: null,
       canonical: 'xiasha|xiasha-v1|11|south|207',
       display: '下沙校区 · 11号楼 · 南 · 207',
     },
@@ -94,7 +95,7 @@ function fakeService(calls: ServiceCalls): RoommateService {
         managementCode: 'manage-once',
         sessionToken: 'session-created',
         own,
-        members: [{ id: own.id, nickname: own.nickname, contact: own.contact }],
+        members: [{ id: own.id, nickname: own.nickname, bed: own.address.bed, contact: own.contact }],
       };
     },
     async getMine(token) { calls.ownTokens.push(token); return own; },
@@ -106,7 +107,7 @@ function fakeService(calls: ServiceCalls): RoommateService {
     },
     async listMembers(token) {
       calls.memberTokens.push(token);
-      return [{ id: own.id, nickname: own.nickname, contact: own.contact }];
+      return [{ id: own.id, nickname: own.nickname, bed: own.address.bed, contact: own.contact }];
     },
     async listAdmin(actor) {
       calls.adminActors.push(actor);
@@ -183,7 +184,7 @@ test('returns templates but refuses sensitive roommate operations while disabled
     assert.equal(response.statusCode, 200);
     assert.equal(response.json().enabled, false);
     assert.equal(response.json().campuses.find((item: { code: string }) => item.code === 'xiasha').enabled, true);
-    assert.equal(response.json().campuses.find((item: { code: string }) => item.code === 'shaoxing').enabled, false);
+    assert.equal(response.json().campuses.find((item: { code: string }) => item.code === 'shaoxing').enabled, true);
 
     const create = await app.inject({
       method: 'POST',
@@ -254,6 +255,8 @@ test('uses only a valid signed cookie for own/member access, rotates recovery, a
     });
     assert.equal(members.statusCode, 200);
     assert.equal(members.json().items.length, 1);
+    assert.equal(members.json().items[0].bed, null);
+    assert.equal('roomKey' in members.json().items[0], false);
     assert.deepEqual(calls.memberTokens, ['session-created']);
 
     const mine = await app.inject({
@@ -377,6 +380,60 @@ test('normalizes exact numeric building and room filters before matching', async
     });
     assert.equal(response.statusCode, 200);
     assert.equal(response.json().items.length, 1);
+  });
+});
+
+test('accepts both campuses, all orientations, and optional beds while rejecting invalid values', async () => {
+  await withApp(true, async (app) => {
+    for (const campus of ['xiasha', 'shaoxing'] as const) {
+      for (const orientation of ['east', 'south', 'west', 'north', 'unknown'] as const) {
+        for (const bed of ['1', '2', '3', '4', '5', null] as const) {
+          const response = await app.inject({
+            method: 'POST',
+            url: '/api/roommates/registrations',
+            remoteAddress: '127.0.0.1',
+            headers: { 'x-forwarded-proto': 'https' },
+            payload: { ...VALID_INPUT, address: { ...VALID_INPUT.address, campus, orientation, bed } },
+          });
+          assert.equal(response.statusCode, 200);
+        }
+      }
+    }
+    for (const address of [
+      { ...VALID_INPUT.address, orientation: 'diagonal' },
+      { ...VALID_INPUT.address, building: '41' },
+      { ...VALID_INPUT.address, bed: '6' },
+    ]) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/roommates/registrations',
+        remoteAddress: '127.0.0.1',
+        headers: { 'x-forwarded-proto': 'https' },
+        payload: { ...VALID_INPUT, address },
+      });
+      assert.equal(response.statusCode, 400);
+    }
+  });
+});
+
+test('maps active bed conflicts to 409 without exposing storage details', async () => {
+  await withApp(true, async (app) => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/roommates/registrations',
+      remoteAddress: '127.0.0.1',
+      headers: { 'x-forwarded-proto': 'https' },
+      payload: VALID_INPUT,
+    });
+    assert.equal(response.statusCode, 409);
+    assert.deepEqual(response.json(), {
+      error: { code: 'CONFLICT', message: 'Bed already occupied' },
+    });
+    assert.doesNotMatch(response.body, /SQLITE|roommate_registrations|\/srv\//i);
+  }, (service) => {
+    Object.defineProperty(service, 'create', {
+      value: async () => { throw new Error('Bed already occupied'); },
+    });
   });
 });
 

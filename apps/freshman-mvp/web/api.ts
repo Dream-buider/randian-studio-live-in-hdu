@@ -30,7 +30,8 @@ export interface QuestionContext {
 }
 
 export type RoommateCampusCode = 'xiasha' | 'shaoxing';
-export type RoommateOrientation = 'south' | 'north';
+export type RoommateOrientation = 'east' | 'south' | 'west' | 'north' | 'unknown';
+export type RoommateBed = '1' | '2' | '3' | '4' | '5';
 export type RoommateContactType = 'wechat' | 'qq' | 'phone' | 'other';
 export type RoommateRegistrationStatus = 'active' | 'hidden' | 'deleted' | 'expired';
 
@@ -40,13 +41,14 @@ export type RoommateCampusTemplate =
     name: string;
     templateVersion: 'xiasha-v1';
     enabled: true;
+    unavailableReason?: string;
   }
   | {
     code: 'shaoxing';
     name: string;
-    templateVersion: null;
-    enabled: false;
-    unavailableReason: string;
+    templateVersion: 'shaoxing-v1';
+    enabled: true;
+    unavailableReason?: string;
   };
 
 export interface RoommateConfig {
@@ -60,10 +62,12 @@ export interface RoommateAddressInput {
   building: string;
   orientation: RoommateOrientation;
   room: string;
+  bed?: RoommateBed | null;
 }
 
-export interface RoommateAddress extends RoommateAddressInput {
-  templateVersion: 'xiasha-v1';
+export interface RoommateAddress extends Omit<RoommateAddressInput, 'bed'> {
+  templateVersion: 'xiasha-v1' | 'shaoxing-v1';
+  bed: RoommateBed | null;
   canonical: string;
   display: string;
 }
@@ -88,6 +92,7 @@ export interface RoommateSelf {
 export interface RoommateMember {
   id: string;
   nickname: string;
+  bed: RoommateBed | null;
   contact: RoommateContact | null;
 }
 
@@ -364,9 +369,8 @@ function isRoommateCampusTemplate(value: unknown): value is RoommateCampusTempla
     return value.enabled === true && value.templateVersion === 'xiasha-v1';
   }
   return value.code === 'shaoxing'
-    && value.enabled === false
-    && value.templateVersion === null
-    && typeof value.unavailableReason === 'string';
+    && value.enabled === true
+    && value.templateVersion === 'shaoxing-v1';
 }
 
 function isRoommateConfig(value: unknown): value is RoommateConfig {
@@ -394,13 +398,18 @@ function isRoommateContact(value: unknown): value is RoommateContact {
     && typeof value.value === 'string';
 }
 
+function isRoommateBed(value: unknown): value is RoommateBed | null {
+  return value === null || (typeof value === 'string' && ['1', '2', '3', '4', '5'].includes(value));
+}
+
 function isRoommateAddress(value: unknown): value is RoommateAddress {
   return isRecord(value)
-    && value.campus === 'xiasha'
-    && value.templateVersion === 'xiasha-v1'
+    && ((value.campus === 'xiasha' && value.templateVersion === 'xiasha-v1')
+      || (value.campus === 'shaoxing' && value.templateVersion === 'shaoxing-v1'))
     && typeof value.building === 'string'
-    && (value.orientation === 'south' || value.orientation === 'north')
+    && ['east', 'south', 'west', 'north', 'unknown'].includes(value.orientation as string)
     && typeof value.room === 'string'
+    && isRoommateBed(value.bed)
     && typeof value.canonical === 'string'
     && typeof value.display === 'string';
 }
@@ -422,6 +431,7 @@ function isRoommateMember(value: unknown): value is RoommateMember {
   return isRecord(value)
     && typeof value.id === 'string'
     && typeof value.nickname === 'string'
+    && isRoommateBed(value.bed)
     && (value.contact === null || isRoommateContact(value.contact));
 }
 
@@ -749,8 +759,9 @@ function projectRoommateRegistrationInput(
     || !isRecord(input.address)
     || (input.address.campus !== 'xiasha' && input.address.campus !== 'shaoxing')
     || typeof input.address.building !== 'string'
-    || (input.address.orientation !== 'south' && input.address.orientation !== 'north')
+    || !['east', 'south', 'west', 'north', 'unknown'].includes(input.address.orientation)
     || typeof input.address.room !== 'string'
+    || (input.address.bed !== undefined && !isRoommateBed(input.address.bed))
     || typeof input.nickname !== 'string'
     || (input.contactType !== null && !isRoommateContactType(input.contactType))
     || (input.contactValue !== null && typeof input.contactValue !== 'string')
@@ -764,6 +775,7 @@ function projectRoommateRegistrationInput(
       building: input.address.building,
       orientation: input.address.orientation,
       room: input.address.room,
+      bed: input.address.bed ?? null,
     },
     nickname: input.nickname,
     contactType: input.contactType,
