@@ -57,7 +57,7 @@ function normalizeRoom(value: string): string {
   return /^\d+$/.test(trimmed) ? trimmed.replace(/^0+(?=\d)/, '') : trimmed;
 }
 
-function normalizeBed(value: RoomAddressInput['bed']): BedNumber | null {
+function normalizeBed(value: unknown): BedNumber | null {
   if (value === undefined || value === null || value === '') return null;
   if (typeof value !== 'string' || !BED_NUMBERS.includes(value as BedNumber)) {
     throw new Error('床位必须为1-5号');
