@@ -11,6 +11,7 @@ import {
   deleteMyRoommateRegistration,
   getMyRoommateRegistration,
   getRoommateConfig,
+  getRoommateBuildingGroup,
   listRoommateMembers,
   recoverRoommateRegistration,
   updateMyRoommateRegistration,
@@ -35,6 +36,7 @@ const self = {
     building: '11',
     orientation: 'south',
     room: '207',
+    bed: null,
     canonical: 'xiasha|xiasha-v1|11|south|207',
     display: '下沙校区 · 11号楼 · 南 · 207',
   },
@@ -50,6 +52,7 @@ const self = {
 const member = {
   id: 'registration-1',
   nickname: '小燃',
+  bed: null,
   contact: { type: 'wechat', value: 'randian-207' },
 } as const;
 
@@ -59,6 +62,7 @@ const registrationInput: RoommateRegistrationInput = {
     building: '11',
     orientation: 'south',
     room: '207',
+    bed: '2',
   },
   nickname: '小燃',
   contactType: 'wechat',
@@ -115,9 +119,8 @@ describe('roommate client route and API boundary', () => {
       }, {
         code: 'shaoxing',
         name: '绍兴校区',
-        templateVersion: null,
-        enabled: false,
-        unavailableReason: '寝室分配规则确认中，暂未开放匹配',
+        templateVersion: 'shaoxing-v1',
+        enabled: true,
       }],
     }));
 
@@ -323,5 +326,36 @@ describe('roommate client route and API boundary', () => {
       message: '请求过于频繁，请稍后再试',
     });
     await expect(request).rejects.not.toThrow(/database|encryption key/i);
+  });
+
+  it('validates building-group responses and keeps image URLs same-origin', async () => {
+    const unavailable = await getRoommateBuildingGroup('xiasha', '015', {
+      fetcher: async () => jsonResponse({
+        campus: 'xiasha', building: '15', available: false, message: '该楼栋群暂未开放',
+      }),
+    });
+    expect(unavailable.available).toBe(false);
+
+    const available = await getRoommateBuildingGroup('shaoxing', '40', {
+      fetcher: async () => jsonResponse({
+        campus: 'shaoxing',
+        building: '40',
+        available: true,
+        imageUrl: '/api/roommates/building-groups/shaoxing/40/image',
+        updatedAt: '2026-08-29T00:00:00.000Z',
+      }),
+    });
+    expect(available).toMatchObject({ campus: 'shaoxing', building: '40', available: true });
+
+    for (const body of [
+      { campus: 'shaoxing', building: '40', available: true, imageUrl: 'https://evil.example/qr.png', updatedAt: 'now' },
+      { campus: 'shaoxing', building: '40', available: true, imageUrl: 'data:image/png;base64,abc', updatedAt: 'now' },
+      { campus: 'xiasha', building: '40', available: true, imageUrl: '/api/roommates/building-groups/shaoxing/40/image', updatedAt: 'now' },
+      { campus: 'shaoxing', building: '40', available: true, imageUrl: '/api/roommates/building-groups/shaoxing/40/image', updatedAt: 'now', updatedBy: 'secret' },
+    ]) {
+      await expect(getRoommateBuildingGroup('shaoxing', '40', {
+        fetcher: async () => jsonResponse(body),
+      })).rejects.toBeInstanceOf(ApiResponseError);
+    }
   });
 });

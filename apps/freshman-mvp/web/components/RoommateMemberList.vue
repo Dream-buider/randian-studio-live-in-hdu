@@ -73,6 +73,7 @@ async function copyCredential(): Promise<void> {
     <ul v-else class="roommate-member-grid" aria-label="同寝室已登记成员">
       <li v-for="member in members" :key="member.id">
         <strong>{{ member.nickname }}<span v-if="member.id === own.id">（我）</span></strong>
+        <p>床位：{{ member.bed === null ? '未填写' : `${member.bed}号床` }}</p>
         <p v-if="member.contact">
           {{ contactLabels[member.contact.type] ?? '联系方式' }}：{{ member.contact.value }}
         </p>

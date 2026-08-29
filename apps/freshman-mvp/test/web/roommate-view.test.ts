@@ -23,9 +23,8 @@ const enabledConfig = {
   }, {
     code: 'shaoxing',
     name: '绍兴校区',
-    templateVersion: null,
-    enabled: false,
-    unavailableReason: '寝室分配规则确认中，暂未开放匹配',
+    templateVersion: 'shaoxing-v1',
+    enabled: true,
   }],
 } as const;
 
@@ -37,6 +36,7 @@ const own = {
     building: '11',
     orientation: 'south',
     room: '207',
+    bed: null,
     canonical: 'xiasha|xiasha-v1|11|south|207',
     display: '下沙校区 · 11号楼 · 南 · 207',
   },
@@ -57,15 +57,20 @@ const hiddenOwn = {
 const noContactMember = {
   id: 'registration-2',
   nickname: '小火',
+  bed: '3',
   contact: null,
 } as const;
 
-function unauthenticatedSetup(extra?: (url: string, init?: RequestInit) => Response | null) {
+function unauthenticatedSetup(extra?: (url: string, init?: RequestInit) => Response | Promise<Response> | null) {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const custom = extra?.(url, init);
-    if (custom) return custom;
+    if (custom) return await custom;
     if (url === '/api/roommates/config') return jsonResponse(enabledConfig);
+    if (url.startsWith('/api/roommates/building-groups/')) {
+      const [, , , , campus, building] = url.split('/');
+      return jsonResponse({ campus, building, available: false, message: '该楼栋群暂未开放' });
+    }
     if (url === '/api/roommates/me') {
       return jsonResponse({ error: { code: 'NOT_FOUND' } }, { status: 404 });
     }
@@ -81,7 +86,11 @@ async function openRegistrationForm(fetcher = unauthenticatedSetup()) {
 }
 
 async function fillXiaShaForm(wrapper: ReturnType<typeof mount>) {
-  await wrapper.get('input[name="building"]').setValue('011');
+  await wrapper.get('select[name="campus"]').setValue('xiasha');
+  await wrapper.get('select[name="building"]').setValue('11');
+  if (wrapper.find('[data-action="close-building-group"]').exists()) {
+    await wrapper.get('[data-action="close-building-group"]').trigger('click');
+  }
   await wrapper.get('select[name="orientation"]').setValue('south');
   await wrapper.get('input[name="room"]').setValue('0207');
   await wrapper.get('input[name="nickname"]').setValue('小燃');
@@ -124,15 +133,16 @@ describe('roommate matching client flow', () => {
     const { wrapper } = await openRegistrationForm();
 
     expect(wrapper.get('label[for="roommate-building"]').text()).toContain('楼栋');
-    expect(wrapper.get('label[for="roommate-orientation"]').text()).toContain('南北');
+    expect(wrapper.get('label[for="roommate-orientation"]').text()).toContain('方位');
     expect(wrapper.get('label[for="roommate-room"]').text()).toContain('寝室号');
     expect(wrapper.get('label[for="roommate-nickname"]').text()).toContain('昵称');
     expect(wrapper.get('label[for="roommate-contact-type"]').text()).toContain('联系方式类型');
     expect(wrapper.find('input[name="consent"]').exists()).toBe(false);
+    expect(wrapper.get('select[name="building"]').attributes('disabled')).toBeDefined();
 
     await wrapper.get('select[name="campus"]').setValue('shaoxing');
-    expect(wrapper.text()).toContain('寝室分配规则确认中，暂未开放匹配');
-    expect(wrapper.get('[data-action="confirm-registration"]').attributes('disabled')).toBeDefined();
+    expect(wrapper.get('select[name="building"]').attributes('disabled')).toBeUndefined();
+    expect((wrapper.get('select[name="building"]').element as HTMLSelectElement).value).toBe('');
 
     await wrapper.get('select[name="campus"]').setValue('xiasha');
     await wrapper.get('select[name="contactType"]').setValue('wechat');
@@ -143,11 +153,111 @@ describe('roommate matching client flow', () => {
     expect(wrapper.text()).toContain('身份证号');
   });
 
+  it('starts with no campus, exposes the complete address selectors, and carries bed into confirmation', async () => {
+    const { wrapper } = await openRegistrationForm();
+    const campus = wrapper.get('select[name="campus"]');
+    const building = wrapper.get('select[name="building"]');
+    expect((campus.element as HTMLSelectElement).value).toBe('');
+    expect(building.attributes('disabled')).toBeDefined();
+    expect(wrapper.get('[data-action="confirm-registration"]').attributes('disabled')).toBeDefined();
+    expect(building.findAll('option')).toHaveLength(41);
+    expect(building.findAll('option')[1]?.attributes('value')).toBe('1');
+    expect(building.findAll('option')[40]?.attributes('value')).toBe('40');
+    expect(wrapper.get('select[name="orientation"]').findAll('option').map((option) => option.text()))
+      .toEqual(['请选择方位', '东', '南', '西', '北', '不确定']);
+    expect(wrapper.get('select[name="bed"]').findAll('option').map((option) => option.text()))
+      .toEqual(['不填写床位', '1号床', '2号床', '3号床', '4号床', '五号床']);
+
+    await campus.setValue('shaoxing');
+    await building.setValue('40');
+    await wrapper.get('[data-action="close-building-group"]').trigger('click');
+    await wrapper.get('select[name="orientation"]').setValue('east');
+    await wrapper.get('input[name="room"]').setValue('0307');
+    await wrapper.get('select[name="bed"]').setValue('5');
+    await wrapper.get('input[name="nickname"]').setValue('小星');
+    await wrapper.get('form[data-role="roommate-registration-form"]').trigger('submit');
+
+    expect(wrapper.get('[data-state="confirm"]').text())
+      .toContain('绍兴校区 · 40号楼 · 东 · 307 · 5号床');
+  });
+
+  it('shows available, unavailable, and failed building-group dialog states without blocking registration', async () => {
+    const fetcher = unauthenticatedSetup((url) => {
+      if (url.endsWith('/xiasha/15')) {
+        return jsonResponse({
+          campus: 'xiasha', building: '15', available: true,
+          imageUrl: '/api/roommates/building-groups/xiasha/15/image', updatedAt: 'now',
+        });
+      }
+      if (url.endsWith('/xiasha/16')) {
+        return jsonResponse({
+          campus: 'xiasha', building: '16', available: false, message: '该楼栋群暂未开放',
+        });
+      }
+      if (url.endsWith('/xiasha/17')) throw new Error('temporary failure');
+      return null;
+    });
+    vi.stubGlobal('fetch', fetcher);
+    const wrapper = mount(RoommateView, { attachTo: document.body });
+    await flushPromises();
+    await wrapper.get('select[name="campus"]').setValue('xiasha');
+    const building = wrapper.get('select[name="building"]');
+    (building.element as HTMLSelectElement).focus();
+    await building.setValue('15');
+    await flushPromises();
+    expect(wrapper.get('[role="dialog"] img').attributes('src'))
+      .toBe('/api/roommates/building-groups/xiasha/15/image');
+    expect(document.activeElement).toBe(wrapper.get('[data-action="close-building-group"]').element);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await flushPromises();
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+    expect(document.activeElement).toBe(building.element);
+    expect((wrapper.get('select[name="building"]').element as HTMLSelectElement).value).toBe('15');
+
+    await wrapper.get('select[name="building"]').setValue('16');
+    await flushPromises();
+    expect(wrapper.get('[role="dialog"]').text()).toContain('该楼栋群暂未开放');
+    await wrapper.get('[data-action="close-building-group"]').trigger('click');
+    await wrapper.get('select[name="building"]').setValue('17');
+    await flushPromises();
+    expect(wrapper.get('[role="dialog"]').text()).toContain('暂时无法读取');
+    expect(wrapper.find('[data-state="error"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('ignores stale building-group responses after a quick building switch', async () => {
+    let resolveFirst!: (response: Response) => void;
+    let resolveSecond!: (response: Response) => void;
+    const first = new Promise<Response>((resolve) => { resolveFirst = resolve; });
+    const second = new Promise<Response>((resolve) => { resolveSecond = resolve; });
+    const fetcher = unauthenticatedSetup((url) => {
+      if (url.endsWith('/xiasha/11')) return first;
+      if (url.endsWith('/xiasha/12')) return second;
+      return null;
+    });
+    const { wrapper } = await openRegistrationForm(fetcher);
+    await wrapper.get('select[name="campus"]').setValue('xiasha');
+    await wrapper.get('select[name="building"]').setValue('11');
+    await wrapper.get('select[name="building"]').setValue('12');
+    resolveSecond(jsonResponse({
+      campus: 'xiasha', building: '12', available: false, message: '该楼栋群暂未开放',
+    }));
+    await flushPromises();
+    resolveFirst(jsonResponse({
+      campus: 'xiasha', building: '11', available: true,
+      imageUrl: '/api/roommates/building-groups/xiasha/11/image', updatedAt: 'old',
+    }));
+    await flushPromises();
+    expect(wrapper.get('[role="dialog"] h2').text()).toContain('12号楼');
+    expect(wrapper.get('[role="dialog"]').text()).toContain('该楼栋群暂未开放');
+  });
+
   it('enforces backend field limits and associates visible validation errors with inputs', async () => {
     const { wrapper } = await openRegistrationForm();
     const form = wrapper.get('form[data-role="roommate-registration-form"]');
 
-    await wrapper.get('input[name="building"]').setValue('0');
+    await wrapper.get('select[name="campus"]').setValue('xiasha');
+    await wrapper.get('select[name="building"]').setValue('');
     await wrapper.get('input[name="room"]').setValue('20#7');
     await wrapper.get('input[name="nickname"]').setValue('x'.repeat(31));
     await wrapper.get('select[name="contactType"]').setValue('wechat');
@@ -155,13 +265,13 @@ describe('roommate matching client flow', () => {
       .toBeUndefined();
     await form.trigger('submit');
 
-    const building = wrapper.get('input[name="building"]');
+    const building = wrapper.get('select[name="building"]');
     const room = wrapper.get('input[name="room"]');
     const nickname = wrapper.get('input[name="nickname"]');
     const contact = wrapper.get('input[name="contactValue"]');
     expect(building.attributes('aria-invalid')).toBe('true');
     expect(building.attributes('aria-describedby')).toContain('roommate-building-message');
-    expect(wrapper.get('#roommate-building-message').text()).toContain('正整数');
+    expect(wrapper.get('#roommate-building-message').text()).toContain('1–40号楼栋');
     expect(room.attributes('aria-invalid')).toBe('true');
     expect(room.attributes('aria-describedby')).toContain('roommate-room-message');
     expect(nickname.attributes('maxlength')).toBe('30');
@@ -180,7 +290,10 @@ describe('roommate matching client flow', () => {
           registrationId: own.id,
           managementCode,
           own,
-          members: [own, noContactMember].map(({ id, nickname, contact }) => ({ id, nickname, contact })),
+          members: [
+            { id: own.id, nickname: own.nickname, bed: own.address.bed, contact: own.contact },
+            noContactMember,
+          ],
         });
       }
       return null;
@@ -204,6 +317,8 @@ describe('roommate matching client flow', () => {
     expect(wrapper.get('[data-action="copy-credential"]').text()).not.toContain('已复制');
     await wrapper.get('[data-action="credential-saved"]').trigger('click');
     expect(wrapper.get('[data-state="members"]').text()).toContain('小火');
+    expect(wrapper.get('[data-state="members"]').text()).toContain('床位：未填写');
+    expect(wrapper.get('[data-state="members"]').text()).toContain('床位：3号床');
     expect(wrapper.text()).not.toContain(managementCode);
   });
 
@@ -216,7 +331,7 @@ describe('roommate matching client flow', () => {
       if (url === '/api/roommates/config') return jsonResponse(enabledConfig);
       if (url === '/api/roommates/me' && !init?.method) return jsonResponse({ item: own });
       if (url === '/api/roommates/members') {
-        return jsonResponse({ items: [{ id: own.id, nickname: currentNickname, contact: own.contact }] });
+        return jsonResponse({ items: [{ id: own.id, nickname: currentNickname, bed: null, contact: own.contact }] });
       }
       if (url === '/api/roommates/me' && init?.method === 'PATCH') {
         currentNickname = '小火';
@@ -232,7 +347,13 @@ describe('roommate matching client flow', () => {
     await flushPromises();
 
     await wrapper.get('[data-action="edit-registration"]').trigger('click');
+    expect((wrapper.get('select[name="campus"]').element as HTMLSelectElement).value).toBe('xiasha');
+    expect((wrapper.get('select[name="building"]').element as HTMLSelectElement).value).toBe('11');
+    expect((wrapper.get('select[name="orientation"]').element as HTMLSelectElement).value).toBe('south');
+    expect((wrapper.get('select[name="bed"]').element as HTMLSelectElement).value).toBe('');
     expect((wrapper.get('input[name="nickname"]').element as HTMLInputElement).value).toBe('小燃');
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+    expect(fetcher.mock.calls.some(([url]) => String(url).includes('/building-groups/'))).toBe(false);
     await wrapper.get('input[name="nickname"]').setValue('小火');
     await wrapper.get('form[data-role="roommate-registration-form"]').trigger('submit');
     await wrapper.get('[data-action="update-registration"]').trigger('click');
@@ -320,7 +441,7 @@ describe('roommate matching client flow', () => {
         return jsonResponse({ registrationId: own.id, own });
       }
       if (url === '/api/roommates/members') {
-        return jsonResponse({ items: [{ id: own.id, nickname: own.nickname, contact: own.contact }] });
+        return jsonResponse({ items: [{ id: own.id, nickname: own.nickname, bed: null, contact: own.contact }] });
       }
       return null;
     });
@@ -351,7 +472,7 @@ describe('roommate matching client flow', () => {
             registrationId: own.id,
             managementCode: 'retry-code',
             own,
-            members: [{ id: own.id, nickname: own.nickname, contact: own.contact }],
+            members: [{ id: own.id, nickname: own.nickname, bed: null, contact: own.contact }],
           });
       }
       return null;

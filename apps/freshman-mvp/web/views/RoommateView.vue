@@ -5,6 +5,7 @@ import {
   createRoommateRegistration,
   deleteMyRoommateRegistration,
   getMyRoommateRegistration,
+  getRoommateBuildingGroup,
   getRoommateConfig,
   listRoommateMembers,
   recoverRoommateRegistration,
@@ -12,13 +13,17 @@ import {
   type RoommateConfig,
   type RoommateMember,
   type RoommateRecoveryCredential,
+  type RoommateRegistrationDraft,
   type RoommateRegistrationInput,
   type RoommateSelf,
+  type RoommateBuildingGroup,
+  type RoommateCampusCode,
 } from '../api.js';
 import BrandHeader from '../components/BrandHeader.vue';
 import RoommateMemberList from '../components/RoommateMemberList.vue';
 import RoommateRecoveryForm from '../components/RoommateRecoveryForm.vue';
 import RoommateRegistrationForm from '../components/RoommateRegistrationForm.vue';
+import RoommateBuildingGroupDialog from '../components/RoommateBuildingGroupDialog.vue';
 
 type ViewState = 'loading' | 'disabled' | 'register' | 'confirm' | 'credential' | 'members' | 'recover' | 'error';
 type ConfirmAction = 'create' | 'update';
@@ -32,8 +37,14 @@ const errorMessage = ref('');
 const errorReturnState = ref<ViewState>('register');
 const confirmAction = ref<ConfirmAction>('create');
 const oneTimeManagementCode = ref<string | null>(null);
-const draft = ref<RoommateRegistrationInput>(emptyRegistration());
+const draft = ref<RoommateRegistrationDraft>(emptyRegistration());
+const pendingInput = ref<RoommateRegistrationInput | null>(null);
 const recoveryDraft = ref<RoommateRecoveryCredential>({ registrationId: '', managementCode: '' });
+const buildingGroupDialogOpen = ref(false);
+const buildingGroupStatus = ref<'loading' | 'available' | 'unavailable' | 'error'>('loading');
+const buildingGroup = ref<RoommateBuildingGroup | null>(null);
+const buildingGroupSelection = ref<{ campus: RoommateCampusCode; building: string } | null>(null);
+let buildingGroupRequestId = 0;
 
 let robotsMeta: HTMLMetaElement | null = null;
 let previousRobotsContent: string | null = null;
@@ -42,13 +53,19 @@ let createdRobotsMeta = false;
 const normalizedAddress = computed(() => {
   const building = normalizeNumeric(draft.value.address.building);
   const room = normalizeRoom(draft.value.address.room);
-  const orientation = draft.value.address.orientation === 'south' ? '南' : '北';
-  return `下沙校区 · ${building}号楼 · ${orientation} · ${room}`;
+  const campus = config.value?.campuses.find((item) => item.code === draft.value.address.campus)?.name
+    ?? '未选择校区';
+  const orientationLabels: Record<string, string> = {
+    east: '东', south: '南', west: '西', north: '北', unknown: '不确定',
+  };
+  const orientation = orientationLabels[draft.value.address.orientation] ?? '未选择方位';
+  const bed = draft.value.address.bed === null ? null : `${draft.value.address.bed}号床`;
+  return [campus, `${building}号楼`, orientation, room, bed].filter(Boolean).join(' · ');
 });
 
-function emptyRegistration(): RoommateRegistrationInput {
+function emptyRegistration(): RoommateRegistrationDraft {
   return {
-    address: { campus: 'xiasha', building: '', orientation: 'south', room: '' },
+    address: { campus: '', building: '', orientation: '', room: '', bed: null },
     nickname: '',
     contactType: null,
     contactValue: null,
@@ -66,13 +83,14 @@ function normalizeRoom(value: string): string {
   return /^\d+$/.test(trimmed) ? String(Number(trimmed)) : trimmed;
 }
 
-function draftFromSelf(item: RoommateSelf): RoommateRegistrationInput {
+function draftFromSelf(item: RoommateSelf): RoommateRegistrationDraft {
   return {
     address: {
       campus: item.address.campus,
       building: item.address.building,
       orientation: item.address.orientation,
       room: item.address.room,
+      bed: item.address.bed,
     },
     nickname: item.nickname,
     contactType: item.contact?.type ?? null,
@@ -134,7 +152,8 @@ async function showOwn(item: RoommateSelf): Promise<void> {
   state.value = 'members';
 }
 
-function openConfirmation(): void {
+function openConfirmation(input: RoommateRegistrationInput): void {
+  pendingInput.value = input;
   confirmAction.value = own.value ? 'update' : 'create';
   state.value = 'confirm';
 }
@@ -142,27 +161,55 @@ function openConfirmation(): void {
 function editRegistration(): void {
   if (!own.value) return;
   draft.value = draftFromSelf(own.value);
+  pendingInput.value = null;
   confirmAction.value = 'update';
   state.value = 'register';
 }
 
 async function submitConfirmed(): Promise<void> {
+  const input = pendingInput.value;
+  if (!input) {
+    state.value = 'register';
+    return;
+  }
   busy.value = true;
   try {
     if (confirmAction.value === 'create') {
-      const result = await createRoommateRegistration(draft.value);
+      const result = await createRoommateRegistration(input);
       own.value = result.own;
       members.value = result.members;
       oneTimeManagementCode.value = result.managementCode;
       state.value = result.managementCode ? 'credential' : 'members';
     } else {
-      await showOwn(await updateMyRoommateRegistration(draft.value));
+      await showOwn(await updateMyRoommateRegistration(input));
     }
   } catch (error) {
     showError(error, 'confirm');
   } finally {
     busy.value = false;
   }
+}
+
+async function handleBuildingGroupSelected(selection: { campus: 'xiasha' | 'shaoxing'; building: string }): Promise<void> {
+  const requestId = ++buildingGroupRequestId;
+  buildingGroupSelection.value = selection;
+  buildingGroupDialogOpen.value = true;
+  buildingGroupStatus.value = 'loading';
+  buildingGroup.value = null;
+  try {
+    const result = await getRoommateBuildingGroup(selection.campus, selection.building);
+    if (requestId !== buildingGroupRequestId) return;
+    buildingGroup.value = result;
+    buildingGroupStatus.value = result.available ? 'available' : 'unavailable';
+  } catch {
+    if (requestId !== buildingGroupRequestId) return;
+    buildingGroupStatus.value = 'error';
+  }
+}
+
+function closeBuildingGroupDialog(): void {
+  buildingGroupRequestId += 1;
+  buildingGroupDialogOpen.value = false;
 }
 
 function leaveCredential(): void {
@@ -179,6 +226,7 @@ async function deleteRegistration(): Promise<void> {
     members.value = [];
     oneTimeManagementCode.value = null;
     draft.value = emptyRegistration();
+    pendingInput.value = null;
     state.value = 'register';
   } catch (error) {
     showError(error, 'members');
@@ -222,6 +270,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  buildingGroupRequestId += 1;
   oneTimeManagementCode.value = null;
   recoveryDraft.value = { registrationId: '', managementCode: '' };
   restoreRobotsMeta();
@@ -255,6 +304,7 @@ onBeforeUnmount(() => {
         :campuses="config.campuses"
         :busy="busy"
         @submit="openConfirmation"
+        @building-group-selected="handleBuildingGroupSelected"
         @recover="state = 'recover'"
       />
     </section>
@@ -314,5 +364,14 @@ onBeforeUnmount(() => {
         返回重试
       </button>
     </section>
+
+    <RoommateBuildingGroupDialog
+      v-if="buildingGroupDialogOpen && buildingGroupSelection"
+      :campus="buildingGroupSelection.campus"
+      :building="buildingGroupSelection.building"
+      :status="buildingGroupStatus"
+      :group="buildingGroup"
+      @close="closeBuildingGroupDialog"
+    />
   </main>
 </template>

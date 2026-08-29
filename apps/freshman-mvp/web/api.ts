@@ -398,6 +398,36 @@ function isRoommateContact(value: unknown): value is RoommateContact {
     && typeof value.value === 'string';
 }
 
+/** UI-only draft shape; blank campus/orientation values never cross the API boundary. */
+export interface RoommateRegistrationDraft {
+  address: {
+    campus: RoommateCampusCode | '';
+    building: string;
+    orientation: RoommateOrientation | '';
+    room: string;
+    bed: RoommateBed | null;
+  };
+  nickname: string;
+  contactType: RoommateContactType | null;
+  contactValue: string | null;
+  consent: boolean;
+}
+
+export type RoommateBuildingGroup =
+  | {
+    campus: RoommateCampusCode;
+    building: string;
+    available: false;
+    message: '该楼栋群暂未开放';
+  }
+  | {
+    campus: RoommateCampusCode;
+    building: string;
+    available: true;
+    imageUrl: string;
+    updatedAt: string;
+  };
+
 function isRoommateBed(value: unknown): value is RoommateBed | null {
   return value === null || (typeof value === 'string' && ['1', '2', '3', '4', '5'].includes(value));
 }
@@ -433,6 +463,51 @@ function isRoommateMember(value: unknown): value is RoommateMember {
     && typeof value.nickname === 'string'
     && isRoommateBed(value.bed)
     && (value.contact === null || isRoommateContact(value.contact));
+}
+
+function canonicalRoommateBuilding(value: string): string | null {
+  if (!/^\d+$/.test(value.trim())) return null;
+  const normalized = value.trim().replace(/^0+(?=\d)/, '');
+  const number = Number(normalized);
+  return Number.isInteger(number) && number >= 1 && number <= 40 ? normalized : null;
+}
+
+function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  const expected = new Set(keys);
+  return Object.keys(value).length === expected.size
+    && Object.keys(value).every((key) => expected.has(key));
+}
+
+function isSafeRoommateBuildingGroupImageUrl(
+  value: unknown,
+  campus: RoommateCampusCode,
+  building: string,
+): value is string {
+  if (typeof value !== 'string' || !value.startsWith('/api/roommates/building-groups/')) {
+    return false;
+  }
+  if (value.includes('://') || value.includes('\\') || /[?#]/.test(value)) {
+    return false;
+  }
+  return value === `/api/roommates/building-groups/${campus}/${building}/image`;
+}
+
+function isRoommateBuildingGroup(
+  value: unknown,
+  campus: RoommateCampusCode,
+  building: string,
+): value is RoommateBuildingGroup {
+  if (!isRecord(value) || value.campus !== campus || value.building !== building) {
+    return false;
+  }
+  if (value.available === false) {
+    return hasExactKeys(value, ['campus', 'building', 'available', 'message'])
+      && value.message === '该楼栋群暂未开放';
+  }
+  return value.available === true
+    && hasExactKeys(value, ['campus', 'building', 'available', 'imageUrl', 'updatedAt'])
+    && isSafeRoommateBuildingGroupImageUrl(value.imageUrl, campus, building)
+    && typeof value.updatedAt === 'string';
 }
 
 function isRoommateAdminItem(value: unknown): value is RoommateAdminItem {
@@ -806,6 +881,30 @@ export async function getRoommateConfig(
   const response = await roommateFetch('/api/roommates/config', undefined, options);
   const body = await readJson(response);
   if (containsRawSessionToken(body) || !isRoommateConfig(body)) {
+    throw new ApiResponseError(response.status);
+  }
+  return body;
+}
+
+export async function getRoommateBuildingGroup(
+  campus: RoommateCampusCode,
+  building: string,
+  options: RoommateApiOptions = {},
+): Promise<RoommateBuildingGroup> {
+  if (campus !== 'xiasha' && campus !== 'shaoxing') {
+    throw new ApiResponseError(400);
+  }
+  const canonicalBuilding = canonicalRoommateBuilding(building);
+  if (!canonicalBuilding) {
+    throw new ApiResponseError(400);
+  }
+  const response = await roommateFetch(
+    `/api/roommates/building-groups/${encodeURIComponent(campus)}/${encodeURIComponent(canonicalBuilding)}`,
+    undefined,
+    options,
+  );
+  const body = await readJson(response);
+  if (containsRawSessionToken(body) || !isRoommateBuildingGroup(body, campus, canonicalBuilding)) {
     throw new ApiResponseError(response.status);
   }
   return body;

@@ -3,18 +3,23 @@ import { computed, ref } from 'vue';
 import type {
   RoommateCampusTemplate,
   RoommateContactType,
+  RoommateRegistrationDraft,
   RoommateRegistrationInput,
+  RoommateBed,
+  RoommateCampusCode,
+  RoommateOrientation,
 } from '../api.js';
 
 const props = defineProps<{
-  modelValue: RoommateRegistrationInput;
+  modelValue: RoommateRegistrationDraft;
   campuses: RoommateCampusTemplate[];
   busy?: boolean;
 }>();
 
 const emit = defineEmits<{
-  'update:modelValue': [value: RoommateRegistrationInput];
-  submit: [];
+  'update:modelValue': [value: RoommateRegistrationDraft];
+  'building-group-selected': [selection: { campus: RoommateCampusCode; building: string }];
+  submit: [value: RoommateRegistrationInput];
   recover: [];
 }>();
 
@@ -26,8 +31,11 @@ const selectedCampus = computed(() => (
 ));
 const buildingValid = computed(() => {
   const value = props.modelValue.address.building.trim();
-  return /^\d{1,10}$/.test(value) && Number(value) > 0;
+  return /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 40;
 });
+const orientationValid = computed(() => (
+  ['east', 'south', 'west', 'north', 'unknown'].includes(props.modelValue.address.orientation)
+));
 const roomValid = computed(() => /^[A-Za-z0-9]{1,10}$/.test(props.modelValue.address.room.trim()));
 const nicknameValid = computed(() => {
   const value = props.modelValue.nickname.trim();
@@ -41,6 +49,7 @@ const contactValid = computed(() => {
 const canSubmit = computed(() => (
   selectedCampus.value?.enabled === true
   && buildingValid.value
+  && orientationValid.value
   && roomValid.value
   && nicknameValid.value
   && contactValid.value
@@ -48,14 +57,69 @@ const canSubmit = computed(() => (
 
 function submitIfValid(): void {
   validationAttempted.value = true;
-  if (canSubmit.value) emit('submit');
+  if (canSubmit.value) {
+    const campus = props.modelValue.address.campus;
+    const orientation = props.modelValue.address.orientation;
+    if (!isCampusCode(campus) || !isRoommateOrientation(orientation)) return;
+    const input: RoommateRegistrationInput = {
+      address: {
+        campus,
+        building: props.modelValue.address.building,
+        orientation,
+        room: props.modelValue.address.room,
+        bed: props.modelValue.address.bed,
+      },
+      nickname: props.modelValue.nickname,
+      contactType: props.modelValue.contactType,
+      contactValue: props.modelValue.contactValue,
+      consent: props.modelValue.consent,
+    };
+    emit('submit', input);
+  }
 }
 
-function updateAddress(field: 'campus' | 'building' | 'orientation' | 'room', value: string): void {
+function isCampusCode(value: string): value is RoommateCampusCode {
+  return value === 'xiasha' || value === 'shaoxing';
+}
+
+function isRoommateOrientation(value: string): value is RoommateOrientation {
+  return ['east', 'south', 'west', 'north', 'unknown'].includes(value);
+}
+
+function isRoommateBed(value: string): value is RoommateBed {
+  return ['1', '2', '3', '4', '5'].includes(value);
+}
+
+function updateAddress(field: 'orientation' | 'room', value: string): void {
   emit('update:modelValue', {
     ...props.modelValue,
     address: { ...props.modelValue.address, [field]: value },
-  } as RoommateRegistrationInput);
+  });
+}
+
+function updateCampus(value: string): void {
+  emit('update:modelValue', {
+    ...props.modelValue,
+    address: { ...props.modelValue.address, campus: isCampusCode(value) ? value : '', building: '' },
+  });
+}
+
+function updateBuilding(value: string): void {
+  emit('update:modelValue', {
+    ...props.modelValue,
+    address: { ...props.modelValue.address, building: value },
+  });
+  if (isCampusCode(props.modelValue.address.campus) && /^\d+$/.test(value)) {
+    emit('building-group-selected', {
+      campus: props.modelValue.address.campus,
+      building: String(Number(value)),
+    });
+  }
+}
+
+function updateBed(value: string): void {
+  const bed: RoommateBed | null = isRoommateBed(value) ? value : null;
+  emit('update:modelValue', { ...props.modelValue, address: { ...props.modelValue.address, bed } });
 }
 
 function updateField(
@@ -66,13 +130,17 @@ function updateField(
 }
 
 function updateContactType(value: string): void {
-  const contactType = value === '' ? null : value as RoommateContactType;
+  const contactType: RoommateContactType | null = isRoommateContactType(value) ? value : null;
   emit('update:modelValue', {
     ...props.modelValue,
     contactType,
     contactValue: contactType === null ? null : props.modelValue.contactValue ?? '',
     consent: contactType === null ? false : props.modelValue.consent,
   });
+}
+
+function isRoommateContactType(value: string): value is RoommateContactType {
+  return ['wechat', 'qq', 'phone', 'other'].includes(value);
 }
 
 function updateConsent(checked: boolean): void {
@@ -95,8 +163,11 @@ function updateConsent(checked: boolean): void {
         id="roommate-campus"
         name="campus"
         :value="modelValue.address.campus"
-        @change="updateAddress('campus', ($event.target as HTMLSelectElement).value)"
+        required
+        :aria-invalid="validationAttempted && !selectedCampus"
+        @change="updateCampus(($event.target as HTMLSelectElement).value)"
       >
+        <option value="">请选择校区</option>
         <option v-for="campus in campuses" :key="campus.code" :value="campus.code">
           {{ campus.name }}<template v-if="!campus.enabled">（暂未开放）</template>
         </option>
@@ -114,36 +185,45 @@ function updateConsent(checked: boolean): void {
       <div class="roommate-address-grid">
         <div>
           <label for="roommate-building">楼栋</label>
-          <input
+          <select
             id="roommate-building"
             name="building"
-            inputmode="numeric"
-            autocomplete="off"
             required
-            maxlength="10"
             aria-describedby="roommate-building-message"
             :aria-invalid="validationAttempted && !buildingValid"
+            :disabled="!modelValue.address.campus"
             :value="modelValue.address.building"
-            @input="updateAddress('building', ($event.target as HTMLInputElement).value)"
-          />
+            @change="updateBuilding(($event.target as HTMLSelectElement).value)"
+          >
+            <option value="">请选择楼栋</option>
+            <option v-for="building in 40" :key="building" :value="String(building)">
+              {{ building }}号楼
+            </option>
+          </select>
           <p
             id="roommate-building-message"
             class="roommate-field-message"
             :class="{ 'is-error': validationAttempted && !buildingValid }"
           >
-            {{ validationAttempted && !buildingValid ? '请输入正整数楼栋' : '例如：11' }}
+            {{ validationAttempted && !buildingValid ? '请选择1–40号楼栋' : '请选择楼栋' }}
           </p>
         </div>
         <div>
-          <label for="roommate-orientation">南北</label>
+          <label for="roommate-orientation">方位</label>
           <select
             id="roommate-orientation"
             name="orientation"
+            required
             :value="modelValue.address.orientation"
+            :aria-invalid="validationAttempted && !orientationValid"
             @change="updateAddress('orientation', ($event.target as HTMLSelectElement).value)"
           >
+            <option value="">请选择方位</option>
+            <option value="east">东</option>
             <option value="south">南</option>
+            <option value="west">西</option>
             <option value="north">北</option>
+            <option value="unknown">不确定</option>
           </select>
         </div>
         <div>
@@ -166,6 +246,22 @@ function updateConsent(checked: boolean): void {
           >
             {{ validationAttempted && !roomValid ? '请输入 1–10 位数字或字母' : '例如：207' }}
           </p>
+        </div>
+        <div>
+          <label for="roommate-bed">床位（可选）</label>
+          <select
+            id="roommate-bed"
+            name="bed"
+            :value="modelValue.address.bed ?? ''"
+            @change="updateBed(($event.target as HTMLSelectElement).value)"
+          >
+            <option value="">不填写床位</option>
+            <option value="1">1号床</option>
+            <option value="2">2号床</option>
+            <option value="3">3号床</option>
+            <option value="4">4号床</option>
+            <option value="5">五号床</option>
+          </select>
         </div>
       </div>
 
