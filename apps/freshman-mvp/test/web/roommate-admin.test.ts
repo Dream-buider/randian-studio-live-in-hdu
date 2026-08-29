@@ -26,6 +26,7 @@ const older = {
     building: '11',
     orientation: 'south',
     room: '207',
+    bed: null,
     canonical: 'xiasha|xiasha-v1|11|south|207',
     display: '下沙校区 · 11号楼 · 南 · 207',
   },
@@ -136,14 +137,19 @@ describe('AdminRoommatePanel', () => {
 
     await wrapper.get('select[aria-label="校区筛选"]').setValue('xiasha');
     await wrapper.get('select[aria-label="状态筛选"]').setValue('active');
-    await wrapper.get('input[aria-label="楼栋筛选"]').setValue('011');
-    await wrapper.get('select[aria-label="南北筛选"]').setValue('south');
+    const building = wrapper.get('select[aria-label="楼栋筛选"]');
+    expect(building.findAll('option')).toHaveLength(41);
+    await building.setValue('11');
+    const orientation = wrapper.get('select[aria-label="方位筛选"]');
+    expect(orientation.findAll('option').map((option) => option.attributes('value')))
+      .toEqual(['', 'east', 'south', 'west', 'north', 'unknown']);
+    await orientation.setValue('south');
     await wrapper.get('input[aria-label="寝室筛选"]').setValue('0207');
     await wrapper.get('form[data-role="roommate-admin-filters"]').trigger('submit');
     await flushPromises();
 
     expect(records.at(-1)).toBe(
-      '/api/admin/roommates?campus=xiasha&status=active&building=011&orientation=south&room=0207',
+      '/api/admin/roommates?campus=xiasha&status=active&building=11&orientation=south&room=0207',
     );
   });
 

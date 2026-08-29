@@ -160,14 +160,22 @@ onMounted(load);
       </label>
       <label>
         楼栋
-        <input v-model="filters.building" aria-label="楼栋筛选" inputmode="numeric">
+        <select v-model="filters.building" aria-label="楼栋筛选">
+          <option value="">全部</option>
+          <option v-for="building in 40" :key="building" :value="String(building)">
+            {{ building }}号楼
+          </option>
+        </select>
       </label>
       <label>
-        南北
-        <select v-model="filters.orientation" aria-label="南北筛选">
+        方位
+        <select v-model="filters.orientation" aria-label="方位筛选">
           <option value="">全部</option>
+          <option value="east">东</option>
           <option value="south">南</option>
+          <option value="west">西</option>
           <option value="north">北</option>
+          <option value="unknown">不确定</option>
         </select>
       </label>
       <label>

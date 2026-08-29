@@ -71,7 +71,7 @@ function input(index: number, otherRoom = false) {
   return {
     address: {
       campus: 'xiasha',
-      building: otherRoom ? '9372' : '9371',
+      building: otherRoom ? '32' : '31',
       orientation: otherRoom ? 'north' : 'south',
       room: otherRoom ? 'ZY92' : 'ZX91',
     },
@@ -83,7 +83,7 @@ function input(index: number, otherRoom = false) {
 }
 
 const hiddenUpdateInput = {
-  address: { campus: 'xiasha', building: '9388', orientation: 'north', room: 'HD88' },
+  address: { campus: 'xiasha', building: '38', orientation: 'north', room: 'HD88' },
   nickname: '隐藏后更新昵称-QxV',
   contactType: 'qq',
   contactValue: 'hidden-updated-contact-QxV',

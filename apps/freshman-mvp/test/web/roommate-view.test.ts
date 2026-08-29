@@ -163,6 +163,10 @@ describe('roommate matching client flow', () => {
     expect(building.findAll('option')).toHaveLength(41);
     expect(building.findAll('option')[1]?.attributes('value')).toBe('1');
     expect(building.findAll('option')[40]?.attributes('value')).toBe('40');
+    expect(wrapper.get('select[name="orientation"]').findAll('option').map((option) => option.attributes('value')))
+      .toEqual(['', 'east', 'south', 'west', 'north', 'unknown']);
+    expect(wrapper.get('select[name="bed"]').findAll('option').map((option) => option.attributes('value')))
+      .toEqual(['', '1', '2', '3', '4', '5']);
     expect(wrapper.get('select[name="orientation"]').findAll('option').map((option) => option.text()))
       .toEqual(['请选择方位', '东', '南', '西', '北', '不确定']);
     expect(wrapper.get('select[name="bed"]').findAll('option').map((option) => option.text()))

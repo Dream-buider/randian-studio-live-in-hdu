@@ -398,6 +398,22 @@ function isRoommateContact(value: unknown): value is RoommateContact {
     && typeof value.value === 'string';
 }
 
+export type RoommateBuildingGroupImageMime = 'image/png' | 'image/jpeg';
+
+export interface AdminRoommateBuildingGroup {
+  campus: RoommateCampusCode;
+  building: string;
+  imageMime: RoommateBuildingGroupImageMime;
+  imageSize: number;
+  updatedAt: string;
+  imageUrl: string;
+}
+
+export interface AdminRoommateBuildingGroupUpload {
+  mimeType: RoommateBuildingGroupImageMime;
+  imageBase64: string;
+}
+
 /** UI-only draft shape; blank campus/orientation values never cross the API boundary. */
 export interface RoommateRegistrationDraft {
   address: {
@@ -508,6 +524,61 @@ function isRoommateBuildingGroup(
     && hasExactKeys(value, ['campus', 'building', 'available', 'imageUrl', 'updatedAt'])
     && isSafeRoommateBuildingGroupImageUrl(value.imageUrl, campus, building)
     && typeof value.updatedAt === 'string';
+}
+
+interface AdminRoommateBuildingGroupWire extends AdminRoommateBuildingGroup {
+  imageSha256: string;
+  updatedBy: string;
+}
+
+function isAdminRoommateBuildingGroupWire(value: unknown): value is AdminRoommateBuildingGroupWire {
+  if (!isRecord(value) || !hasExactKeys(value, [
+    'campus',
+    'building',
+    'imageMime',
+    'imageSha256',
+    'imageSize',
+    'updatedAt',
+    'updatedBy',
+    'imageUrl',
+  ])) {
+    return false;
+  }
+  if (value.campus !== 'xiasha' && value.campus !== 'shaoxing') return false;
+  const building = canonicalRoommateBuilding(String(value.building));
+  return building !== null
+    && value.building === building
+    && (value.imageMime === 'image/png' || value.imageMime === 'image/jpeg')
+    && typeof value.imageSha256 === 'string'
+    && /^[a-f0-9]{64}$/.test(value.imageSha256)
+    && typeof value.imageSize === 'number'
+    && Number.isInteger(value.imageSize)
+    && value.imageSize > 0
+    && value.imageSize <= 1024 * 1024
+    && typeof value.updatedAt === 'string'
+    && typeof value.updatedBy === 'string'
+    && value.imageUrl === `/api/admin/roommate-building-groups/${value.campus}/${building}/image`;
+}
+
+function projectAdminRoommateBuildingGroup(
+  value: AdminRoommateBuildingGroupWire,
+): AdminRoommateBuildingGroup {
+  return {
+    campus: value.campus,
+    building: value.building,
+    imageMime: value.imageMime,
+    imageSize: value.imageSize,
+    updatedAt: value.updatedAt,
+    imageUrl: value.imageUrl,
+  };
+}
+
+function strictBase64DecodedSize(value: string): number | null {
+  if (value.length === 0 || value.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(value)) {
+    return null;
+  }
+  const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0;
+  return (value.length / 4) * 3 - padding;
 }
 
 function isRoommateAdminItem(value: unknown): value is RoommateAdminItem {
@@ -1011,6 +1082,75 @@ export async function listRoommateMembers(
     throw new ApiResponseError(response.status);
   }
   return body.items;
+}
+
+export async function listAdminRoommateBuildingGroups(): Promise<AdminRoommateBuildingGroup[]> {
+  const response = await fetch('/api/admin/roommate-building-groups');
+  const body = await readJson(response);
+  if (
+    !isRecord(body)
+    || !hasExactKeys(body, ['items'])
+    || !Array.isArray(body.items)
+    || !body.items.every(isAdminRoommateBuildingGroupWire)
+  ) {
+    throw new ApiResponseError(response.status);
+  }
+  return body.items.map(projectAdminRoommateBuildingGroup);
+}
+
+export async function putAdminRoommateBuildingGroup(
+  campus: RoommateCampusCode,
+  building: string,
+  upload: AdminRoommateBuildingGroupUpload,
+): Promise<AdminRoommateBuildingGroup> {
+  const canonicalBuilding = canonicalRoommateBuilding(building);
+  const decodedSize = strictBase64DecodedSize(upload.imageBase64);
+  if (
+    (campus !== 'xiasha' && campus !== 'shaoxing')
+    || !canonicalBuilding
+    || (upload.mimeType !== 'image/png' && upload.mimeType !== 'image/jpeg')
+    || decodedSize === null
+    || decodedSize <= 0
+    || decodedSize > 1024 * 1024
+  ) {
+    throw new ApiResponseError(400);
+  }
+  const response = await fetch(
+    `/api/admin/roommate-building-groups/${campus}/${canonicalBuilding}`,
+    {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ mimeType: upload.mimeType, imageBase64: upload.imageBase64 }),
+    },
+  );
+  const body = await readJson(response);
+  if (!isAdminRoommateBuildingGroupWire(body)) {
+    throw new ApiResponseError(response.status);
+  }
+  return projectAdminRoommateBuildingGroup(body);
+}
+
+export async function deleteAdminRoommateBuildingGroup(
+  campus: RoommateCampusCode,
+  building: string,
+): Promise<'deleted' | 'not_found'> {
+  const canonicalBuilding = canonicalRoommateBuilding(building);
+  if ((campus !== 'xiasha' && campus !== 'shaoxing') || !canonicalBuilding) {
+    throw new ApiResponseError(400);
+  }
+  const response = await fetch(
+    `/api/admin/roommate-building-groups/${campus}/${canonicalBuilding}`,
+    { method: 'DELETE' },
+  );
+  const body = await readJson(response);
+  if (
+    !isRecord(body)
+    || !hasExactKeys(body, ['status'])
+    || (body.status !== 'deleted' && body.status !== 'not_found')
+  ) {
+    throw new ApiResponseError(response.status);
+  }
+  return body.status;
 }
 
 export async function listAdminRoommates(
