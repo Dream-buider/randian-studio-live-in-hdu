@@ -163,6 +163,13 @@ describe('roommate matching client flow', () => {
     expect(building.findAll('option')).toHaveLength(41);
     expect(building.findAll('option')[1]?.attributes('value')).toBe('1');
     expect(building.findAll('option')[40]?.attributes('value')).toBe('40');
+    const addressFields = wrapper.findAll('.roommate-address-field');
+    expect(addressFields).toHaveLength(4);
+    addressFields.forEach((field) => {
+      expect(field.find('label').exists()).toBe(true);
+      expect(field.find('input, select').exists()).toBe(true);
+      expect(field.find('.roommate-field-message').exists()).toBe(true);
+    });
     expect(wrapper.get('select[name="orientation"]').findAll('option').map((option) => option.attributes('value')))
       .toEqual(['', 'east', 'south', 'west', 'north', 'unknown']);
     expect(wrapper.get('select[name="bed"]').findAll('option').map((option) => option.attributes('value')))

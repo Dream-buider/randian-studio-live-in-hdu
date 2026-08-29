@@ -183,7 +183,7 @@ function updateConsent(checked: boolean): void {
       </p>
 
       <div class="roommate-address-grid">
-        <div>
+        <div class="roommate-address-field">
           <label for="roommate-building">楼栋</label>
           <select
             id="roommate-building"
@@ -208,12 +208,13 @@ function updateConsent(checked: boolean): void {
             {{ validationAttempted && !buildingValid ? '请选择1–40号楼栋' : '请选择楼栋' }}
           </p>
         </div>
-        <div>
+        <div class="roommate-address-field">
           <label for="roommate-orientation">方位</label>
           <select
             id="roommate-orientation"
             name="orientation"
             required
+            aria-describedby="roommate-orientation-message"
             :value="modelValue.address.orientation"
             :aria-invalid="validationAttempted && !orientationValid"
             @change="updateAddress('orientation', ($event.target as HTMLSelectElement).value)"
@@ -225,8 +226,15 @@ function updateConsent(checked: boolean): void {
             <option value="north">北</option>
             <option value="unknown">不确定</option>
           </select>
+          <p
+            id="roommate-orientation-message"
+            class="roommate-field-message"
+            :class="{ 'is-error': validationAttempted && !orientationValid }"
+          >
+            {{ validationAttempted && !orientationValid ? '请选择方位' : '不确定时可选择“不确定”' }}
+          </p>
         </div>
-        <div>
+        <div class="roommate-address-field">
           <label for="roommate-room">寝室号</label>
           <input
             id="roommate-room"
@@ -247,11 +255,12 @@ function updateConsent(checked: boolean): void {
             {{ validationAttempted && !roomValid ? '请输入 1–10 位数字或字母' : '例如：207' }}
           </p>
         </div>
-        <div>
+        <div class="roommate-address-field">
           <label for="roommate-bed">床位（可选）</label>
           <select
             id="roommate-bed"
             name="bed"
+            aria-describedby="roommate-bed-message"
             :value="modelValue.address.bed ?? ''"
             @change="updateBed(($event.target as HTMLSelectElement).value)"
           >
@@ -262,6 +271,7 @@ function updateConsent(checked: boolean): void {
             <option value="4">4号床</option>
             <option value="5">五号床</option>
           </select>
+          <p id="roommate-bed-message" class="roommate-field-message">选填，不影响同寝室匹配</p>
         </div>
       </div>
 
