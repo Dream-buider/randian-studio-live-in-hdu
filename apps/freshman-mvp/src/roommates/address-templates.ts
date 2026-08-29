@@ -1,38 +1,34 @@
 import type {
+  BedNumber,
+  CampusCode,
   NormalizedRoomAddress,
   RoomAddressInput,
   RoomOrientation,
 } from './models.js';
 
 export interface EnabledCampusTemplateSummary {
-  code: 'xiasha';
+  code: CampusCode;
   name: string;
-  templateVersion: 'xiasha-v1';
+  templateVersion: 'xiasha-v1' | 'shaoxing-v1';
   enabled: true;
 }
 
-export interface DisabledCampusTemplateSummary {
-  code: 'shaoxing';
-  name: string;
-  templateVersion: null;
-  enabled: false;
-  unavailableReason: string;
-}
-
-export type CampusTemplateSummary = EnabledCampusTemplateSummary | DisabledCampusTemplateSummary;
-
-const SHAOXING_UNAVAILABLE_REASON = '寝室分配规则确认中，暂未开放匹配';
+export type CampusTemplateSummary = EnabledCampusTemplateSummary;
 
 const CAMPUS_TEMPLATES: readonly CampusTemplateSummary[] = [
   { code: 'xiasha', name: '下沙校区', templateVersion: 'xiasha-v1', enabled: true },
-  {
-    code: 'shaoxing',
-    name: '绍兴校区',
-    templateVersion: null,
-    enabled: false,
-    unavailableReason: SHAOXING_UNAVAILABLE_REASON,
-  },
+  { code: 'shaoxing', name: '绍兴校区', templateVersion: 'shaoxing-v1', enabled: true },
 ];
+
+const ORIENTATION_LABELS: Record<RoomOrientation, string> = {
+  east: '东',
+  south: '南',
+  west: '西',
+  north: '北',
+  unknown: '不确定',
+};
+
+const BED_NUMBERS: readonly BedNumber[] = ['1', '2', '3', '4', '5'];
 
 function containsControlCharacter(value: string): boolean {
   return /[\u0000-\u001f\u007f]/.test(value);
@@ -47,6 +43,9 @@ function normalizeNumeric(value: string, field: string): string {
   if (Number(normalized) <= 0) {
     throw new Error(`${field}必须为正数`);
   }
+  if (Number(normalized) > 40) {
+    throw new Error(`${field}必须在1-40号之间`);
+  }
   return normalized;
 }
 
@@ -58,33 +57,47 @@ function normalizeRoom(value: string): string {
   return /^\d+$/.test(trimmed) ? trimmed.replace(/^0+(?=\d)/, '') : trimmed;
 }
 
+function normalizeBed(value: RoomAddressInput['bed']): BedNumber | null {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string' || !BED_NUMBERS.includes(value as BedNumber)) {
+    throw new Error('床位必须为1-5号');
+  }
+  return value as BedNumber;
+}
+
 export function listCampusTemplates(): CampusTemplateSummary[] {
   return CAMPUS_TEMPLATES.map((template) => ({ ...template }));
 }
 
 export function normalizeRoomAddress(input: RoomAddressInput): NormalizedRoomAddress {
-  if (input.campus === 'shaoxing') {
-    throw new Error(SHAOXING_UNAVAILABLE_REASON);
-  }
-  if (input.campus !== 'xiasha') {
+  const campusTemplate = CAMPUS_TEMPLATES.find((template) => template.code === input.campus);
+  if (!campusTemplate) {
     throw new Error('校区不支持');
   }
-  if (input.orientation !== 'south' && input.orientation !== 'north') {
+  if (!Object.prototype.hasOwnProperty.call(ORIENTATION_LABELS, input.orientation)) {
     throw new Error('朝向不支持');
   }
 
   const building = normalizeNumeric(input.building, '楼栋');
   const room = normalizeRoom(input.room);
   const orientation = input.orientation as RoomOrientation;
-  const orientationDisplay = orientation === 'south' ? '南' : '北';
+  const bed = normalizeBed(input.bed);
+  const displayParts = [
+    campusTemplate.name,
+    `${building}号楼`,
+    ORIENTATION_LABELS[orientation],
+    room,
+  ];
+  if (bed !== null) displayParts.push(`${bed}号床`);
 
   return {
-    campus: 'xiasha',
-    templateVersion: 'xiasha-v1',
+    campus: campusTemplate.code,
+    templateVersion: campusTemplate.templateVersion,
     building,
     orientation,
     room,
-    canonical: `xiasha|xiasha-v1|${building}|${orientation}|${room}`,
-    display: `下沙校区 · ${building}号楼 · ${orientationDisplay} · ${room}`,
+    bed,
+    canonical: `${campusTemplate.code}|${campusTemplate.templateVersion}|${building}|${orientation}|${room}`,
+    display: displayParts.join(' · '),
   };
 }

@@ -1,5 +1,6 @@
 export type CampusCode = 'xiasha' | 'shaoxing';
-export type RoomOrientation = 'south' | 'north';
+export type RoomOrientation = 'east' | 'south' | 'west' | 'north' | 'unknown';
+export type BedNumber = '1' | '2' | '3' | '4' | '5';
 export type ContactType = 'wechat' | 'qq' | 'phone' | 'other';
 export type RoommateStatus = 'active' | 'hidden' | 'deleted' | 'expired';
 export type RoommateAdminAuditAction = 'view_contact' | 'hide' | 'restore' | 'delete';
@@ -9,10 +10,12 @@ export interface RoomAddressInput {
   building: string;
   orientation: RoomOrientation;
   room: string;
+  bed?: BedNumber | null;
 }
 
 export interface NormalizedRoomAddress extends RoomAddressInput {
-  templateVersion: 'xiasha-v1';
+  bed: BedNumber | null;
+  templateVersion: 'xiasha-v1' | 'shaoxing-v1';
   canonical: string;
   display: string;
 }
