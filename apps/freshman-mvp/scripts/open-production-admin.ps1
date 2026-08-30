@@ -19,7 +19,7 @@ function Test-AdminTunnel {
 if (-not (Test-AdminTunnel)) {
   $listener = Get-NetTCPConnection -LocalPort $localPort -State Listen -ErrorAction SilentlyContinue
   if ($listener) {
-    throw "本机端口 $localPort 已被其他程序占用，请关闭该程序后重试。"
+    throw "Local port $localPort is already in use. Stop the conflicting process and retry."
   }
 
   $ssh = (Get-Command ssh -ErrorAction Stop).Source
@@ -42,11 +42,11 @@ if (-not (Test-AdminTunnel)) {
     }
   }
   if (-not $ready) {
-    throw '无法建立管理端安全通道。请确认电脑可以联网，并且 SSH 公钥仍然有效。'
+    throw 'Unable to establish the admin SSH tunnel. Check network access and the SSH public key.'
   }
 }
 
-Write-Host "管理端安全通道已就绪：$adminUrl" -ForegroundColor Green
+Write-Host "Admin SSH tunnel is ready: $adminUrl" -ForegroundColor Green
 if (-not $NoBrowser) {
   Start-Process $adminUrl
 }
