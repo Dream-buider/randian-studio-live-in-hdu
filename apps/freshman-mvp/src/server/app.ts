@@ -495,7 +495,7 @@ export function createApp(deps: AppDependencies): FastifyInstance {
         campus,
         building,
         available: false,
-        message: '该楼栋群暂未开放',
+        message: '该新生楼栋群暂未开放',
       };
     }
     return {

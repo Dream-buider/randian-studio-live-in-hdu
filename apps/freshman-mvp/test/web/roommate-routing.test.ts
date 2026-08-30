@@ -331,7 +331,7 @@ describe('roommate client route and API boundary', () => {
   it('validates building-group responses and keeps image URLs same-origin', async () => {
     const unavailable = await getRoommateBuildingGroup('xiasha', '015', {
       fetcher: async () => jsonResponse({
-        campus: 'xiasha', building: '15', available: false, message: '该楼栋群暂未开放',
+        campus: 'xiasha', building: '15', available: false, message: '该新生楼栋群暂未开放',
       }),
     });
     expect(unavailable.available).toBe(false);

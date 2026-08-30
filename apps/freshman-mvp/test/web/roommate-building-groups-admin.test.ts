@@ -127,8 +127,8 @@ describe('AdminRoommateBuildingGroups', () => {
     }));
     const wrapper = mount(AdminRoommateBuildingGroups);
     await flushPromises();
-    await wrapper.get('select[aria-label="二维码楼栋"]').setValue('15');
-    const input = wrapper.get('input[aria-label="选择楼栋群二维码图片"]');
+    await wrapper.get('select[aria-label="新生楼栋群楼栋"]').setValue('15');
+    const input = wrapper.get('input[aria-label="选择新生楼栋群二维码图片"]');
     const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], 'qr.png', {
       type: 'image/png',
     });
@@ -140,11 +140,11 @@ describe('AdminRoommateBuildingGroups', () => {
     await wrapper.get('[data-action="save-building-group"]').trigger('click');
     await flushPromises();
 
-    expect(confirm).toHaveBeenCalledWith('该楼栋已有二维码，确定替换吗？');
+    expect(confirm).toHaveBeenCalledWith('该楼栋已有新生楼栋群二维码，确定替换吗？');
     const put = requests.find(({ init }) => init?.method === 'PUT');
     expect(put?.url).toBe('/api/admin/roommate-building-groups/xiasha/15');
     expect(JSON.parse(String(put?.init?.body))).toEqual({ mimeType: 'image/png', imageBase64: pngBase64 });
-    expect(wrapper.text()).toContain('二维码已保存');
+    expect(wrapper.text()).toContain('新生楼栋群二维码已保存');
     wrapper.unmount();
   });
 
@@ -153,8 +153,8 @@ describe('AdminRoommateBuildingGroups', () => {
     vi.stubGlobal('fetch', fetch);
     const wrapper = mount(AdminRoommateBuildingGroups);
     await flushPromises();
-    await wrapper.get('select[aria-label="二维码楼栋"]').setValue('1');
-    const input = wrapper.get('input[aria-label="选择楼栋群二维码图片"]');
+    await wrapper.get('select[aria-label="新生楼栋群楼栋"]').setValue('1');
+    const input = wrapper.get('input[aria-label="选择新生楼栋群二维码图片"]');
 
     Object.defineProperty(input.element, 'files', {
       configurable: true,
@@ -188,7 +188,7 @@ describe('AdminRoommateBuildingGroups', () => {
     await wrapper.get('[data-action="delete-building-group"]').trigger('click');
     await flushPromises();
     expect(confirm).toHaveBeenCalled();
-    expect(wrapper.text()).toContain('二维码已删除');
+    expect(wrapper.text()).toContain('新生楼栋群二维码已删除');
     wrapper.unmount();
 
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ error: { code: 'FORBIDDEN' } }, { status: 403 })));

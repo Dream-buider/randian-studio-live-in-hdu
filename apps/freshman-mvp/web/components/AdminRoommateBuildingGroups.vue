@@ -115,7 +115,7 @@ async function load(): Promise<void> {
     ));
   } catch (error) {
     items.value = [];
-    errorMessage.value = safeError(error, '楼栋群二维码暂时加载失败，请稍后重试。');
+    errorMessage.value = safeError(error, '新生楼栋群二维码暂时加载失败，请稍后重试。');
   } finally {
     loading.value = false;
   }
@@ -123,10 +123,10 @@ async function load(): Promise<void> {
 
 async function upload(): Promise<void> {
   if (!building.value || !selectedFile.value || !imageBase64.value) {
-    errorMessage.value = '请先选择校区、楼栋和二维码图片。';
+    errorMessage.value = '请先选择校区、楼栋和新生楼栋群二维码图片。';
     return;
   }
-  if (selectedItem.value && !window.confirm('该楼栋已有二维码，确定替换吗？')) return;
+  if (selectedItem.value && !window.confirm('该楼栋已有新生楼栋群二维码，确定替换吗？')) return;
   busy.value = true;
   errorMessage.value = '';
   successMessage.value = '';
@@ -136,10 +136,10 @@ async function upload(): Promise<void> {
       imageBase64: imageBase64.value,
     });
     await load();
-    successMessage.value = `${campusLabels[campus.value]} ${building.value}号楼二维码已保存。`;
+    successMessage.value = `${campusLabels[campus.value]} ${building.value}号楼新生楼栋群二维码已保存。`;
     resetFile();
   } catch (error) {
-    errorMessage.value = safeError(error, '二维码保存失败，请稍后重试。');
+    errorMessage.value = safeError(error, '新生楼栋群二维码保存失败，请稍后重试。');
   } finally {
     busy.value = false;
   }
@@ -147,17 +147,17 @@ async function upload(): Promise<void> {
 
 async function remove(): Promise<void> {
   const item = selectedItem.value;
-  if (!item || !window.confirm(`确定删除${campusLabels[item.campus]} ${item.building}号楼二维码吗？`)) return;
+  if (!item || !window.confirm(`确定删除${campusLabels[item.campus]} ${item.building}号楼新生楼栋群二维码吗？`)) return;
   busy.value = true;
   errorMessage.value = '';
   successMessage.value = '';
   try {
     const status = await deleteAdminRoommateBuildingGroup(item.campus, item.building);
     await load();
-    successMessage.value = status === 'deleted' ? '二维码已删除。' : '该二维码已不存在。';
+    successMessage.value = status === 'deleted' ? '新生楼栋群二维码已删除。' : '该新生楼栋群二维码已不存在。';
     resetFile();
   } catch (error) {
-    errorMessage.value = safeError(error, '二维码删除失败，请稍后重试。');
+    errorMessage.value = safeError(error, '新生楼栋群二维码删除失败，请稍后重试。');
   } finally {
     busy.value = false;
   }
@@ -177,7 +177,7 @@ onMounted(load);
     <header>
       <div>
         <p>仅管理员可维护，普通用户无上传入口</p>
-        <h2 id="building-group-admin-heading">楼栋群二维码</h2>
+        <h2 id="building-group-admin-heading">新生楼栋群二维码</h2>
       </div>
       <button type="button" :disabled="loading || busy" @click="load">刷新列表</button>
     </header>
@@ -185,14 +185,14 @@ onMounted(load);
     <div class="building-group-editor">
       <label>
         校区
-        <select v-model="campus" aria-label="二维码校区" :disabled="busy" @change="clearFeedback">
+        <select v-model="campus" aria-label="新生楼栋群校区" :disabled="busy" @change="clearFeedback">
           <option value="xiasha">下沙校区</option>
           <option value="shaoxing">绍兴校区</option>
         </select>
       </label>
       <label>
         楼栋
-        <select v-model="building" aria-label="二维码楼栋" :disabled="busy" @change="clearFeedback">
+        <select v-model="building" aria-label="新生楼栋群楼栋" :disabled="busy" @change="clearFeedback">
           <option value="">请选择楼栋</option>
           <option v-for="number in 40" :key="number" :value="String(number)">{{ number }}号楼</option>
         </select>
@@ -203,7 +203,7 @@ onMounted(load);
           ref="fileInput"
           type="file"
           accept="image/png,image/jpeg"
-          aria-label="选择楼栋群二维码图片"
+          aria-label="选择新生楼栋群二维码图片"
           :disabled="busy"
           @change="chooseFile"
         >
@@ -215,7 +215,7 @@ onMounted(load);
           :disabled="busy || !building || !selectedFile || !imageBase64"
           @click="upload"
         >
-          {{ selectedItem ? '替换二维码' : '上传二维码' }}
+          {{ selectedItem ? '替换新生楼栋群二维码' : '上传新生楼栋群二维码' }}
         </button>
         <button
           v-if="selectedItem"
@@ -224,7 +224,7 @@ onMounted(load);
           :disabled="busy"
           @click="remove"
         >
-          删除二维码
+          删除新生楼栋群二维码
         </button>
       </div>
     </div>
@@ -233,13 +233,13 @@ onMounted(load);
     <p v-if="successMessage" class="building-group-message is-success" role="status">{{ successMessage }}</p>
 
     <div v-if="selectedItem" class="building-group-preview" data-role="building-group-preview">
-      <img :src="selectedItem.imageUrl" :alt="`${campusLabels[selectedItem.campus]} ${selectedItem.building}号楼群二维码`">
+      <img :src="selectedItem.imageUrl" :alt="`${campusLabels[selectedItem.campus]} ${selectedItem.building}号楼新生楼栋群二维码`">
       <p>更新时间：{{ selectedItem.updatedAt }} · 大小：{{ formatSize(selectedItem.imageSize) }}</p>
     </div>
-    <p v-else-if="building" class="building-group-message">该楼栋暂未配置二维码，可直接上传。</p>
+    <p v-else-if="building" class="building-group-message">该楼栋暂未配置新生楼栋群二维码，可直接上传。</p>
 
-    <p v-if="loading" class="building-group-message">正在读取二维码配置…</p>
-    <p v-else-if="items.length === 0 && !errorMessage" class="building-group-message">暂未配置楼栋群二维码。</p>
+    <p v-if="loading" class="building-group-message">正在读取新生楼栋群二维码配置…</p>
+    <p v-else-if="items.length === 0 && !errorMessage" class="building-group-message">暂未配置新生楼栋群二维码。</p>
     <div v-else-if="items.length > 0" class="building-group-table-wrap">
       <table>
         <thead><tr><th>校区与楼栋</th><th>更新时间</th><th>大小</th><th>操作</th></tr></thead>

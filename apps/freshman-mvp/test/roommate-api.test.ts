@@ -583,7 +583,7 @@ test('serves public QR metadata and image only over HTTPS when matching is enabl
       headers: { 'x-forwarded-proto': 'https' },
     });
     assert.deepEqual(missing.json(), {
-      campus: 'xiasha', building: '15', available: false, message: '该楼栋群暂未开放',
+      campus: 'xiasha', building: '15', available: false, message: '该新生楼栋群暂未开放',
     });
 
     const put = await app.inject({

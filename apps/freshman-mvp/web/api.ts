@@ -434,7 +434,7 @@ export type RoommateBuildingGroup =
     campus: RoommateCampusCode;
     building: string;
     available: false;
-    message: '该楼栋群暂未开放';
+    message: '该新生楼栋群暂未开放';
   }
   | {
     campus: RoommateCampusCode;
@@ -518,7 +518,7 @@ function isRoommateBuildingGroup(
   }
   if (value.available === false) {
     return hasExactKeys(value, ['campus', 'building', 'available', 'message'])
-      && value.message === '该楼栋群暂未开放';
+      && value.message === '该新生楼栋群暂未开放';
   }
   return value.available === true
     && hasExactKeys(value, ['campus', 'building', 'available', 'imageUrl', 'updatedAt'])

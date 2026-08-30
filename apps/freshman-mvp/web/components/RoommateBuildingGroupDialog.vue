@@ -16,7 +16,7 @@ const campusLabels: Record<RoommateCampusCode, string> = {
   xiasha: '下沙校区',
   shaoxing: '绍兴校区',
 };
-const title = computed(() => `${campusLabels[props.campus]} · ${props.building}号楼 · 楼栋群`);
+const title = computed(() => `${campusLabels[props.campus]} · ${props.building}号楼 · 新生楼栋群`);
 
 function close(): void {
   emit('close');
@@ -39,27 +39,27 @@ useDialogFocus(panel, '[data-action="close-building-group"]', close);
         class="roommate-dialog-close"
         type="button"
         data-action="close-building-group"
-        aria-label="关闭楼栋群二维码"
+        aria-label="关闭新生楼栋群二维码"
         @click="close"
       >
         ×
       </button>
       <h2 id="roommate-building-group-title">{{ title }}</h2>
       <p id="roommate-building-group-description" class="roommate-dialog-description">
-        可使用微信扫描二维码加入楼栋群。不加入群聊也可以关闭窗口，继续填写寝室信息。
+        可使用微信扫描二维码加入新生楼栋群。不加入群聊也可以关闭窗口，继续填写寝室信息。
       </p>
 
       <p v-if="status === 'loading'" class="roommate-dialog-status" role="status">
-        正在读取楼栋群…
+        正在读取新生楼栋群…
       </p>
       <template v-else-if="status === 'available' && group?.available">
-        <img class="roommate-building-group-qr" :src="group.imageUrl" alt="楼栋群二维码" />
+        <img class="roommate-building-group-qr" :src="group.imageUrl" alt="新生楼栋群二维码" />
       </template>
       <p v-else-if="status === 'unavailable'" class="roommate-dialog-status" role="status">
-        该楼栋群暂未开放，不影响继续匹配。
+        该新生楼栋群暂未开放，不影响继续匹配。
       </p>
       <p v-else class="roommate-dialog-status" role="alert">
-        楼栋群信息暂时无法读取，不影响继续匹配。
+        新生楼栋群信息暂时无法读取，不影响继续匹配。
       </p>
     </section>
   </div>

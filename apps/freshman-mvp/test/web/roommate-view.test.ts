@@ -69,7 +69,7 @@ function unauthenticatedSetup(extra?: (url: string, init?: RequestInit) => Respo
     if (url === '/api/roommates/config') return jsonResponse(enabledConfig);
     if (url.startsWith('/api/roommates/building-groups/')) {
       const [, , , , campus, building] = url.split('/');
-      return jsonResponse({ campus, building, available: false, message: '该楼栋群暂未开放' });
+      return jsonResponse({ campus, building, available: false, message: '该新生楼栋群暂未开放' });
     }
     if (url === '/api/roommates/me') {
       return jsonResponse({ error: { code: 'NOT_FOUND' } }, { status: 404 });
@@ -148,8 +148,11 @@ describe('roommate matching client flow', () => {
     await wrapper.get('select[name="contactType"]').setValue('wechat');
     await wrapper.get('input[name="contactValue"]').setValue('randian-207');
     expect(wrapper.get('input[name="consent"]').attributes('required')).toBeDefined();
-    expect(wrapper.text()).toContain('有任何疑问请咨询团队负责人：微信：Vikboow');
-    expect(wrapper.text()).not.toContain('非学校官方身份认证系统');
+    expect(wrapper.text()).toContain('有任何技术上的问题请咨询：微信：lbz070605');
+    expect(wrapper.text()).toContain(
+      '如果新生楼栋群已满，请加团队负责人微信：Vikboow，通过管理员添加入群聊。',
+    );
+    expect(wrapper.text()).not.toContain('有任何疑问请咨询团队负责人');
     expect(wrapper.text()).toContain('90 天');
     expect(wrapper.text()).toContain('身份证号');
   });
@@ -203,7 +206,7 @@ describe('roommate matching client flow', () => {
       }
       if (url.endsWith('/xiasha/16')) {
         return jsonResponse({
-          campus: 'xiasha', building: '16', available: false, message: '该楼栋群暂未开放',
+          campus: 'xiasha', building: '16', available: false, message: '该新生楼栋群暂未开放',
         });
       }
       if (url.endsWith('/xiasha/17')) throw new Error('temporary failure');
@@ -228,7 +231,7 @@ describe('roommate matching client flow', () => {
 
     await wrapper.get('select[name="building"]').setValue('16');
     await flushPromises();
-    expect(wrapper.get('[role="dialog"]').text()).toContain('该楼栋群暂未开放');
+    expect(wrapper.get('[role="dialog"]').text()).toContain('该新生楼栋群暂未开放');
     await wrapper.get('[data-action="close-building-group"]').trigger('click');
     await wrapper.get('select[name="building"]').setValue('17');
     await flushPromises();
@@ -252,7 +255,7 @@ describe('roommate matching client flow', () => {
     await wrapper.get('select[name="building"]').setValue('11');
     await wrapper.get('select[name="building"]').setValue('12');
     resolveSecond(jsonResponse({
-      campus: 'xiasha', building: '12', available: false, message: '该楼栋群暂未开放',
+      campus: 'xiasha', building: '12', available: false, message: '该新生楼栋群暂未开放',
     }));
     await flushPromises();
     resolveFirst(jsonResponse({
@@ -261,7 +264,7 @@ describe('roommate matching client flow', () => {
     }));
     await flushPromises();
     expect(wrapper.get('[role="dialog"] h2').text()).toContain('12号楼');
-    expect(wrapper.get('[role="dialog"]').text()).toContain('该楼栋群暂未开放');
+    expect(wrapper.get('[role="dialog"]').text()).toContain('该新生楼栋群暂未开放');
   });
 
   it('enforces backend field limits and associates visible validation errors with inputs', async () => {

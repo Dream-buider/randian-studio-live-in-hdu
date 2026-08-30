@@ -347,7 +347,8 @@ function updateConsent(checked: boolean): void {
     <aside class="roommate-privacy-copy" aria-label="隐私提示">
       <strong>提交前请留意</strong>
       <ul>
-        <li>有任何疑问请咨询团队负责人：微信：Vikboow</li>
+        <li>有任何技术上的问题请咨询：微信：lbz070605</li>
+        <li>如果新生楼栋群已满，请加团队负责人微信：Vikboow，通过管理员添加入群聊。</li>
         <li>寝室与成员信息由用户自行填写，请自行判断真实性。</li>
         <li>联系方式可选；登记默认保留 90 天，期间可修改或删除。</li>
         <li>请勿填写身份证号、银行卡号、家庭住址等无关敏感信息。</li>
