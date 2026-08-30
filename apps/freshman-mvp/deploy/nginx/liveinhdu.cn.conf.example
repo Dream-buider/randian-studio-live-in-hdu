@@ -21,6 +21,8 @@ server {
   add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
 
   # Defense in depth: these routes stay private even though Nginx connects from loopback.
+  location = /admin { return 403; }
+  location ^~ /admin/ { return 403; }
   location = /api/admin { return 403; }
   location ^~ /api/admin/ { return 403; }
   location = /api/reviews { return 403; }
