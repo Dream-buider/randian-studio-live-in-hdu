@@ -67,7 +67,7 @@ describe('roommate admin API boundary', () => {
       building: '011',
       orientation: 'south',
       room: '0207',
-    })).resolves.toEqual([older]);
+    })).resolves.toEqual([{ ...older, contacts: [{ type: 'wechat', masked: true }] }]);
     expect(fetch).toHaveBeenCalledWith(
       '/api/admin/roommates?campus=xiasha&status=active&building=011&orientation=south&room=0207',
     );

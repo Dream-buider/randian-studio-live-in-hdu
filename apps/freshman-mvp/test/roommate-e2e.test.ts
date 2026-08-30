@@ -86,7 +86,7 @@ const hiddenUpdateInput = {
   address: { campus: 'xiasha', building: '38', orientation: 'north', room: 'HD88' },
   nickname: '隐藏后更新昵称-QxV',
   contactType: 'qq',
-  contactValue: 'hidden-updated-contact-QxV',
+  contactValue: '987654321',
   consent: true,
 } as const;
 

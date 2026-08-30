@@ -23,7 +23,7 @@ const loading = ref(true);
 const errorMessage = ref('');
 const reasons = reactive<Record<string, string>>({});
 const rowErrors = reactive<Record<string, string>>({});
-const revealedContacts = reactive<Record<string, RoommateContact>>({});
+const revealedContacts = reactive<Record<string, RoommateContact[]>>({});
 const pendingAction = ref<string | null>(null);
 
 function statusLabel(status: RoommateAdminItem['status']): string {
@@ -99,7 +99,7 @@ async function revealContact(item: RoommateAdminItem): Promise<void> {
   pendingAction.value = `reveal:${item.id}`;
   try {
     const result = await revealRoommateContact(item.id, reason);
-    revealedContacts[item.id] = result.contact;
+    revealedContacts[item.id] = result.contacts;
     item.lastModeration = result.lastModeration;
   } catch (error) {
     rowErrors[item.id] = error instanceof ApiResponseError && error.status === 403
@@ -175,7 +175,7 @@ onMounted(load);
           <option value="south">南</option>
           <option value="west">西</option>
           <option value="north">北</option>
-          <option value="unknown">不确定</option>
+          <option value="unknown">无</option>
         </select>
       </label>
       <label>
@@ -213,10 +213,12 @@ onMounted(load);
           <div>
             <dt>联系方式</dt>
             <dd v-if="revealedContacts[item.id]" class="sensitive-contact">
-              {{ contactTypeLabel(revealedContacts[item.id].type) }}：{{ revealedContacts[item.id].value }}
+              <span v-for="contact in revealedContacts[item.id]" :key="contact.type">
+                {{ contactTypeLabel(contact.type) }}：{{ contact.value }}
+              </span>
             </dd>
-            <dd v-else-if="item.contact">
-              {{ contactTypeLabel(item.contact.type) }}（已脱敏）
+            <dd v-else-if="item.contacts.length > 0">
+              {{ item.contacts.map((contact) => `${contactTypeLabel(contact.type)}（已脱敏）`).join('、') }}
             </dd>
             <dd v-else>未填写</dd>
           </div>
@@ -242,7 +244,7 @@ onMounted(load);
         </p>
         <div class="roommate-admin-actions">
           <button
-            v-if="item.contact"
+            v-if="item.contacts.length > 0"
             type="button"
             data-action="reveal-roommate-contact"
             :disabled="pendingAction !== null"

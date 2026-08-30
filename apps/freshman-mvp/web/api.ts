@@ -82,6 +82,7 @@ export interface RoommateSelf {
   address: RoommateAddress;
   nickname: string;
   contact: RoommateContact | null;
+  contacts: RoommateContact[];
   status: RoommateRegistrationStatus;
   createdAt: string;
   updatedAt: string;
@@ -94,6 +95,7 @@ export interface RoommateMember {
   nickname: string;
   bed: RoommateBed | null;
   contact: RoommateContact | null;
+  contacts: RoommateContact[];
 }
 
 export interface RoommateRecoveryCredential {
@@ -101,8 +103,9 @@ export interface RoommateRecoveryCredential {
   managementCode: string;
 }
 
-export interface RoommateAdminItem extends Omit<RoommateSelf, 'contact'> {
+export interface RoommateAdminItem extends Omit<RoommateSelf, 'contact' | 'contacts'> {
   contact: { type: RoommateContactType; masked: true } | null;
+  contacts: Array<{ type: RoommateContactType; masked: true }>;
   lastModeration: {
     action: 'hide' | 'restore' | 'delete' | 'view_contact';
     actorId: string;
@@ -113,6 +116,7 @@ export interface RoommateAdminItem extends Omit<RoommateSelf, 'contact'> {
 
 export interface RoommateAdminContactReveal {
   contact: RoommateContact;
+  contacts: RoommateContact[];
   lastModeration: NonNullable<RoommateAdminItem['lastModeration']>;
 }
 
@@ -131,6 +135,7 @@ export interface RoommateRegistrationInput {
   nickname: string;
   contactType: RoommateContactType | null;
   contactValue: string | null;
+  contacts?: RoommateContact[];
   consent: boolean;
 }
 
@@ -426,6 +431,7 @@ export interface RoommateRegistrationDraft {
   nickname: string;
   contactType: RoommateContactType | null;
   contactValue: string | null;
+  contacts: RoommateContact[];
   consent: boolean;
 }
 
@@ -466,6 +472,7 @@ function isRoommateSelf(value: unknown): value is RoommateSelf {
     && isRoommateAddress(value.address)
     && typeof value.nickname === 'string'
     && (value.contact === null || isRoommateContact(value.contact))
+    && (value.contacts === undefined || (Array.isArray(value.contacts) && value.contacts.every(isRoommateContact)))
     && isRoommateStatus(value.status)
     && typeof value.createdAt === 'string'
     && typeof value.updatedAt === 'string'
@@ -478,7 +485,16 @@ function isRoommateMember(value: unknown): value is RoommateMember {
     && typeof value.id === 'string'
     && typeof value.nickname === 'string'
     && isRoommateBed(value.bed)
-    && (value.contact === null || isRoommateContact(value.contact));
+    && (value.contact === null || isRoommateContact(value.contact))
+    && (value.contacts === undefined || (Array.isArray(value.contacts) && value.contacts.every(isRoommateContact)));
+}
+
+function normalizeRoommateSelf(value: RoommateSelf): RoommateSelf {
+  return { ...value, contacts: value.contacts ?? (value.contact ? [value.contact] : []) };
+}
+
+function normalizeRoommateMember(value: RoommateMember): RoommateMember {
+  return { ...value, contacts: value.contacts ?? (value.contact ? [value.contact] : []) };
 }
 
 function canonicalRoommateBuilding(value: string): string | null {
@@ -602,6 +618,9 @@ function isRoommateAdminItem(value: unknown): value is RoommateAdminItem {
   )) {
     return false;
   }
+  if (value.contacts !== undefined && (!Array.isArray(value.contacts) || !value.contacts.every((contact) => (
+    isRecord(contact) && isRoommateContactType(contact.type) && contact.masked === true
+  )))) return false;
   if (value.lastModeration === null) {
     return true;
   }
@@ -911,6 +930,11 @@ function projectRoommateRegistrationInput(
     || typeof input.nickname !== 'string'
     || (input.contactType !== null && !isRoommateContactType(input.contactType))
     || (input.contactValue !== null && typeof input.contactValue !== 'string')
+    || (input.contacts !== undefined && (
+      !Array.isArray(input.contacts)
+      || input.contacts.length > 3
+      || !input.contacts.every((contact) => isRoommateContact(contact) && contact.type !== 'other')
+    ))
     || typeof input.consent !== 'boolean'
   ) {
     throw new ApiResponseError(400);
@@ -926,6 +950,9 @@ function projectRoommateRegistrationInput(
     nickname: input.nickname,
     contactType: input.contactType,
     contactValue: input.contactValue,
+    ...(input.contacts === undefined ? {} : {
+      contacts: input.contacts.map(({ type, value }) => ({ type, value })),
+    }),
     consent: input.consent,
   };
 }
@@ -1005,8 +1032,8 @@ export async function createRoommateRegistration(
   return {
     registrationId: body.registrationId,
     managementCode: body.managementCode as string | null,
-    own: body.own,
-    members: body.members,
+    own: normalizeRoommateSelf(body.own),
+    members: body.members.map(normalizeRoommateMember),
   };
 }
 
@@ -1018,7 +1045,7 @@ export async function getMyRoommateRegistration(
   if (!isRecord(body) || containsRawSessionToken(body) || !isRoommateSelf(body.item)) {
     throw new ApiResponseError(response.status);
   }
-  return body.item;
+  return normalizeRoommateSelf(body.item);
 }
 
 export async function updateMyRoommateRegistration(
@@ -1034,7 +1061,7 @@ export async function updateMyRoommateRegistration(
   if (!isRecord(body) || containsRawSessionToken(body) || !isRoommateSelf(body.item)) {
     throw new ApiResponseError(response.status);
   }
-  return body.item;
+  return normalizeRoommateSelf(body.item);
 }
 
 export async function deleteMyRoommateRegistration(
@@ -1065,7 +1092,7 @@ export async function recoverRoommateRegistration(
   ) {
     throw new ApiResponseError(response.status);
   }
-  return { registrationId: body.registrationId, own: body.own };
+  return { registrationId: body.registrationId, own: normalizeRoommateSelf(body.own) };
 }
 
 export async function listRoommateMembers(
@@ -1081,7 +1108,7 @@ export async function listRoommateMembers(
   ) {
     throw new ApiResponseError(response.status);
   }
-  return body.items;
+  return body.items.map(normalizeRoommateMember);
 }
 
 export async function listAdminRoommateBuildingGroups(): Promise<AdminRoommateBuildingGroup[]> {
@@ -1173,7 +1200,10 @@ export async function listAdminRoommates(
   ) {
     throw new ApiResponseError(response.status);
   }
-  return body.items;
+  return body.items.map((item) => ({
+    ...item,
+    contacts: item.contacts ?? (item.contact ? [item.contact] : []),
+  }));
 }
 
 export async function revealRoommateContact(
@@ -1197,6 +1227,7 @@ export async function revealRoommateContact(
     !isRecord(body)
     || containsRoommateAdminSecret(body)
     || !isRoommateContact(body.contact)
+    || (body.contacts !== undefined && (!Array.isArray(body.contacts) || !body.contacts.every(isRoommateContact)))
     || !isRecord(body.lastModeration)
     || typeof body.lastModeration.action !== 'string'
     || !['hide', 'restore', 'delete', 'view_contact'].includes(body.lastModeration.action)
@@ -1208,6 +1239,7 @@ export async function revealRoommateContact(
   }
   return {
     contact: body.contact,
+    contacts: body.contacts ?? [body.contact],
     lastModeration: body.lastModeration as RoommateAdminContactReveal['lastModeration'],
   };
 }

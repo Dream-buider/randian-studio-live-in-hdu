@@ -74,9 +74,11 @@ async function copyCredential(): Promise<void> {
       <li v-for="member in members" :key="member.id">
         <strong>{{ member.nickname }}<span v-if="member.id === own.id">（我）</span></strong>
         <p>床位：{{ member.bed === null ? '未填写' : `${member.bed}号床` }}</p>
-        <p v-if="member.contact">
-          {{ contactLabels[member.contact.type] ?? '联系方式' }}：{{ member.contact.value }}
-        </p>
+        <template v-if="member.contacts.length > 0">
+          <p v-for="contact in member.contacts" :key="contact.type">
+            {{ contactLabels[contact.type] ?? '联系方式' }}：{{ contact.value }}
+          </p>
+        </template>
         <p v-else>暂未留下联系方式</p>
       </li>
     </ul>

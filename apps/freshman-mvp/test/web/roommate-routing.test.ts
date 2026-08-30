@@ -42,6 +42,7 @@ const self = {
   },
   nickname: '小燃',
   contact: { type: 'wechat', value: 'randian-207' },
+  contacts: [{ type: 'wechat', value: 'randian-207' }],
   status: 'active',
   createdAt: '2026-08-11T00:00:00.000Z',
   updatedAt: '2026-08-11T00:00:00.000Z',
@@ -54,6 +55,7 @@ const member = {
   nickname: '小燃',
   bed: null,
   contact: { type: 'wechat', value: 'randian-207' },
+  contacts: [{ type: 'wechat', value: 'randian-207' }],
 } as const;
 
 const registrationInput: RoommateRegistrationInput = {

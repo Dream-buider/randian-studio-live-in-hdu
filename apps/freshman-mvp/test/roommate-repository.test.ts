@@ -16,8 +16,14 @@ const createdAt = '2026-08-11T00:00:00.000Z';
 const expiresAt = '2026-11-09T00:00:00.000Z';
 
 function registration(overrides: Partial<RoommateRegistrationRecord> = {}): RoommateRegistrationRecord {
+  const id = overrides.id ?? 'registration-1';
+  const contactType = overrides.contactType === undefined ? 'wechat' : overrides.contactType;
+  const contactCiphertext = overrides.contactCiphertext === undefined
+    ? 'encrypted-contact'
+    : overrides.contactCiphertext;
+  const contactDigest = overrides.contactDigest === undefined ? 'contact-digest' : overrides.contactDigest;
   return {
-    id: 'registration-1',
+    id,
     campusCode: 'xiasha',
     templateVersion: 'xiasha-v1',
     roomKey: 'room-key-11-south-207',
@@ -25,9 +31,17 @@ function registration(overrides: Partial<RoommateRegistrationRecord> = {}): Room
     buildingKey: 'building-key-11',
     addressCiphertext: 'encrypted-address',
     nicknameCiphertext: 'encrypted-nickname',
-    contactType: 'wechat',
-    contactCiphertext: 'encrypted-contact',
-    contactDigest: 'contact-digest',
+    contactType,
+    contactCiphertext,
+    contactDigest,
+    contacts: contactType && contactCiphertext && contactDigest ? [{
+      registrationId: id,
+      type: contactType,
+      ciphertext: contactCiphertext,
+      digest: contactDigest,
+      createdAt,
+      updatedAt: createdAt,
+    }] : [],
     managementDigest: 'management-digest',
     consentAt: createdAt,
     status: 'active',
@@ -119,7 +133,17 @@ test('migration adds roommate tables without changing existing pre-v5 Q&A rows',
       db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(version, createdAt);
     }
     seedQuestionIntent(db);
-    const legacy = registration();
+    const legacy = registration({
+      contactType: 'other',
+      contacts: [{
+        registrationId: 'registration-1',
+        type: 'other',
+        ciphertext: 'encrypted-contact',
+        digest: 'contact-digest',
+        createdAt,
+        updatedAt: createdAt,
+      }],
+    });
     db.prepare(`
       INSERT INTO roommate_registrations (
         id, campus_code, template_version, room_key, building_key, address_ciphertext,
@@ -159,6 +183,22 @@ test('migration adds roommate tables without changing existing pre-v5 Q&A rows',
       1,
     );
     assert.equal(
+      Number((db.prepare('SELECT COUNT(*) AS count FROM schema_migrations WHERE version = 7').get() as { count: number }).count),
+      1,
+    );
+    assert.deepEqual(
+      { ...(db.prepare(`
+        SELECT contact_type, contact_ciphertext, contact_digest, active_digest
+        FROM roommate_registration_contacts WHERE registration_id = ?
+      `).get('registration-1') as Record<string, unknown>) },
+      {
+        contact_type: 'other',
+        contact_ciphertext: 'encrypted-contact',
+        contact_digest: 'contact-digest',
+        active_digest: 'contact-digest',
+      },
+    );
+    assert.equal(
       (db.prepare('SELECT bed_key FROM roommate_registrations WHERE id = ?').get('registration-1') as { bed_key: string | null }).bed_key,
       null,
     );
@@ -180,7 +220,7 @@ test('migration adds roommate tables without changing existing pre-v5 Q&A rows',
     );
     assert.deepEqual(
       await new SqliteRoommateRepository(reopened).getRegistration('registration-1'),
-      registration(),
+      legacy,
     );
     reopened.close();
   } finally {
@@ -286,6 +326,7 @@ test('repository scopes active members and atomically expires personal contact a
       contactType: null,
       contactCiphertext: null,
       contactDigest: null,
+      contacts: [],
       consentAt: null,
       updatedAt: createdAt,
     });
@@ -470,6 +511,79 @@ test('repository returns the latest audit for each requested registration in one
       ],
     );
     assert.deepEqual(await repository.listLatestAdminAudits([]), []);
+  } finally {
+    db.close();
+  }
+});
+
+test('repository atomically manages three contacts across hide, restore, delete, and expiry', async () => {
+  const db = openDatabase(':memory:');
+  try {
+    migrateDatabase(db);
+    const repository = new SqliteRoommateRepository(db);
+    const first = registration({
+      contacts: [
+        { registrationId: 'registration-1', type: 'wechat', ciphertext: 'wx-cipher', digest: 'wx-digest', createdAt, updatedAt: createdAt },
+        { registrationId: 'registration-1', type: 'qq', ciphertext: 'qq-cipher', digest: 'qq-digest', createdAt, updatedAt: createdAt },
+        { registrationId: 'registration-1', type: 'phone', ciphertext: 'phone-cipher', digest: 'phone-digest', createdAt, updatedAt: createdAt },
+      ],
+    });
+    await repository.createRegistration(first);
+    assert.deepEqual((await repository.getRegistration(first.id))?.contacts?.map(({ type }) => type), [
+      'wechat', 'qq', 'phone',
+    ]);
+
+    const hidden = { ...first, status: 'hidden' as const, updatedAt: '2026-08-12T00:00:00.000Z' };
+    assert.deepEqual(await repository.moderate(hidden, { status: 'active', updatedAt: createdAt }), hidden);
+    assert.equal(
+      Number((db.prepare('SELECT COUNT(*) AS count FROM roommate_registration_contacts WHERE active_digest IS NOT NULL').get() as { count: number }).count),
+      0,
+    );
+
+    const second = registration({
+      id: 'registration-2',
+      roomKey: 'room-key-11-south-208',
+      contactType: 'qq',
+      contactCiphertext: 'qq-cipher',
+      contactDigest: 'qq-digest',
+      managementDigest: 'management-digest-2',
+      contacts: [{ registrationId: 'registration-2', type: 'qq', ciphertext: 'qq-cipher', digest: 'qq-digest', createdAt, updatedAt: createdAt }],
+    });
+    await repository.createRegistration(second);
+    await assert.rejects(
+      repository.moderate(
+        { ...hidden, status: 'active', updatedAt: '2026-08-12T01:00:00.000Z' },
+        { status: 'hidden', updatedAt: hidden.updatedAt },
+      ),
+      /Contact already has an active registration/,
+    );
+    assert.equal((await repository.getRegistration(first.id))?.status, 'hidden');
+
+    const deletedSecond = {
+      ...second,
+      status: 'deleted' as const,
+      contactType: null,
+      contactCiphertext: null,
+      contactDigest: null,
+      contacts: [],
+      updatedAt: '2026-08-12T02:00:00.000Z',
+      deletedAt: '2026-08-12T02:00:00.000Z',
+    };
+    await repository.moderate(deletedSecond, { status: 'active', updatedAt: createdAt });
+    assert.equal(
+      Number((db.prepare('SELECT COUNT(*) AS count FROM roommate_registration_contacts WHERE registration_id = ?').get(second.id) as { count: number }).count),
+      0,
+    );
+    const restored = { ...hidden, status: 'active' as const, updatedAt: '2026-08-12T03:00:00.000Z' };
+    assert.deepEqual(await repository.moderate(restored, { status: 'hidden', updatedAt: hidden.updatedAt }), restored);
+
+    await repository.updateRegistration({ ...restored, expiresAt: '2026-08-12T03:30:00.000Z' });
+    await repository.expireDue('2026-08-12T04:00:00.000Z');
+    assert.equal((await repository.getRegistration(first.id))?.status, 'expired');
+    assert.equal(
+      Number((db.prepare('SELECT COUNT(*) AS count FROM roommate_registration_contacts WHERE registration_id = ?').get(first.id) as { count: number }).count),
+      0,
+    );
   } finally {
     db.close();
   }

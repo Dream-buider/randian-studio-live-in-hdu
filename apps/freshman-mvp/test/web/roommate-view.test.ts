@@ -136,7 +136,9 @@ describe('roommate matching client flow', () => {
     expect(wrapper.get('label[for="roommate-orientation"]').text()).toContain('方位');
     expect(wrapper.get('label[for="roommate-room"]').text()).toContain('寝室号');
     expect(wrapper.get('label[for="roommate-nickname"]').text()).toContain('昵称');
-    expect(wrapper.get('label[for="roommate-contact-type"]').text()).toContain('联系方式类型');
+    expect(wrapper.get('label[for="roommate-contact-wechat"]').text()).toContain('微信');
+    expect(wrapper.get('label[for="roommate-contact-qq"]').text()).toContain('QQ');
+    expect(wrapper.get('label[for="roommate-contact-phone"]').text()).toContain('手机号');
     expect(wrapper.find('input[name="consent"]').exists()).toBe(false);
     expect(wrapper.get('select[name="building"]').attributes('disabled')).toBeDefined();
 
@@ -145,8 +147,7 @@ describe('roommate matching client flow', () => {
     expect((wrapper.get('select[name="building"]').element as HTMLSelectElement).value).toBe('');
 
     await wrapper.get('select[name="campus"]').setValue('xiasha');
-    await wrapper.get('select[name="contactType"]').setValue('wechat');
-    await wrapper.get('input[name="contactValue"]').setValue('randian-207');
+    await wrapper.get('input[name="wechat"]').setValue('randian-207');
     expect(wrapper.get('input[name="consent"]').attributes('required')).toBeDefined();
     expect(wrapper.text()).toContain('有任何技术上的问题请咨询：微信：lbz070605');
     expect(wrapper.text()).toContain(
@@ -179,7 +180,7 @@ describe('roommate matching client flow', () => {
     expect(wrapper.get('select[name="bed"]').findAll('option').map((option) => option.attributes('value')))
       .toEqual(['', '1', '2', '3', '4', '5']);
     expect(wrapper.get('select[name="orientation"]').findAll('option').map((option) => option.text()))
-      .toEqual(['请选择方位', '东', '南', '西', '北', '不确定']);
+      .toEqual(['请选择方位', '东', '南', '西', '北', '无']);
     expect(wrapper.get('select[name="bed"]').findAll('option').map((option) => option.text()))
       .toEqual(['不填写床位', '1号床', '2号床', '3号床', '4号床', '五号床']);
 
@@ -275,7 +276,7 @@ describe('roommate matching client flow', () => {
     await wrapper.get('select[name="building"]').setValue('');
     await wrapper.get('input[name="room"]').setValue('20#7');
     await wrapper.get('input[name="nickname"]').setValue('x'.repeat(31));
-    await wrapper.get('select[name="contactType"]').setValue('wechat');
+    await wrapper.get('input[name="wechat"]').setValue('x'.repeat(101));
     expect(wrapper.get('[data-action="confirm-registration"]').attributes('disabled'))
       .toBeUndefined();
     await form.trigger('submit');
@@ -283,7 +284,7 @@ describe('roommate matching client flow', () => {
     const building = wrapper.get('select[name="building"]');
     const room = wrapper.get('input[name="room"]');
     const nickname = wrapper.get('input[name="nickname"]');
-    const contact = wrapper.get('input[name="contactValue"]');
+    const contact = wrapper.get('input[name="wechat"]');
     expect(building.attributes('aria-invalid')).toBe('true');
     expect(building.attributes('aria-describedby')).toContain('roommate-building-message');
     expect(wrapper.get('#roommate-building-message').text()).toContain('1–40号楼栋');
@@ -293,7 +294,7 @@ describe('roommate matching client flow', () => {
     expect(nickname.attributes('aria-invalid')).toBe('true');
     expect(contact.attributes('maxlength')).toBe('100');
     expect(contact.attributes('aria-invalid')).toBe('true');
-    expect(wrapper.get('#roommate-contact-message').text()).toContain('选择类型后请填写');
+    expect(wrapper.get('.roommate-contact-fields .roommate-field-message').text()).toContain('请检查联系方式格式');
     expect(wrapper.find('[data-state="confirm"]').exists()).toBe(false);
   });
 

@@ -30,7 +30,7 @@ test('normalizes both enabled campuses with all supported orientations', () => {
       assert.equal(room.campus, campus);
       assert.equal(room.orientation, orientation);
       assert.equal(room.bed, null);
-      assert.equal(room.display.includes('不确定'), orientation === 'unknown');
+      assert.equal(room.display.includes('无'), orientation === 'unknown');
     }
   }
 });

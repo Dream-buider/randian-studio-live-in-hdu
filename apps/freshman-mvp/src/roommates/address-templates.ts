@@ -25,7 +25,7 @@ const ORIENTATION_LABELS: Record<RoomOrientation, string> = {
   south: '南',
   west: '西',
   north: '北',
-  unknown: '不确定',
+  unknown: '无',
 };
 
 const BED_NUMBERS: readonly BedNumber[] = ['1', '2', '3', '4', '5'];

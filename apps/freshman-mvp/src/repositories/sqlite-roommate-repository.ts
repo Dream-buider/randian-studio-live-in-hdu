@@ -1,6 +1,7 @@
 import type { SqliteDatabase } from '../db/sqlite.js';
 import type {
   RoommateAdminAuditRecord,
+  RoommateRegistrationContactRecord,
   RoommateRegistrationRecord,
   RoommateRepository,
   RoommateSessionRecord,
@@ -55,10 +56,21 @@ export class SqliteRoommateRepository implements RoommateRepository {
   async getActiveRegistrationByContactDigest(
     contactDigest: string,
   ): Promise<RoommateRegistrationRecord | null> {
-    const row = this.database.prepare(`
-      SELECT * FROM roommate_registrations
-      WHERE contact_digest = ? AND status = 'active'
-    `).get(contactDigest) as Row | undefined;
+    const row = (this.database.prepare(`
+      SELECT registrations.*
+      FROM roommate_registration_contacts AS contacts
+      JOIN roommate_registrations AS registrations ON registrations.id = contacts.registration_id
+      WHERE contacts.active_digest = ? AND registrations.status = 'active'
+      LIMIT 1
+    `).get(contactDigest) ?? this.database.prepare(`
+      SELECT registrations.* FROM roommate_registrations AS registrations
+      WHERE registrations.contact_digest = ? AND registrations.status = 'active'
+        AND NOT EXISTS (
+          SELECT 1 FROM roommate_registration_contacts AS contacts
+          WHERE contacts.registration_id = registrations.id
+        )
+      LIMIT 1
+    `).get(contactDigest)) as Row | undefined;
     return row ? this.toRegistration(row) : null;
   }
 
@@ -113,6 +125,7 @@ export class SqliteRoommateRepository implements RoommateRepository {
       if (Number(result.changes) !== 1) {
         throw new Error('Roommate registration not found');
       }
+      this.syncContacts(record);
       return record;
     });
   }
@@ -138,7 +151,10 @@ export class SqliteRoommateRepository implements RoommateRepository {
         record.contactCiphertext, record.contactDigest, record.consentAt, record.updatedAt,
         record.id, expectedStatus, expectedUpdatedAt,
       );
-      return Number(result.changes) === 1 ? { ...record, status: expectedStatus } : null;
+      if (Number(result.changes) !== 1) return null;
+      const persisted = { ...record, status: expectedStatus };
+      this.syncContacts(persisted);
+      return persisted;
     });
   }
 
@@ -170,10 +186,14 @@ export class SqliteRoommateRepository implements RoommateRepository {
             contact_digest = NULL, consent_at = NULL, updated_at = ?
         WHERE status IN ('active', 'hidden') AND expires_at <= ?
       `).run(now, now);
+      const deleteContacts = this.database.prepare(
+        'DELETE FROM roommate_registration_contacts WHERE registration_id = ?',
+      );
       const deleteSessions = this.database.prepare(
         'DELETE FROM roommate_sessions WHERE registration_id = ?',
       );
       for (const row of dueRows) {
+        deleteContacts.run(String(row.id));
         deleteSessions.run(String(row.id));
       }
     });
@@ -233,6 +253,7 @@ export class SqliteRoommateRepository implements RoommateRepository {
       if (audit) {
         this.insertAudit(audit);
       }
+      this.syncContacts(record);
       if (record.status === 'deleted') {
         this.database.prepare('DELETE FROM roommate_sessions WHERE registration_id = ?').run(record.id);
       }
@@ -267,6 +288,31 @@ export class SqliteRoommateRepository implements RoommateRepository {
       record.contactCiphertext, record.contactDigest, record.managementDigest, record.consentAt,
       record.status, record.createdAt, record.updatedAt, record.expiresAt, record.deletedAt,
     );
+    this.syncContacts(record);
+  }
+
+  private syncContacts(record: RoommateRegistrationRecord): void {
+    this.database.prepare(
+      'DELETE FROM roommate_registration_contacts WHERE registration_id = ?',
+    ).run(record.id);
+    if (record.status === 'deleted' || record.status === 'expired') return;
+    const insert = this.database.prepare(`
+      INSERT INTO roommate_registration_contacts (
+        registration_id, contact_type, contact_ciphertext, contact_digest,
+        active_digest, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const contact of record.contacts ?? this.legacyContacts(record)) {
+      insert.run(
+        record.id,
+        contact.type,
+        contact.ciphertext,
+        contact.digest,
+        record.status === 'active' ? contact.digest : null,
+        contact.createdAt,
+        contact.updatedAt,
+      );
+    }
   }
 
   private insertSession(record: RoommateSessionRecord): void {
@@ -277,6 +323,7 @@ export class SqliteRoommateRepository implements RoommateRepository {
   }
 
   private toRegistration(row: Row): RoommateRegistrationRecord {
+    const contacts = this.readContacts(String(row.id), row);
     return {
       id: String(row.id),
       campusCode: String(row.campus_code) as RoommateRegistrationRecord['campusCode'],
@@ -291,6 +338,7 @@ export class SqliteRoommateRepository implements RoommateRepository {
         : String(row.contact_type) as RoommateRegistrationRecord['contactType'],
       contactCiphertext: row.contact_ciphertext === null ? null : String(row.contact_ciphertext),
       contactDigest: row.contact_digest === null ? null : String(row.contact_digest),
+      contacts,
       managementDigest: String(row.management_digest),
       consentAt: row.consent_at === null ? null : String(row.consent_at),
       status: String(row.status) as RoommateRegistrationRecord['status'],
@@ -299,6 +347,49 @@ export class SqliteRoommateRepository implements RoommateRepository {
       expiresAt: String(row.expires_at),
       deletedAt: row.deleted_at === null ? null : String(row.deleted_at),
     };
+  }
+
+  private readContacts(registrationId: string, parent: Row): RoommateRegistrationContactRecord[] {
+    const rows = this.database.prepare(`
+      SELECT registration_id, contact_type, contact_ciphertext, contact_digest, created_at, updated_at
+      FROM roommate_registration_contacts
+      WHERE registration_id = ?
+      ORDER BY CASE contact_type
+        WHEN 'wechat' THEN 1 WHEN 'qq' THEN 2 WHEN 'phone' THEN 3 ELSE 4 END
+    `).all(registrationId) as Row[];
+    if (rows.length > 0) {
+      return rows.map((contact) => ({
+        registrationId: String(contact.registration_id),
+        type: String(contact.contact_type) as RoommateRegistrationContactRecord['type'],
+        ciphertext: String(contact.contact_ciphertext),
+        digest: String(contact.contact_digest),
+        createdAt: String(contact.created_at),
+        updatedAt: String(contact.updated_at),
+      }));
+    }
+    if (parent.contact_type === null || parent.contact_ciphertext === null || parent.contact_digest === null) {
+      return [];
+    }
+    return [{
+      registrationId,
+      type: String(parent.contact_type) as RoommateRegistrationContactRecord['type'],
+      ciphertext: String(parent.contact_ciphertext),
+      digest: String(parent.contact_digest),
+      createdAt: String(parent.created_at),
+      updatedAt: String(parent.updated_at),
+    }];
+  }
+
+  private legacyContacts(record: RoommateRegistrationRecord): RoommateRegistrationContactRecord[] {
+    if (!record.contactType || !record.contactCiphertext || !record.contactDigest) return [];
+    return [{
+      registrationId: record.id,
+      type: record.contactType,
+      ciphertext: record.contactCiphertext,
+      digest: record.contactDigest,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+    }];
   }
 
   private toAudit(row: Row): RoommateAdminAuditRecord {
@@ -323,6 +414,12 @@ export class SqliteRoommateRepository implements RoommateRepository {
       const message = error instanceof Error ? error.message : '';
       if (message.includes('roommate_registrations.room_key') && message.includes('roommate_registrations.bed_key')) {
         throw new Error('Bed already occupied');
+      }
+      if (
+        message.includes('roommate_registration_contacts.active_digest')
+        || message.includes('roommate_registrations.contact_digest')
+      ) {
+        throw new Error('Contact already has an active registration');
       }
       throw error;
     }

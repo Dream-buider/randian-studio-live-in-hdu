@@ -110,7 +110,7 @@ test('secure SQLite roommate runtime migrates, unrefs retention, and closes stor
         database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'roommate_%' ORDER BY name")
           .all()
           .map((row) => (row as { name: string }).name),
-        ['roommate_admin_audit', 'roommate_building_groups', 'roommate_registrations', 'roommate_sessions'],
+        ['roommate_admin_audit', 'roommate_building_groups', 'roommate_registration_contacts', 'roommate_registrations', 'roommate_sessions'],
       );
 
       await runtime.close();

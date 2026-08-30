@@ -2,6 +2,7 @@ export type CampusCode = 'xiasha' | 'shaoxing';
 export type RoomOrientation = 'east' | 'south' | 'west' | 'north' | 'unknown';
 export type BedNumber = '1' | '2' | '3' | '4' | '5';
 export type ContactType = 'wechat' | 'qq' | 'phone' | 'other';
+export type WritableContactType = Exclude<ContactType, 'other'>;
 export type RoommateStatus = 'active' | 'hidden' | 'deleted' | 'expired';
 export type RoommateAdminAuditAction = 'view_contact' | 'hide' | 'restore' | 'delete';
 
@@ -32,6 +33,7 @@ export interface RoommateRegistrationRecord {
   contactType: ContactType | null;
   contactCiphertext: string | null;
   contactDigest: string | null;
+  contacts?: RoommateRegistrationContactRecord[];
   managementDigest: string;
   consentAt: string | null;
   status: RoommateStatus;
@@ -39,6 +41,15 @@ export interface RoommateRegistrationRecord {
   updatedAt: string;
   expiresAt: string;
   deletedAt: string | null;
+}
+
+export interface RoommateRegistrationContactRecord {
+  registrationId: string;
+  type: ContactType;
+  ciphertext: string;
+  digest: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface RoommateSessionRecord {

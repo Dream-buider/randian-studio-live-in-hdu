@@ -46,7 +46,7 @@ useDialogFocus(panel, '[data-action="close-building-group"]', close);
       </button>
       <h2 id="roommate-building-group-title">{{ title }}</h2>
       <p id="roommate-building-group-description" class="roommate-dialog-description">
-        可使用微信扫描二维码加入新生楼栋群。不加入群聊也可以关闭窗口，继续填写寝室信息。
+        可使用微信扫描二维码加入新生楼栋群。
       </p>
 
       <p v-if="status === 'loading'" class="roommate-dialog-status" role="status">

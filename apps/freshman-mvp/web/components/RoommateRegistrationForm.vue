@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue';
 import type {
   RoommateCampusTemplate,
-  RoommateContactType,
+  RoommateContact,
   RoommateRegistrationDraft,
   RoommateRegistrationInput,
   RoommateBed,
@@ -24,8 +24,7 @@ const emit = defineEmits<{
 }>();
 
 const validationAttempted = ref(false);
-const contactEnabled = computed(() => props.modelValue.contactType !== null);
-const requiresConsent = computed(() => Boolean(props.modelValue.contactValue?.trim()));
+const requiresConsent = computed(() => props.modelValue.contacts.length > 0);
 const selectedCampus = computed(() => (
   props.campuses.find((campus) => campus.code === props.modelValue.address.campus)
 ));
@@ -42,9 +41,15 @@ const nicknameValid = computed(() => {
   return value.length > 0 && Array.from(value).length <= 30;
 });
 const contactValid = computed(() => {
-  if (!contactEnabled.value) return true;
-  const value = props.modelValue.contactValue?.trim() ?? '';
-  return value.length > 0 && Array.from(value).length <= 100 && props.modelValue.consent;
+  const contacts = props.modelValue.contacts;
+  const unique = new Set(contacts.map(({ type }) => type)).size === contacts.length;
+  return contacts.length <= 3 && unique && contacts.every(({ type, value }) => {
+    const normalized = value.trim();
+    if (!normalized || Array.from(normalized).length > 100 || /\p{Cc}/u.test(value)) return false;
+    if (type === 'qq') return /^[1-9]\d{4,11}$/.test(normalized);
+    if (type === 'phone') return /^1[3-9]\d{9}$/.test(normalized);
+    return type === 'wechat';
+  }) && (contacts.length === 0 ? !props.modelValue.consent : props.modelValue.consent);
 });
 const canSubmit = computed(() => (
   selectedCampus.value?.enabled === true
@@ -72,6 +77,9 @@ function submitIfValid(): void {
       nickname: props.modelValue.nickname,
       contactType: props.modelValue.contactType,
       contactValue: props.modelValue.contactValue,
+      contacts: props.modelValue.contactType === 'other' && props.modelValue.contacts.length === 0
+        ? undefined
+        : props.modelValue.contacts,
       consent: props.modelValue.consent,
     };
     emit('submit', input);
@@ -123,24 +131,29 @@ function updateBed(value: string): void {
 }
 
 function updateField(
-  field: 'nickname' | 'contactValue',
+  field: 'nickname',
   value: string,
 ): void {
   emit('update:modelValue', { ...props.modelValue, [field]: value });
 }
 
-function updateContactType(value: string): void {
-  const contactType: RoommateContactType | null = isRoommateContactType(value) ? value : null;
+function updateContact(type: RoommateContact['type'], value: string): void {
+  if (type === 'other') return;
+  const contacts = props.modelValue.contacts.filter((contact) => contact.type !== type);
+  if (value.length > 0) contacts.push({ type, value });
+  const order = { wechat: 1, qq: 2, phone: 3 } as const;
+  contacts.sort((left, right) => order[left.type as keyof typeof order] - order[right.type as keyof typeof order]);
   emit('update:modelValue', {
     ...props.modelValue,
-    contactType,
-    contactValue: contactType === null ? null : props.modelValue.contactValue ?? '',
-    consent: contactType === null ? false : props.modelValue.consent,
+    contacts,
+    contactType: null,
+    contactValue: null,
+    consent: contacts.length === 0 ? false : props.modelValue.consent,
   });
 }
 
-function isRoommateContactType(value: string): value is RoommateContactType {
-  return ['wechat', 'qq', 'phone', 'other'].includes(value);
+function contactValue(type: 'wechat' | 'qq' | 'phone'): string {
+  return props.modelValue.contacts.find((contact) => contact.type === type)?.value ?? '';
 }
 
 function updateConsent(checked: boolean): void {
@@ -224,14 +237,14 @@ function updateConsent(checked: boolean): void {
             <option value="south">南</option>
             <option value="west">西</option>
             <option value="north">北</option>
-            <option value="unknown">不确定</option>
+            <option value="unknown">无</option>
           </select>
           <p
             id="roommate-orientation-message"
             class="roommate-field-message"
             :class="{ 'is-error': validationAttempted && !orientationValid }"
           >
-            {{ validationAttempted && !orientationValid ? '请选择方位' : '不确定时可选择“不确定”' }}
+            {{ validationAttempted && !orientationValid ? '请选择方位' : '没有方位信息时可选择“无”' }}
           </p>
         </div>
         <div class="roommate-address-field">
@@ -295,53 +308,34 @@ function updateConsent(checked: boolean): void {
         {{ validationAttempted && !nicknameValid ? '请输入 1–30 个字符的昵称' : '同寝室成员会看到这个昵称' }}
       </p>
 
-      <label for="roommate-contact-type">联系方式类型（可选）</label>
-      <select
-        id="roommate-contact-type"
-        name="contactType"
-        :value="modelValue.contactType ?? ''"
-        @change="updateContactType(($event.target as HTMLSelectElement).value)"
-      >
-        <option value="">不填写联系方式</option>
-        <option value="wechat">微信</option>
-        <option value="qq">QQ</option>
-        <option value="phone">手机号</option>
-        <option value="other">其他</option>
-      </select>
-
-      <template v-if="contactEnabled">
-        <label for="roommate-contact-value">联系方式</label>
-        <input
-          id="roommate-contact-value"
-          name="contactValue"
-          autocomplete="off"
-          required
-          maxlength="100"
-          aria-describedby="roommate-contact-message"
+      <fieldset class="roommate-contact-fields">
+        <legend>联系方式（均可选）</legend>
+        <label for="roommate-contact-wechat">微信</label>
+        <input id="roommate-contact-wechat" name="wechat" autocomplete="off" maxlength="100"
           :aria-invalid="validationAttempted && !contactValid"
-          :value="modelValue.contactValue ?? ''"
-          @input="updateField('contactValue', ($event.target as HTMLInputElement).value)"
-        />
-        <p
-          id="roommate-contact-message"
-          class="roommate-field-message"
-          :class="{ 'is-error': validationAttempted && !contactValid }"
-        >
+          :value="contactValue('wechat')"
+          @input="updateContact('wechat', ($event.target as HTMLInputElement).value)" />
+        <label for="roommate-contact-qq">QQ</label>
+        <input id="roommate-contact-qq" name="qq" inputmode="numeric" maxlength="12"
+          :aria-invalid="validationAttempted && !contactValid"
+          :value="contactValue('qq')"
+          @input="updateContact('qq', ($event.target as HTMLInputElement).value)" />
+        <label for="roommate-contact-phone">手机号</label>
+        <input id="roommate-contact-phone" name="phone" inputmode="tel" maxlength="11"
+          :aria-invalid="validationAttempted && !contactValid"
+          :value="contactValue('phone')"
+          @input="updateContact('phone', ($event.target as HTMLInputElement).value)" />
+        <p class="roommate-field-message" :class="{ 'is-error': validationAttempted && !contactValid }">
           {{ validationAttempted && !contactValid
-            ? '选择类型后请填写联系方式，并同意展示'
-            : '最多 100 个字符，仅同寝室已登记成员可见' }}
+            ? '请检查联系方式格式并同意展示'
+            : '可同时填写微信、QQ 和手机号，仅同寝室已登记成员可见' }}
         </p>
         <label v-if="requiresConsent" class="roommate-consent">
-          <input
-            name="consent"
-            type="checkbox"
-            required
-            :checked="modelValue.consent"
-            @change="updateConsent(($event.target as HTMLInputElement).checked)"
-          />
-          <span>我同意将该联系方式展示给同寝室已登记成员</span>
+          <input name="consent" type="checkbox" required :checked="modelValue.consent"
+            @change="updateConsent(($event.target as HTMLInputElement).checked)" />
+          <span>我同意将上述联系方式展示给同寝室已登记成员</span>
         </label>
-      </template>
+      </fieldset>
     </fieldset>
 
     <aside class="roommate-privacy-copy" aria-label="隐私提示">

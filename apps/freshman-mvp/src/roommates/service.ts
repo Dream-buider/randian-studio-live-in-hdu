@@ -7,9 +7,11 @@ import type {
   RoomAddressInput,
   RoommateAdminAuditRecord,
   RoommateAdminAuditAction,
+  RoommateRegistrationContactRecord,
   RoommateRegistrationRecord,
   RoommateRepository,
   RoommateStatus,
+  WritableContactType,
 } from './models.js';
 import { SlidingWindowRateLimiter } from './rate-limit.js';
 
@@ -27,6 +29,7 @@ export interface RoommateCreateInput {
   nickname: string;
   contactType: ContactType | null;
   contactValue: string | null;
+  contacts?: RoommateContactInput[];
   consent: boolean;
 }
 
@@ -37,11 +40,17 @@ export interface RoommateContactView {
   value: string;
 }
 
+export interface RoommateContactInput {
+  type: WritableContactType;
+  value: string;
+}
+
 export interface RoommateOwnView {
   id: string;
   address: NormalizedRoomAddress;
   nickname: string;
   contact: RoommateContactView | null;
+  contacts: RoommateContactView[];
   status: RoommateStatus;
   createdAt: string;
   updatedAt: string;
@@ -54,10 +63,12 @@ export interface RoommateMemberView {
   nickname: string;
   bed: NormalizedRoomAddress['bed'];
   contact: RoommateContactView | null;
+  contacts: RoommateContactView[];
 }
 
-export interface RoommateAdminView extends Omit<RoommateOwnView, 'contact'> {
+export interface RoommateAdminView extends Omit<RoommateOwnView, 'contact' | 'contacts'> {
   contact: { type: ContactType; masked: true } | null;
+  contacts: Array<{ type: ContactType; masked: true }>;
   lastModeration: RoommateAdminModerationView | null;
 }
 
@@ -70,6 +81,7 @@ export interface RoommateAdminModerationView {
 
 export interface RoommateAdminContactReveal {
   contact: RoommateContactView;
+  contacts: RoommateContactView[];
   lastModeration: RoommateAdminModerationView;
 }
 
@@ -103,9 +115,8 @@ export interface RoommateServiceOptions {
 interface ValidatedInput {
   address: NormalizedRoomAddress;
   nickname: string;
-  contactType: ContactType | null;
-  contactValue: string | null;
-  normalizedContact: string | null;
+  contacts: Array<RoommateContactInput & { normalizedValue: string }>;
+  preserveContacts: boolean;
   consent: boolean;
 }
 
@@ -148,17 +159,22 @@ export class RoommateService {
     }
 
     const validated = this.validateInput(input);
-    const contactDigest = validated.contactType && validated.normalizedContact
-      ? this.crypto.contactDigest(validated.contactType, validated.normalizedContact)
-      : null;
-    if (contactDigest && await this.repository.getActiveRegistrationByContactDigest(contactDigest)) {
-      throw new Error('Contact already has an active registration');
+    const digests = validated.contacts.map((contact) => (
+      this.crypto.contactDigest(contact.type, contact.normalizedValue)
+    ));
+    for (const digest of digests) {
+      if (await this.repository.getActiveRegistrationByContactDigest(digest)) {
+        throw new Error('Contact already has an active registration');
+      }
     }
     const managementCode = this.crypto.newManagementCode();
     const sessionToken = this.crypto.newSessionToken();
     const expiresAt = new Date(Date.parse(now) + RETENTION_MS).toISOString();
+    const registrationId = this.id('registration');
+    const contacts = this.encryptContacts(registrationId, validated.contacts, now);
+    const legacy = contacts[0] ?? null;
     const record: RoommateRegistrationRecord = {
-      id: this.id('registration'),
+      id: registrationId,
       campusCode: validated.address.campus,
       templateVersion: validated.address.templateVersion,
       roomKey: this.crypto.roomKey(validated.address.canonical),
@@ -166,9 +182,10 @@ export class RoommateService {
       buildingKey: this.crypto.buildingKey(validated.address.campus, validated.address.building),
       addressCiphertext: this.crypto.encrypt(JSON.stringify(validated.address)),
       nicknameCiphertext: this.crypto.encrypt(validated.nickname),
-      contactType: validated.contactType,
-      contactCiphertext: validated.contactValue === null ? null : this.crypto.encrypt(validated.contactValue),
-      contactDigest,
+      contactType: legacy?.type ?? null,
+      contactCiphertext: legacy?.ciphertext ?? null,
+      contactDigest: legacy?.digest ?? null,
+      contacts,
       managementDigest: this.crypto.managementDigest(managementCode),
       consentAt: validated.consent ? now : null,
       status: 'active',
@@ -186,8 +203,10 @@ export class RoommateService {
     try {
       await this.repository.createRegistrationWithSession(record, session);
     } catch (error) {
-      if (contactDigest && await this.repository.getActiveRegistrationByContactDigest(contactDigest)) {
-        throw new Error('Contact already has an active registration');
+      for (const digest of digests) {
+        if (await this.repository.getActiveRegistrationByContactDigest(digest)) {
+          throw new Error('Contact already has an active registration');
+        }
       }
       throw error;
     }
@@ -211,16 +230,17 @@ export class RoommateService {
   ): Promise<RoommateOwnView> {
     const now = this.timestamp();
     const current = await this.authenticateSelf(sessionToken, now);
-    const validated = this.validateInput(input);
-    const contactDigest = validated.contactType && validated.normalizedContact
-      ? this.crypto.contactDigest(validated.contactType, validated.normalizedContact)
-      : null;
-    if (contactDigest) {
-      const duplicate = await this.repository.getActiveRegistrationByContactDigest(contactDigest);
+    const validated = this.validateInput(input, current);
+    const contacts = validated.preserveContacts
+      ? current.contacts ?? []
+      : this.encryptContacts(current.id, validated.contacts, now);
+    for (const contact of contacts) {
+      const duplicate = await this.repository.getActiveRegistrationByContactDigest(contact.digest);
       if (duplicate && duplicate.id !== current.id) {
         throw new Error('Contact already has an active registration');
       }
     }
+    const legacy = contacts[0] ?? null;
     const updated: RoommateRegistrationRecord = {
       ...current,
       campusCode: validated.address.campus,
@@ -230,10 +250,11 @@ export class RoommateService {
       buildingKey: this.crypto.buildingKey(validated.address.campus, validated.address.building),
       addressCiphertext: this.crypto.encrypt(JSON.stringify(validated.address)),
       nicknameCiphertext: this.crypto.encrypt(validated.nickname),
-      contactType: validated.contactType,
-      contactCiphertext: validated.contactValue === null ? null : this.crypto.encrypt(validated.contactValue),
-      contactDigest,
-      consentAt: validated.consent ? now : null,
+      contactType: legacy?.type ?? null,
+      contactCiphertext: legacy?.ciphertext ?? null,
+      contactDigest: legacy?.digest ?? null,
+      contacts,
+      consentAt: contacts.length > 0 ? current.consentAt ?? now : null,
       updatedAt: this.nextVersion(current.updatedAt, now),
     };
     const persisted = await this.repository.updateSelfRegistration(
@@ -309,13 +330,15 @@ export class RoommateService {
   ): Promise<RoommateAdminContactReveal> {
     this.validateAdmin(actorId, reason);
     const record = await this.repository.getRegistration(registrationId);
-    if (!record?.contactType || !record.contactCiphertext) {
+    if (!record || (record.contacts ?? []).length === 0) {
       throw new Error('Contact unavailable');
     }
     const audit = this.audit(record.id, actorId, 'view_contact', reason);
     await this.repository.appendAudit(audit);
+    const contacts = this.contactViews(record);
     return {
-      contact: { type: record.contactType, value: this.crypto.decrypt(record.contactCiphertext) },
+      contact: contacts[0]!,
+      contacts,
       lastModeration: this.toAdminModeration(audit),
     };
   }
@@ -392,53 +415,88 @@ export class RoommateService {
       id: member.id,
       nickname: this.crypto.decrypt(member.nicknameCiphertext),
       bed: this.readAddress(member.addressCiphertext).bed,
-      contact: member.contactType && member.contactCiphertext
-        ? { type: member.contactType, value: this.crypto.decrypt(member.contactCiphertext) }
-        : null,
+      contact: this.contactViews(member)[0] ?? null,
+      contacts: this.contactViews(member),
     }));
   }
 
-  private validateInput(input: RoommateCreateInput): ValidatedInput {
+  private validateInput(
+    input: RoommateCreateInput,
+    current?: RoommateRegistrationRecord,
+  ): ValidatedInput {
     const address = normalizeRoomAddress(input.address);
     const nickname = input.nickname.trim();
     if (/\p{Cc}/u.test(input.nickname) || [...nickname].length < 1 || [...nickname].length > 30) {
       throw new Error('Nickname must contain 1-30 Unicode code points without controls');
     }
+    if (input.contacts === undefined && current?.contacts?.some((contact) => contact.type === 'other')) {
+      return { address, nickname, contacts: [], preserveContacts: true, consent: true };
+    }
+    const supplied = input.contacts ?? this.legacyInputContacts(input);
+    if (supplied.length > 3) throw new Error('At most three contacts are allowed');
+    const seen = new Set<string>();
+    const contacts = supplied.map((contact) => {
+      if (!['wechat', 'qq', 'phone'].includes(contact.type)) {
+        throw new Error('Contact type is invalid');
+      }
+      if (seen.has(contact.type)) throw new Error('Contact types must be unique');
+      seen.add(contact.type);
+      const value = contact.value.trim();
+      if (/\p{Cc}/u.test(contact.value) || [...value].length < 1 || [...value].length > 100) {
+        throw new Error('Contact value is invalid');
+      }
+      if (contact.type === 'qq' && !/^[1-9]\d{4,11}$/.test(value)) {
+        throw new Error('QQ contact is invalid');
+      }
+      if (contact.type === 'phone' && !/^1[3-9]\d{9}$/.test(value)) {
+        throw new Error('Phone contact is invalid');
+      }
+      return { ...contact, value, normalizedValue: value.toLocaleLowerCase('en-US') };
+    });
+    if (contacts.length > 0 && !input.consent) throw new Error('Contact consent is required');
+    if (contacts.length === 0 && input.consent) throw new Error('Contact consent must be false without contacts');
+    return { address, nickname, contacts, preserveContacts: false, consent: contacts.length > 0 };
+  }
+
+  private legacyInputContacts(input: RoommateCreateInput): RoommateContactInput[] {
     const paired = input.contactType !== null && input.contactValue !== null;
     if (paired !== (input.contactType !== null || input.contactValue !== null)) {
       throw new Error('Contact type and value must be provided together');
     }
-    if (input.contactType === null && input.contactValue === null) {
-      return { address, nickname, contactType: null, contactValue: null, normalizedContact: null, consent: false };
-    }
-    if (!['wechat', 'qq', 'phone', 'other'].includes(input.contactType as string)) {
-      throw new Error('Contact type is invalid');
-    }
-    const contactValue = input.contactValue!.trim();
-    if (/\p{Cc}/u.test(input.contactValue!) || [...contactValue].length < 1 || [...contactValue].length > 100) {
-      throw new Error('Contact value is invalid');
-    }
-    if (!input.consent) {
-      throw new Error('Contact consent is required');
-    }
-    return {
-      address,
-      nickname,
-      contactType: input.contactType,
-      contactValue,
-      normalizedContact: contactValue.toLocaleLowerCase('en-US'),
-      consent: true,
-    };
+    if (input.contactType === null || input.contactValue === null) return [];
+    return [{ type: input.contactType as WritableContactType, value: input.contactValue }];
+  }
+
+  private encryptContacts(
+    registrationId: string,
+    contacts: ValidatedInput['contacts'],
+    now: string,
+  ): RoommateRegistrationContactRecord[] {
+    return contacts.map((contact) => ({
+      registrationId,
+      type: contact.type,
+      ciphertext: this.crypto.encrypt(contact.value),
+      digest: this.crypto.contactDigest(contact.type, contact.normalizedValue),
+      createdAt: now,
+      updatedAt: now,
+    }));
+  }
+
+  private contactViews(record: RoommateRegistrationRecord): RoommateContactView[] {
+    return (record.contacts ?? []).map((contact) => ({
+      type: contact.type,
+      value: this.crypto.decrypt(contact.ciphertext),
+    }));
   }
 
   private toOwn(record: RoommateRegistrationRecord): RoommateOwnView {
+    const contacts = this.contactViews(record);
     return {
       id: record.id,
       address: this.readAddress(record.addressCiphertext),
       nickname: this.crypto.decrypt(record.nicknameCiphertext),
-      contact: record.contactType && record.contactCiphertext
-        ? { type: record.contactType, value: this.crypto.decrypt(record.contactCiphertext) }
-        : null,
+      contact: contacts[0] ?? null,
+      contacts,
       status: record.status,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
@@ -451,11 +509,13 @@ export class RoommateService {
     record: RoommateRegistrationRecord,
     lastModeration: RoommateAdminAuditRecord | null,
   ): RoommateAdminView {
+    const contacts = (record.contacts ?? []).map(({ type }) => ({ type, masked: true as const }));
     return {
       id: record.id,
       address: this.readAddress(record.addressCiphertext),
       nickname: this.crypto.decrypt(record.nicknameCiphertext),
-      contact: record.contactType ? { type: record.contactType, masked: true } : null,
+      contact: contacts[0] ?? null,
+      contacts,
       status: record.status,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
@@ -488,6 +548,7 @@ export class RoommateService {
       contactType: null,
       contactCiphertext: null,
       contactDigest: null,
+      contacts: [],
       consentAt: null,
       status: 'deleted',
       updatedAt: this.nextVersion(record.updatedAt, now),

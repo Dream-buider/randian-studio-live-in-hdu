@@ -56,7 +56,7 @@ const normalizedAddress = computed(() => {
   const campus = config.value?.campuses.find((item) => item.code === draft.value.address.campus)?.name
     ?? '未选择校区';
   const orientationLabels: Record<string, string> = {
-    east: '东', south: '南', west: '西', north: '北', unknown: '不确定',
+    east: '东', south: '南', west: '西', north: '北', unknown: '无',
   };
   const orientation = orientationLabels[draft.value.address.orientation] ?? '未选择方位';
   const bed = draft.value.address.bed === null ? null : `${draft.value.address.bed}号床`;
@@ -69,6 +69,7 @@ function emptyRegistration(): RoommateRegistrationDraft {
     nickname: '',
     contactType: null,
     contactValue: null,
+    contacts: [],
     consent: false,
   };
 }
@@ -93,9 +94,10 @@ function draftFromSelf(item: RoommateSelf): RoommateRegistrationDraft {
       bed: item.address.bed,
     },
     nickname: item.nickname,
-    contactType: item.contact?.type ?? null,
-    contactValue: item.contact?.value ?? null,
-    consent: item.contact !== null,
+    contactType: item.contact?.type === 'other' ? 'other' : null,
+    contactValue: item.contact?.type === 'other' ? item.contact.value : null,
+    contacts: item.contacts.filter((contact) => contact.type !== 'other'),
+    consent: item.contacts.length > 0,
   };
 }
 

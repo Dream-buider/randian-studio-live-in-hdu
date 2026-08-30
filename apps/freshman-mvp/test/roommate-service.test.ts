@@ -404,13 +404,13 @@ test('hidden registration remains self-manageable without regaining member acces
 
     const updated = await service.updateMine(
       created.sessionToken,
-      xiashaInput('12', 'north', '301', '隐藏后修改', 'qq', 'hidden-after'),
+      xiashaInput('12', 'north', '301', '隐藏后修改', 'qq', '123456'),
       ctxA,
     );
     assert.equal(updated.status, 'hidden');
     assert.equal(updated.address.display, '下沙校区 · 12号楼 · 北 · 301');
     assert.equal(updated.nickname, '隐藏后修改');
-    assert.deepEqual(updated.contact, { type: 'qq', value: 'hidden-after' });
+    assert.deepEqual(updated.contact, { type: 'qq', value: '123456' });
     await assert.rejects(() => service.listMembers(created.sessionToken, ctxA), /session/i);
 
     const recovered = await service.recover(created.registrationId, created.managementCode!, ctxB);
@@ -446,7 +446,7 @@ test('room change revokes access to the old room while preserving identity and c
   const { database, service } = setup();
   try {
     const owner = await service.create(xiashaInput('11', 'south', '207', '搬家者', null, null), ctxA);
-    const oldRoom = await service.create(xiashaInput('11', 'south', '207', '老室友', 'qq', '111'), ctxB);
+    const oldRoom = await service.create(xiashaInput('11', 'south', '207', '老室友', 'qq', '11111'), ctxB);
     const before = await service.getMine(owner.sessionToken, ctxA);
     const updated = await service.updateMine(
       owner.sessionToken,
@@ -469,11 +469,11 @@ test('hidden, deleted, expired, and session-expired registrations cannot list me
     await service.moderate(hidden.registrationId, { action: 'hide', actorId: 'local-admin', reason: 'privacy request' });
     await assert.rejects(() => service.listMembers(hidden.sessionToken, ctxA), /session/i);
 
-    const deleted = await service.create(xiashaInput('11', 'south', '202', '删除', 'qq', '222'), ctxB);
+    const deleted = await service.create(xiashaInput('11', 'south', '202', '删除', 'qq', '22222'), ctxB);
     await service.deleteMine(deleted.sessionToken, ctxB);
     await assert.rejects(() => service.listMembers(deleted.sessionToken, ctxB), /session/i);
 
-    const expired = await service.create(xiashaInput('11', 'south', '203', '过期', 'qq', '333'), ctxC);
+    const expired = await service.create(xiashaInput('11', 'south', '203', '过期', 'qq', '33333'), ctxC);
     advance(90 * DAY_MS);
     await service.runRetention();
     await assert.rejects(() => service.listMembers(expired.sessionToken, ctxC), /session/i);
@@ -627,6 +627,7 @@ test('admin lists masked records and audits contact reveal plus atomic moderatio
       await service.revealAdminContact(created.registrationId, 'local-admin', 'investigate report'),
       {
         contact: { type: 'wechat', value: 'private-wx' },
+        contacts: [{ type: 'wechat', value: 'private-wx' }],
         lastModeration: {
           actorId: 'local-admin',
           action: 'view_contact',

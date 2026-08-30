@@ -125,7 +125,7 @@ function exactObject(value: unknown, allowedKeys: readonly string[], label = 'bo
 function parseRoommateInput(value: unknown): RoommateCreateInput {
   const body = exactObject(
     value,
-    ['address', 'nickname', 'contactType', 'contactValue', 'consent'],
+    ['address', 'nickname', 'contactType', 'contactValue', 'contacts', 'consent'],
   );
   const address = exactObject(body.address, ['campus', 'building', 'orientation', 'room', 'bed'], 'address');
   const campus = boundedString('campus', address.campus, 16);
@@ -140,7 +140,7 @@ function parseRoommateInput(value: unknown): RoommateCreateInput {
   if (bed !== null && (typeof bed !== 'string' || !['1', '2', '3', '4', '5'].includes(bed))) {
     throw new ValidationError('bed is invalid');
   }
-  const contactType = body.contactType;
+  const contactType = body.contactType === undefined && body.contacts !== undefined ? null : body.contactType;
   if (
     contactType !== null
     && (
@@ -150,9 +150,27 @@ function parseRoommateInput(value: unknown): RoommateCreateInput {
   ) {
     throw new ValidationError('contactType is invalid');
   }
-  const contactValue = body.contactValue === null
+  const contactValue = body.contactValue === undefined && body.contacts !== undefined
+    ? null
+    : body.contactValue === null
     ? null
     : boundedString('contactValue', body.contactValue, 100);
+  const contacts = body.contacts === undefined ? undefined : (() => {
+    if (!Array.isArray(body.contacts) || body.contacts.length > 3) {
+      throw new ValidationError('contacts is invalid');
+    }
+    return body.contacts.map((item, index) => {
+      const contact = exactObject(item, ['type', 'value'], `contacts[${index}]`);
+      const type = boundedString(`contacts[${index}].type`, contact.type, 16);
+      if (!['wechat', 'qq', 'phone'].includes(type)) {
+        throw new ValidationError(`contacts[${index}].type is invalid`);
+      }
+      return {
+        type: type as 'wechat' | 'qq' | 'phone',
+        value: boundedString(`contacts[${index}].value`, contact.value, 100),
+      };
+    });
+  })();
   if (typeof body.consent !== 'boolean') {
     throw new ValidationError('consent must be a boolean');
   }
@@ -171,6 +189,7 @@ function parseRoommateInput(value: unknown): RoommateCreateInput {
     nickname: boundedString('nickname', body.nickname, 30),
     contactType: contactType as ContactType | null,
     contactValue,
+    contacts,
     consent: body.consent,
   };
 }

@@ -154,6 +154,20 @@ CREATE TABLE IF NOT EXISTS roommate_building_groups (
   updated_by TEXT NOT NULL,
   PRIMARY KEY (campus_code, building)
 );
+
+CREATE TABLE IF NOT EXISTS roommate_registration_contacts (
+  registration_id TEXT NOT NULL REFERENCES roommate_registrations(id) ON DELETE CASCADE,
+  contact_type TEXT NOT NULL CHECK (contact_type IN ('wechat','qq','phone','other')),
+  contact_ciphertext TEXT NOT NULL,
+  contact_digest TEXT NOT NULL,
+  active_digest TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (registration_id, contact_type)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS roommate_registration_contacts_active_digest
+  ON roommate_registration_contacts(active_digest)
+  WHERE active_digest IS NOT NULL;
 `;
 
 function addColumnIfMissing(database: SqliteDatabase, table: string, column: string, definition: string): void {
@@ -209,6 +223,22 @@ export function migrateDatabase(database: SqliteDatabase): void {
     database.prepare(
       'INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)',
     ).run(6, new Date().toISOString());
+    database.exec(`
+      INSERT OR IGNORE INTO roommate_registration_contacts (
+        registration_id, contact_type, contact_ciphertext, contact_digest,
+        active_digest, created_at, updated_at
+      )
+      SELECT id, contact_type, contact_ciphertext, contact_digest,
+        CASE WHEN status = 'active' THEN contact_digest ELSE NULL END,
+        created_at, updated_at
+      FROM roommate_registrations
+      WHERE contact_type IS NOT NULL
+        AND contact_ciphertext IS NOT NULL
+        AND contact_digest IS NOT NULL;
+    `);
+    database.prepare(
+      'INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)',
+    ).run(7, new Date().toISOString());
     database.exec('COMMIT');
   } catch (error) {
     database.exec('ROLLBACK');
