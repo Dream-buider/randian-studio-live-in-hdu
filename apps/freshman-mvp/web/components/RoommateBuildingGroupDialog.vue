@@ -16,7 +16,7 @@ const campusLabels: Record<RoommateCampusCode, string> = {
   xiasha: '下沙校区',
   shaoxing: '绍兴校区',
 };
-const title = computed(() => `${campusLabels[props.campus]} · ${props.building}号楼楼栋群`);
+const title = computed(() => `${campusLabels[props.campus]} · ${props.building}号楼 · 楼栋群`);
 
 function close(): void {
   emit('close');
@@ -120,4 +120,3 @@ useDialogFocus(panel, '[data-action="close-building-group"]', close);
   border-radius: 12px;
 }
 </style>
-

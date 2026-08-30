@@ -148,7 +148,8 @@ describe('roommate matching client flow', () => {
     await wrapper.get('select[name="contactType"]').setValue('wechat');
     await wrapper.get('input[name="contactValue"]').setValue('randian-207');
     expect(wrapper.get('input[name="consent"]').attributes('required')).toBeDefined();
-    expect(wrapper.text()).toContain('非学校官方身份认证系统');
+    expect(wrapper.text()).toContain('有任何疑问请咨询团队负责人：微信：Vikboow');
+    expect(wrapper.text()).not.toContain('非学校官方身份认证系统');
     expect(wrapper.text()).toContain('90 天');
     expect(wrapper.text()).toContain('身份证号');
   });

@@ -347,7 +347,7 @@ function updateConsent(checked: boolean): void {
     <aside class="roommate-privacy-copy" aria-label="隐私提示">
       <strong>提交前请留意</strong>
       <ul>
-        <li>本功能由 LIVE IN HDU 团队提供，非学校官方身份认证系统。</li>
+        <li>有任何疑问请咨询团队负责人：微信：Vikboow</li>
         <li>寝室与成员信息由用户自行填写，请自行判断真实性。</li>
         <li>联系方式可选；登记默认保留 90 天，期间可修改或删除。</li>
         <li>请勿填写身份证号、银行卡号、家庭住址等无关敏感信息。</li>
